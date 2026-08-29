@@ -46,7 +46,7 @@ class SignedZingStreamTests(unittest.TestCase):
         self.assertTrue(stream_url.startswith("http://172.16.10.200:8099/api/stream/"))
         token = stream_url.rsplit("/", 1)[-1]
         self.assertEqual(
-            self.target,
+            ("zing", self.target),
             self.streaming.verify_stream_token(
                 token, "integration-secret", now=1_299
             ),
@@ -135,6 +135,86 @@ class SignedZingStreamTests(unittest.TestCase):
             hashlib.sha512,
         ).hexdigest()
         self.assertEqual([expected_signature], query["sig"])
+
+
+class _FakeCompleted:
+    def __init__(self, returncode, stdout):
+        self.returncode = returncode
+        self.stdout = stdout
+
+
+class YouTubeAudioResolverTests(unittest.TestCase):
+    def setUp(self):
+        self.streaming = load_streaming_module()
+
+    def _runner(self, returncode, stdout):
+        return lambda *_args, **_kwargs: _FakeCompleted(returncode, stdout)
+
+    def test_youtube_token_round_trip_is_bound_to_video_and_expiry(self):
+        token = self.streaming.create_stream_token(
+            "dQw4w9WgXcQ", "integration-secret", source="youtube", now=1_000, ttl=300
+        )
+        self.assertEqual(
+            ("youtube", "dQw4w9WgXcQ"),
+            self.streaming.verify_stream_token(
+                token, "integration-secret", now=1_299
+            ),
+        )
+        with self.assertRaises(self.streaming.InvalidStreamTokenError):
+            self.streaming.verify_stream_token(
+                token, "integration-secret", now=1_301
+            )
+
+    def test_youtube_token_rejects_a_non_video_id(self):
+        with self.assertRaises(ValueError):
+            self.streaming.create_stream_token(
+                "https://youtube.com/watch?v=dQw4w9WgXcQ",
+                "integration-secret",
+                source="youtube",
+            )
+
+    def test_resolver_returns_googlevideo_audio_with_forwarded_headers(self):
+        info = {
+            "url": "https://rr3---sn-abc.googlevideo.com/videoplayback?mime=audio/mp4",
+            "ext": "m4a",
+            "http_headers": {"User-Agent": "yt-dlp-client"},
+        }
+        result = self.streaming.resolve_youtube_audio(
+            "dQw4w9WgXcQ", runner=self._runner(0, json.dumps(info))
+        )
+
+        self.assertEqual(info["url"], result["url"])
+        self.assertEqual("audio/mp4", result["content_type"])
+        self.assertEqual({"User-Agent": "yt-dlp-client"}, result["headers"])
+
+    def test_resolver_maps_webm_opus_to_its_content_type(self):
+        info = {
+            "url": "https://rr1---sn-xyz.googlevideo.com/videoplayback",
+            "ext": "webm",
+        }
+        result = self.streaming.resolve_youtube_audio(
+            "dQw4w9WgXcQ", runner=self._runner(0, json.dumps(info))
+        )
+        self.assertEqual("audio/webm", result["content_type"])
+
+    def test_resolver_rejects_a_stream_outside_googlevideo(self):
+        info = {"url": "https://evil.example/leak.m4a", "ext": "m4a"}
+        with self.assertRaises(self.streaming.StreamUnavailableError):
+            self.streaming.resolve_youtube_audio(
+                "dQw4w9WgXcQ", runner=self._runner(0, json.dumps(info))
+            )
+
+    def test_resolver_fails_when_yt_dlp_exits_nonzero(self):
+        with self.assertRaises(self.streaming.StreamUnavailableError):
+            self.streaming.resolve_youtube_audio(
+                "dQw4w9WgXcQ", runner=self._runner(1, "")
+            )
+
+    def test_resolver_rejects_an_invalid_video_id(self):
+        with self.assertRaises(ValueError):
+            self.streaming.resolve_youtube_audio(
+                "not-a-valid-id", runner=self._runner(0, "{}")
+            )
 
 
 if __name__ == "__main__":

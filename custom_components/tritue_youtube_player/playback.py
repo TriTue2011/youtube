@@ -164,18 +164,28 @@ def build_target_capabilities(
     else:
         transport = "unsupported"
 
-    sources = []
-    if supports_play_media and (
-        transport in {"google_cast_video", "android_tv"}
-    ):
-        sources.append("youtube")
-    if supports_play_media:
-        sources.extend(("zing", "http"))
+    # TVs and Android boxes run the native YouTube app (with video); every other
+    # play_media-capable speaker (Cast audio, DLNA, ESPHome, generic) receives
+    # YouTube as a relayed audio stream, exactly like Zing.
+    sources = ["youtube", "zing", "http"] if supports_play_media else []
     return {
         "transport": transport,
         "sources": sources,
         "supports_play_media": supports_play_media,
+        "youtube_transport": (
+            "native"
+            if transport in {"google_cast_video", "android_tv"}
+            else "audio"
+        ),
     }
+
+
+NATIVE_YOUTUBE_TRANSPORTS = {"google_cast_video", "android_tv"}
+
+
+def is_native_youtube_transport(transport: str | None) -> bool:
+    """Return whether a transport plays YouTube through the native Cast app."""
+    return transport in NATIVE_YOUTUBE_TRANSPORTS
 
 
 def build_target_request(

@@ -512,20 +512,94 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual(403, raised.exception.code)
         self.assertEqual({"error": "invalid_stream_token"}, json.load(raised.exception))
 
-    def test_stream_api_does_not_accept_youtube_targets(self):
+    @patch("server.resolve_youtube_audio")
+    def test_integration_creates_a_youtube_audio_stream_url(self, resolve):
+        resolve.return_value = {
+            "url": "https://rr3---sn-abc.googlevideo.com/videoplayback?x=1",
+            "headers": {"User-Agent": "TriTue"},
+            "content_type": "audio/mp4",
+        }
+        status, body = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={
+                "source": "youtube",
+                "target": "https://youtu.be/dQw4w9WgXcQ",
+            },
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+
+        self.assertEqual(200, status)
+        self.assertEqual("youtube", body["source"])
+        self.assertEqual("audio/mp4", body["media_content_type"])
+        self.assertTrue(
+            body["stream_url"].startswith("http://172.16.10.200:8099/api/stream/")
+        )
+        resolve.assert_called_once_with("dQw4w9WgXcQ")
+
+    def test_youtube_audio_stream_rejects_a_playlist(self):
         with self.assertRaises(urllib.error.HTTPError) as raised:
             self.request(
                 "/api/integration/stream",
                 method="POST",
                 payload={
                     "source": "youtube",
-                    "target": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+                    "target": "https://www.youtube.com/playlist?list=PL1234567890",
                 },
                 headers={"Authorization": "Bearer test-integration-token"},
             )
 
         self.assertEqual(400, raised.exception.code)
-        self.assertEqual({"error": "unsupported_stream_source"}, json.load(raised.exception))
+        self.assertEqual(
+            {"error": "youtube_audio_requires_video"}, json.load(raised.exception)
+        )
+
+    def test_stream_api_rejects_an_unknown_source(self):
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            self.request(
+                "/api/integration/stream",
+                method="POST",
+                payload={"source": "spotify", "target": "anything"},
+                headers={"Authorization": "Bearer test-integration-token"},
+            )
+
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual(
+            {"error": "unsupported_stream_source"}, json.load(raised.exception)
+        )
+
+    @patch("server.urlopen")
+    @patch("server.resolve_youtube_audio")
+    def test_signed_youtube_stream_relays_googlevideo_audio(
+        self, resolve, open_upstream
+    ):
+        resolve.return_value = {
+            "url": "https://rr3---sn-abc.googlevideo.com/videoplayback",
+            "headers": {"User-Agent": "TriTue"},
+            "content_type": "audio/mp4",
+        }
+        upstream = io.BytesIO(b"M4A!")
+        upstream.headers = {"Content-Type": "audio/mp4", "Content-Length": "4"}
+        upstream.getcode = lambda: 200
+        open_upstream.return_value = upstream
+        _, created = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={"source": "youtube", "target": "dQw4w9WgXcQ"},
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        token = created["stream_url"].rsplit("/", 1)[-1]
+
+        with urllib.request.urlopen(
+            f"{self.base_url}/api/stream/{token}", timeout=2
+        ) as response:
+            self.assertEqual(200, response.status)
+            self.assertEqual("audio/mp4", response.headers["Content-Type"])
+            self.assertEqual(b"M4A!", response.read())
+
+        # The prepared stream is cached, so the proxy reuses it instead of
+        # asking yt-dlp to resolve the short-lived googlevideo URL twice.
+        resolve.assert_called_once_with("dQw4w9WgXcQ")
 
     def test_video_url_is_normalized_and_persisted(self):
         status, target = self.request(

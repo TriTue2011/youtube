@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0 - 2026-08-29
+
+### Added
+
+- YouTube phát được ra mọi loa hỗ trợ `play_media` (Google Cast audio, DLNA,
+  ESPHome…): TV/Android box vẫn mở app YouTube gốc, còn loa nhận YouTube dưới
+  dạng luồng audio ký sẵn từ add-on — cùng đường đi với Zing.
+- `play_on_players` gửi một lệnh tới TV và loa trong cùng một lượt: TV phát
+  video, loa phát nhạc.
+
+### Changed
+
+- Ma trận capability công bố `youtube` cho mọi `media_player` có `play_media`,
+  kèm `youtube_transport` (native trên TV, audio trên loa). Card tự mở nguồn
+  YouTube cho loa thay vì khóa lại.
+- Thiết bị không hỗ trợ `play_media` là trường hợp duy nhất bị coi là không
+  tương thích với mọi nguồn.
+
 ## 0.7.0 - 2026-08-29
 
 ### Added

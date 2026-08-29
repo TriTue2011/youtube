@@ -197,37 +197,60 @@ class PlaybackRequestTests(unittest.TestCase):
                 validator(oversized)
 
     def test_capability_matrix_routes_sources_by_transport(self):
+        # Every play_media speaker can take all three sources; only the YouTube
+        # transport differs: TVs play the native app, others get an audio stream.
         cases = {
             "cast_tv": (
                 {"target_platform": "cast", "target_device_class": "tv"},
                 "google_cast_video",
                 {"youtube", "zing", "http"},
+                "native",
             ),
             "cast_speaker": (
                 {"target_platform": "cast", "target_device_class": "speaker"},
                 "google_cast_audio",
-                {"zing", "http"},
+                {"youtube", "zing", "http"},
+                "audio",
             ),
             "dlna": (
                 {"target_platform": "dlna_dmr", "target_device_class": "speaker"},
                 "dlna",
-                {"zing", "http"},
+                {"youtube", "zing", "http"},
+                "audio",
             ),
             "android_tv": (
                 {"target_platform": "androidtv_remote", "target_device_class": "tv"},
                 "android_tv",
                 {"youtube", "zing", "http"},
+                "native",
+            ),
+            "generic_audio": (
+                {"target_platform": "esphome", "target_device_class": "speaker"},
+                "generic_audio",
+                {"youtube", "zing", "http"},
+                "audio",
             ),
         }
-        for name, (target, transport, sources) in cases.items():
+        for name, (target, transport, sources, youtube_transport) in cases.items():
             with self.subTest(name=name):
                 capability = self.playback.build_target_capabilities(
                     **target, supported_features=512
                 )
                 self.assertEqual(transport, capability["transport"])
                 self.assertEqual(sources, set(capability["sources"]))
+                self.assertEqual(youtube_transport, capability["youtube_transport"])
 
-    def test_unknown_cast_type_is_not_assumed_to_have_a_video_screen(self):
+    def test_players_without_play_media_take_no_sources(self):
+        capability = self.playback.build_target_capabilities(
+            target_platform=None,
+            target_device_class="speaker",
+            supported_features=0,
+        )
+
+        self.assertEqual("unsupported", capability["transport"])
+        self.assertEqual([], capability["sources"])
+
+    def test_unknown_cast_type_streams_youtube_as_audio(self):
         capability = self.playback.build_target_capabilities(
             target_platform="cast",
             target_device_class=None,
@@ -235,7 +258,8 @@ class PlaybackRequestTests(unittest.TestCase):
         )
 
         self.assertEqual("google_cast_unknown", capability["transport"])
-        self.assertEqual({"zing", "http"}, set(capability["sources"]))
+        self.assertEqual({"youtube", "zing", "http"}, set(capability["sources"]))
+        self.assertEqual("audio", capability["youtube_transport"])
 
     def test_target_entity_list_is_ordered_deduplicated_and_bounded(self):
         self.assertEqual(

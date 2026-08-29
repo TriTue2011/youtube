@@ -1,4 +1,4 @@
-"""Short-lived, signed streaming support for public Zing song pages."""
+"""Short-lived, signed streaming support for public Zing songs and YouTube audio."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import hmac
 import io
 import json
 import re
+import subprocess
 import time
 from http.cookiejar import CookieJar
 from urllib.parse import urlencode, urlsplit
@@ -20,6 +21,10 @@ from urllib.request import (
 )
 
 
+STREAM_SOURCES = ("zing", "youtube")
+YOUTUBE_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+YOUTUBE_AUDIO_FORMAT = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
+YOUTUBE_STREAM_HOSTS = ("googlevideo.com",)
 ZING_ID = re.compile(r"^[A-Za-z0-9]{8,16}$")
 ZING_API_BASE = "https://zingmp3.vn"
 ZING_API_PATH = "/api/v2/song/get/streaming"
@@ -108,15 +113,28 @@ def normalize_public_base_url(base_url: str) -> str:
     return base_url.rstrip("/")
 
 
+def validate_stream_target(source: str, target: str) -> str:
+    """Return a normalized target for one supported audio source, or raise."""
+    if source == "zing":
+        return validate_zing_target(target)
+    if source == "youtube":
+        video_id = str(target or "").strip()
+        if not YOUTUBE_VIDEO_ID.fullmatch(video_id):
+            raise ValueError("invalid_youtube_target")
+        return video_id
+    raise ValueError("unsupported_stream_source")
+
+
 def create_stream_token(
-    target_url: str,
+    target: str,
     secret: str,
     *,
+    source: str = "zing",
     now: int | None = None,
     ttl: int = 300,
 ) -> str:
-    """Create a signed, URL-safe token for one public Zing song."""
-    target_url = validate_zing_target(target_url)
+    """Create a signed, URL-safe token for one Zing song or YouTube video."""
+    target = validate_stream_target(source, target)
     secret = str(secret or "")
     if not secret:
         raise ValueError("invalid_stream_secret")
@@ -125,7 +143,7 @@ def create_stream_token(
     issued_at = int(time.time() if now is None else now)
     payload = _b64encode(
         json.dumps(
-            {"exp": issued_at + int(ttl), "source": "zing", "url": target_url},
+            {"exp": issued_at + int(ttl), "source": source, "target": target},
             separators=(",", ":"),
             sort_keys=True,
         ).encode()
@@ -138,8 +156,8 @@ def create_stream_token(
 
 def verify_stream_token(
     token: str, secret: str, *, now: int | None = None
-) -> str:
-    """Verify a stream token and return its restricted Zing target URL."""
+) -> tuple[str, str]:
+    """Verify a stream token and return its ``(source, target)`` pair."""
     try:
         payload, provided_signature = str(token).split(".", 1)
         expected_signature = _b64encode(
@@ -149,9 +167,10 @@ def verify_stream_token(
             raise InvalidStreamTokenError("invalid_stream_token")
         value = json.loads(_b64decode(payload))
         current_time = int(time.time() if now is None else now)
-        if value.get("source") != "zing" or int(value.get("exp", 0)) < current_time:
+        source = value.get("source")
+        if source not in STREAM_SOURCES or int(value.get("exp", 0)) < current_time:
             raise InvalidStreamTokenError("expired_stream_token")
-        return validate_zing_target(value.get("url"))
+        return source, validate_stream_target(source, value.get("target"))
     except InvalidStreamTokenError:
         raise
     except (TypeError, ValueError, KeyError, json.JSONDecodeError) as error:
@@ -160,15 +179,16 @@ def verify_stream_token(
 
 def build_signed_stream_url(
     public_base_url: str,
-    target_url: str,
+    target: str,
     secret: str,
     *,
+    source: str = "zing",
     now: int | None = None,
     ttl: int = 300,
 ) -> str:
     """Build the short-lived URL passed to a Home Assistant media player."""
     base_url = normalize_public_base_url(public_base_url)
-    token = create_stream_token(target_url, secret, now=now, ttl=ttl)
+    token = create_stream_token(target, secret, source=source, now=now, ttl=ttl)
     return f"{base_url}/api/stream/{token}"
 
 
@@ -295,4 +315,90 @@ def resolve_zing_stream(
             "User-Agent": ZING_USER_AGENT,
         },
         "content_type": CONTENT_TYPES.get(extension, "audio/mpeg"),
+    }
+
+
+def _youtube_audio_format(info: dict) -> dict:
+    """Pick the concrete audio format yt-dlp selected from its JSON output."""
+    if info.get("url"):
+        return info
+    requested = info.get("requested_downloads")
+    if isinstance(requested, list) and requested and isinstance(requested[0], dict):
+        return requested[0]
+    formats = info.get("formats")
+    if isinstance(formats, list):
+        audio_only = [
+            item
+            for item in formats
+            if isinstance(item, dict)
+            and item.get("url")
+            and item.get("acodec") not in (None, "none")
+            and item.get("vcodec") in (None, "none")
+        ]
+        if audio_only:
+            return audio_only[-1]
+    raise StreamUnavailableError("stream_provider_failed")
+
+
+def resolve_youtube_audio(
+    video_id: str, *, timeout: int = 45, runner=subprocess.run
+) -> dict:
+    """Resolve one browser-free direct audio stream for a public YouTube video.
+
+    yt-dlp extracts a short-lived, IP-bound ``googlevideo.com`` URL; the caller
+    relays it through the add-on so speakers never fetch YouTube directly.
+    """
+    video_id = validate_stream_target("youtube", video_id)
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    command = [
+        "yt-dlp",
+        "--format",
+        YOUTUBE_AUDIO_FORMAT,
+        "--no-playlist",
+        "--no-warnings",
+        "--dump-single-json",
+        watch_url,
+    ]
+    try:
+        completed = runner(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise StreamUnavailableError("stream_provider_failed") from error
+    if completed.returncode != 0:
+        raise StreamUnavailableError("stream_provider_failed")
+    try:
+        info = json.loads(completed.stdout)
+    except (json.JSONDecodeError, TypeError) as error:
+        raise StreamUnavailableError("invalid_stream_response") from error
+    if not isinstance(info, dict):
+        raise StreamUnavailableError("invalid_stream_response")
+
+    selected = _youtube_audio_format(info)
+    stream_url = str(selected.get("url") or "")
+    parsed_stream = urlsplit(stream_url)
+    stream_host = (parsed_stream.hostname or "").lower()
+    if parsed_stream.scheme not in {"http", "https"} or not any(
+        stream_host == suffix or stream_host.endswith(f".{suffix}")
+        for suffix in YOUTUBE_STREAM_HOSTS
+    ):
+        raise StreamUnavailableError("unsupported_stream_format")
+
+    extension = str(selected.get("ext") or "").lower()
+    headers = {"User-Agent": ZING_USER_AGENT}
+    upstream_headers = selected.get("http_headers") or info.get("http_headers")
+    if isinstance(upstream_headers, dict):
+        headers = {
+            str(key): str(value)
+            for key, value in upstream_headers.items()
+            if key and value
+        } or headers
+    return {
+        "url": stream_url,
+        "headers": headers,
+        "content_type": CONTENT_TYPES.get(extension, "audio/mp4"),
     }

@@ -367,9 +367,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       const incompatible = !this._supportsSource(entityId, this._source);
       label.classList.toggle("source-incompatible", incompatible);
       label.title = incompatible
-        ? (this._source === "youtube"
-          ? "YouTube dùng Cast TV hoặc Android TV/box; DLNA và loa audio nhận Zing/HTTP."
-          : "Entity này không khai báo hỗ trợ play_media.")
+        ? "Thiết bị này không hỗ trợ play_media nên không nhận nguồn nào."
         : this._transportLabel(capability?.transport, isAudioOnly);
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -431,12 +429,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _supportsSource(entityId, source) {
     const capability = this._capabilities.get(entityId);
     if (capability) return Array.isArray(capability.sources) && capability.sources.includes(source);
-    if (!this._supportsFeature(entityId, 512)) return false;
-    if (source !== "youtube") return true;
-    const state = this._hass?.states?.[entityId];
-    const platform = this._hass?.entities?.[entityId]?.platform || "";
-    return ["cast", "androidtv", "androidtv_remote"].includes(platform)
-      && state?.attributes?.device_class !== "speaker";
+    // Before the capability matrix loads, any play_media entity can take every
+    // source: TVs play YouTube natively, other speakers get it as an audio stream.
+    return this._supportsFeature(entityId, 512);
   }
 
   _transportLabel(transport, isAudioOnly) {
@@ -618,7 +613,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     input.maxLength = isHttp ? 2048 : 120;
     submit.textContent = isHttp ? "Thêm URL" : "Tìm kiếm";
     const hints = {
-      youtube: "Phát bằng YouTube chính thức",
+      youtube: "TV phát video · loa phát nhạc",
       zing: "Bài công khai, không VIP",
       http: "MP3/AAC/FLAC/HLS trực tiếp",
     };
@@ -859,9 +854,11 @@ if (!customElements.get("tritue-youtube-player-card")) {
 }
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "tritue-youtube-player-card",
-  name: "TriTue Music Player",
-  description: "Search YouTube/Zing or play direct HTTP audio on Home Assistant media players.",
-  preview: true,
-});
+if (!window.customCards.some((card) => card.type === "tritue-youtube-player-card")) {
+  window.customCards.push({
+    type: "tritue-youtube-player-card",
+    name: "TriTue Music Player",
+    description: "Search YouTube/Zing or play direct HTTP audio on Home Assistant media players.",
+    preview: true,
+  });
+}

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.0 - 2026-08-29
+
+### Added
+
+- Phát nhạc YouTube ra loa như Zing: `POST /api/integration/stream` nhận thêm
+  `source: youtube`, dùng yt-dlp lấy luồng audio `bestaudio` rồi ký URL công khai
+  ngắn hạn. Add-on tự tải và tiếp sóng qua `/api/stream/<token>` nên loa Google
+  Cast, DLNA hay ESPHome không phải gọi thẳng `googlevideo.com` (tránh lỗi 403 do
+  URL gắn theo IP).
+- Token stream mang theo `source`, hỗ trợ cả Zing lẫn YouTube trên cùng một
+  đường tiếp sóng.
+
+### Fixed
+
+- Lịch sử dùng chung nhiều nguồn: giao diện web dán nhãn đúng YouTube/Zing/HTTP,
+  không còn báo lỗi khi bấm lại mục Zing/HTTP (mở trang nguồn thay vì nhồi vào
+  iframe YouTube), và trang web không bị chiếm iframe khi loa đang phát Zing/HTTP.
+- Bộ nhớ đệm stream tự dọn mục hết hạn thay vì phình mãi tới khi khởi động lại.
+- Không giữ khóa `stream_lock` trong lúc gọi mạng, nên một lần resolve chậm không
+  chặn các loa khác đang phát bài đã có trong cache.
+- Giới hạn dung lượng phản hồi tìm kiếm Zing (2 MB) trước khi giải nén.
+
 ## 0.5.0 - 2026-08-29
 
 ### Added

@@ -11,6 +11,7 @@ from .playback import (
     build_stream_request,
     build_target_capabilities,
     build_target_request,
+    is_native_youtube_transport,
     normalize_target_entity_ids,
 )
 
@@ -66,6 +67,7 @@ async def async_play_on_players(
         session_media_content_type = direct_request["media_content_type"]
 
     requests = {}
+    youtube_audio_targets = []
     youtube_session_started = False
     youtube_session_revision = None
     physical_dispatch_completed = False
@@ -77,6 +79,11 @@ async def async_play_on_players(
             youtube_session_revision = played.get("session_revision")
             item = played.get("item") or {}
             for entity_id in playable_targets:
+                if not is_native_youtube_transport(
+                    capabilities(entity_id)["transport"]
+                ):
+                    youtube_audio_targets.append(entity_id)
+                    continue
                 try:
                     requests[entity_id] = build_target_request(
                         item,
@@ -87,7 +94,7 @@ async def async_play_on_players(
                 except UnsupportedTargetMediaError as error:
                     first_error = first_error or error
                     skipped_targets.append(entity_id)
-            playable_targets = list(requests)
+            playable_targets = list(requests) + youtube_audio_targets
         if not playable_targets:
             if first_error is not None:
                 raise first_error
@@ -148,6 +155,30 @@ async def async_play_on_players(
                 else:
                     dispatched_targets.append(entity_id)
                     physical_dispatch_completed = True
+            if youtube_audio_targets:
+                try:
+                    stream = await client.async_create_stream("youtube", target)
+                    audio_request = build_stream_request(stream)
+                except Exception as error:
+                    first_dispatch_error = first_dispatch_error or error
+                    skipped_targets.extend(youtube_audio_targets)
+                else:
+                    session_media_content_type = audio_request["media_content_type"]
+                    for entity_id in youtube_audio_targets:
+                        try:
+                            await hass.services.async_call(
+                                "media_player",
+                                "play_media",
+                                audio_request,
+                                blocking=True,
+                                target={"entity_id": entity_id},
+                            )
+                        except Exception as error:
+                            first_dispatch_error = first_dispatch_error or error
+                            skipped_targets.append(entity_id)
+                        else:
+                            dispatched_targets.append(entity_id)
+                            physical_dispatch_completed = True
             playable_targets = dispatched_targets
             if not playable_targets and first_dispatch_error is not None:
                 raise first_dispatch_error

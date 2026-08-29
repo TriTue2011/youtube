@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 ZING_ID = re.compile(r"^[A-Z0-9]{8,12}$")
 ZING_SEARCH_URL = "https://ac.zingmp3.vn/v1/web/ac-suggestions"
+SEARCH_RESPONSE_LIMIT = 2_000_000
 
 
 class SearchUnavailableError(RuntimeError):
@@ -180,15 +181,21 @@ def search_zing(query, *, limit=20, timeout=10):
         f"{ZING_SEARCH_URL}?query={quote_plus(query)}&num={limit}",
         headers={
             "Accept": "application/json",
-            "User-Agent": "TriTue-YouTube-Player/0.4",
+            "User-Agent": "TriTue-YouTube-Player/0.6",
         },
     )
     try:
         with urlopen(request, timeout=timeout) as response:
-            body = response.read()
+            body = response.read(SEARCH_RESPONSE_LIMIT + 1)
+            if len(body) > SEARCH_RESPONSE_LIMIT:
+                raise SearchUnavailableError("search_response_too_large")
             if response.headers.get("Content-Encoding", "").lower() == "gzip":
                 body = gzip.decompress(body)
+                if len(body) > SEARCH_RESPONSE_LIMIT:
+                    raise SearchUnavailableError("search_response_too_large")
         payload = json.loads(body)
+    except SearchUnavailableError:
+        raise
     except (OSError, ValueError, gzip.BadGzipFile) as error:
         raise SearchUnavailableError("search_provider_failed") from error
     if not isinstance(payload, dict) or payload.get("err") != 0:

@@ -43,6 +43,12 @@ function stopPlayer() {
   emptyPlayer.hidden = false;
 }
 
+function historyLabel(target) {
+  if (target.source === "zing") return "Zing MP3";
+  if (target.source === "http") return "HTTP Audio";
+  return target.kind === "playlist" ? "Playlist" : "Video";
+}
+
 function renderHistory(items) {
   historyList.replaceChildren();
   emptyHistory.hidden = items.length !== 0;
@@ -52,19 +58,26 @@ function renderHistory(items) {
     : "Chưa có nội dung";
 
   for (const target of items) {
+    const source = target.source || "youtube";
     const item = document.createElement("li");
     item.className = "history-item";
     const button = document.createElement("button");
     button.type = "button";
 
     const identifier = document.createElement("span");
-    identifier.textContent = target.id;
+    identifier.textContent = target.title || target.id;
     const kind = document.createElement("span");
     kind.className = "history-kind";
-    kind.textContent = target.kind === "playlist" ? "Playlist" : "Video";
+    kind.textContent = historyLabel(target);
 
     button.append(identifier, kind);
     button.addEventListener("click", async () => {
+      // The web page only owns the YouTube iframe; Zing and HTTP items are played
+      // on speakers from Home Assistant, so open their public source instead.
+      if (source !== "youtube") {
+        if (target.url) window.open(target.url, "_blank", "noopener");
+        return;
+      }
       try {
         const selected = await api("api/history", {
           method: "POST",
@@ -89,7 +102,9 @@ async function refreshHistory() {
 async function refreshPlayer() {
   const previousEmbedUrl = currentEmbedUrl;
   const playerState = await api("api/player");
-  if (playerState.state === "playing" && playerState.item) {
+  // Only YouTube sessions carry an embed_url the iframe can show; a Zing or HTTP
+  // session is playing on a speaker and must not hijack this page's player.
+  if (playerState.state === "playing" && playerState.item?.embed_url) {
     play(playerState.item);
     if (previousEmbedUrl !== playerState.item.embed_url) {
       await refreshHistory();

@@ -71,45 +71,87 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             async_stop=AsyncMock(return_value={"success": True, "state": "idle"}),
         )
 
-    async def test_youtube_dispatches_for_each_platform_and_sets_group_volume(self):
+    async def test_youtube_casts_to_tv_and_streams_audio_to_speaker(self):
         result = await self.actions.async_play_on_players(
             self.hass,
             self.client,
             source="youtube",
             target="dQw4w9WgXcQ",
-            entity_ids=["media_player.cast", "media_player.other"],
+            entity_ids=["media_player.cast", "media_player.speaker"],
             target_platforms={
                 "media_player.cast": "cast",
-                "media_player.other": "dlna_dmr",
+                "media_player.speaker": "dlna_dmr",
             },
             target_device_classes={
                 "media_player.cast": "tv",
-                "media_player.other": None,
+                "media_player.speaker": "speaker",
             },
             target_supported_features={
                 "media_player.cast": 516,
-                "media_player.other": 516,
+                "media_player.speaker": 516,
             },
             volume_level=0.35,
         )
 
-        self.assertEqual(1, result["target_count"])
-        self.assertEqual(["media_player.other"], result["skipped_targets"])
-        self.assertEqual("volume_set", self.hass.services.calls[0]["service"])
+        self.assertEqual(2, result["target_count"])
+        self.assertEqual([], result["skipped_targets"])
+        services = self.hass.services.calls
+        self.assertEqual("volume_set", services[0]["service"])
         self.assertEqual(
-            {"entity_id": ["media_player.cast"]},
-            self.hass.services.calls[0]["target"],
+            {"entity_id": ["media_player.cast", "media_player.speaker"]},
+            services[0]["target"],
         )
-        cast_call = self.hass.services.calls[1]
+        play_calls = [call for call in services if call["service"] == "play_media"]
+        cast_call = next(
+            call for call in play_calls
+            if call["target"] == {"entity_id": "media_player.cast"}
+        )
         self.assertEqual("cast", cast_call["service_data"]["media_content_type"])
-        self.assertEqual(2, len(self.hass.services.calls))
+        speaker_call = next(
+            call for call in play_calls
+            if call["target"] == {"entity_id": "media_player.speaker"}
+        )
+        self.assertEqual(
+            "http://192.0.2.10:8099/api/stream/signed",
+            speaker_call["service_data"]["media_content_id"],
+        )
+        self.assertEqual(
+            "audio/mpeg", speaker_call["service_data"]["media_content_type"]
+        )
+        self.client.async_create_stream.assert_awaited_once_with(
+            "youtube", "dQw4w9WgXcQ"
+        )
         self.client.async_update_session.assert_awaited_once_with(
             "youtube",
             "dQw4w9WgXcQ",
-            ["media_player.cast"],
-            media_content_type=None,
+            ["media_player.cast", "media_player.speaker"],
+            media_content_type="audio/mpeg",
             volume_level=0.35,
         )
+
+    async def test_youtube_streams_audio_to_a_screenless_speaker(self):
+        result = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="youtube",
+            target="dQw4w9WgXcQ",
+            entity_ids=["media_player.esp32"],
+            target_platforms={"media_player.esp32": "esphome"},
+            target_device_classes={"media_player.esp32": "speaker"},
+            target_supported_features={"media_player.esp32": 516},
+        )
+
+        self.client.async_play.assert_awaited_once_with("dQw4w9WgXcQ")
+        self.client.async_create_stream.assert_awaited_once_with(
+            "youtube", "dQw4w9WgXcQ"
+        )
+        play_call = self.hass.services.calls[-1]
+        self.assertEqual("play_media", play_call["service"])
+        self.assertEqual(
+            "http://192.0.2.10:8099/api/stream/signed",
+            play_call["service_data"]["media_content_id"],
+        )
+        self.assertEqual(1, result["target_count"])
 
     async def test_zing_creates_one_signed_stream_for_all_selected_speakers(self):
         target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
@@ -189,20 +231,21 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([], self.hass.services.calls)
         self.client.async_update_session.assert_not_awaited()
 
-    async def test_incompatible_youtube_targets_fail_before_mutating_server(self):
+    async def test_youtube_targets_without_play_media_fail_before_mutating_server(self):
         with self.assertRaises(self.actions.UnsupportedTargetMediaError):
             await self.actions.async_play_on_players(
                 self.hass,
                 self.client,
                 source="youtube",
                 target="dQw4w9WgXcQ",
-                entity_ids=["media_player.speaker"],
-                target_platforms={"media_player.speaker": "cast"},
-                target_device_classes={"media_player.speaker": "speaker"},
-                target_supported_features={"media_player.speaker": 516},
+                entity_ids=["media_player.screenless"],
+                target_platforms={"media_player.screenless": "dlna_dmr"},
+                target_device_classes={"media_player.screenless": "speaker"},
+                target_supported_features={"media_player.screenless": 0},
             )
 
         self.client.async_play.assert_not_awaited()
+        self.client.async_create_stream.assert_not_awaited()
         self.assertEqual([], self.hass.services.calls)
 
     async def test_failed_youtube_dispatch_rolls_back_the_addon_session(self):

@@ -2,7 +2,7 @@ services:
   youtube-player:
     build:
       context: .
-    image: ghcr.io/tritue2011/youtube-player:0.5.0
+    image: ghcr.io/tritue2011/youtube-player:0.6.0
     container_name: tritue-youtube-player
     restart: unless-stopped
     ports:

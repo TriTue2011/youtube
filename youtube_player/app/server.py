@@ -19,7 +19,9 @@ from streaming import (
     StreamUnavailableError,
     build_signed_stream_url,
     normalize_public_base_url,
+    resolve_youtube_audio,
     resolve_zing_stream,
+    validate_stream_target,
     validate_zing_target,
     verify_stream_token,
 )
@@ -41,7 +43,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 API_VERSION = "1"
 
 
@@ -263,35 +265,56 @@ class PlayerServer(ThreadingHTTPServer):
                 raise ValueError("unverified_zing_target")
         return target_url
 
-    def create_stream_url(self, target_url):
+    def create_stream_url(self, source, target):
         """Create a signed LAN URL a speaker can fetch without HA credentials."""
         if not self.public_base_url:
             raise ValueError("public_base_url_required")
         return build_signed_stream_url(
             self.public_base_url,
-            target_url,
+            target,
             self.integration_token,
+            source=source,
             ttl=3600,
         )
 
-    def prepare_stream(self, target_url):
-        """Resolve and briefly cache one stream before giving it to a speaker."""
-        target_url = self.require_public_zing_result(target_url)
-        return self._resolve_stream(target_url)
+    def prepare_stream(self, source, target):
+        """Authorize, resolve and briefly cache one stream before a speaker uses it."""
+        if source == "zing":
+            target = self.require_public_zing_result(target)
+        elif source == "youtube":
+            normalized = normalize_target(target)
+            if normalized.get("kind") != "video" or not normalized.get("id"):
+                raise ValueError("youtube_audio_requires_video")
+            target = normalized["id"]
+        else:
+            raise ValueError("unsupported_stream_source")
+        return target, self._resolve_stream(source, target)
 
-    def _resolve_stream(self, target_url):
-        """Resolve and briefly cache one already validated Zing stream."""
+    def _resolve_stream(self, source, target):
+        """Resolve and briefly cache one already validated audio stream."""
+        key = (source, target)
         with self.stream_lock:
-            cached = self.stream_cache.get(target_url)
+            cached = self.stream_cache.get(key)
             if cached and cached[0] >= time.monotonic():
                 return dict(cached[1])
-            resolved = resolve_zing_stream(target_url)
-            self.stream_cache[target_url] = (time.monotonic() + 120, dict(resolved))
-            return resolved
+        resolved = (
+            resolve_youtube_audio(target)
+            if source == "youtube"
+            else resolve_zing_stream(target)
+        )
+        with self.stream_lock:
+            now = time.monotonic()
+            self.stream_cache = {
+                cached_key: value
+                for cached_key, value in self.stream_cache.items()
+                if value[0] >= now
+            }
+            self.stream_cache[key] = (now + 120, dict(resolved))
+        return dict(resolved)
 
-    def resolve_stream(self, target_url):
+    def resolve_stream(self, source, target):
         """Return the prepared stream, resolving again after cache expiry."""
-        return self._resolve_stream(validate_zing_target(target_url))
+        return self._resolve_stream(source, validate_stream_target(source, target))
 
 
 class PlayerHandler(BaseHTTPRequestHandler):
@@ -339,6 +362,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                         "session",
                         "status",
                         "stop",
+                        "youtube_stream",
                         "zing_stream",
                     ],
                     "sources": ["youtube", "zing"],
@@ -471,11 +495,13 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
                     raise ValueError("invalid_request")
-                if payload.get("source") != "zing":
+                source = payload.get("source")
+                if source not in {"zing", "youtube"}:
                     raise ValueError("unsupported_stream_source")
-                target_url = payload.get("target")
-                resolved = self.server.prepare_stream(target_url)
-                stream_url = self.server.create_stream_url(target_url)
+                target, resolved = self.server.prepare_stream(
+                    source, payload.get("target")
+                )
+                stream_url = self.server.create_stream_url(source, target)
             except StreamUnavailableError:
                 self.send_json(502, {"error": "stream_unavailable"})
                 return
@@ -489,8 +515,10 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     return
                 if error_code not in {
                     "invalid_request",
+                    "invalid_youtube_target",
                     "invalid_zing_target",
                     "unsupported_stream_source",
+                    "youtube_audio_requires_video",
                 }:
                     error_code = "invalid_request"
                 self.send_json(400, {"error": error_code})
@@ -502,7 +530,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 200,
                 {
                     "success": True,
-                    "source": "zing",
+                    "source": source,
                     "stream_url": stream_url,
                     "media_content_type": resolved.get("content_type", "audio/mpeg"),
                     "expires_in": 3600,
@@ -566,8 +594,8 @@ class PlayerHandler(BaseHTTPRequestHandler):
             return
         response_started = False
         try:
-            target_url = verify_stream_token(token, self.server.integration_token)
-            resolved = self.server.resolve_stream(target_url)
+            source, target = verify_stream_token(token, self.server.integration_token)
+            resolved = self.server.resolve_stream(source, target)
             headers = {**resolved["headers"], "Accept-Encoding": "identity"}
             if range_header := self.headers.get("Range"):
                 if not re.fullmatch(r"bytes=\d*-\d*", range_header):
