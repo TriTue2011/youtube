@@ -24,6 +24,7 @@ async def async_play_on_players(
     target_device_classes: dict[str, str | None] | None = None,
     target_supported_features: dict[str, int | None] | None = None,
     volume_level: float | None = None,
+    media_content_type: str | None = None,
     excluded_entity_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Resolve one source item and dispatch it to one or more HA players."""
@@ -51,7 +52,7 @@ async def async_play_on_players(
         entity_id for entity_id in targets if entity_id not in playable_targets
     ]
 
-    if source not in {"youtube", "zing"}:
+    if source not in {"youtube", "zing", "http"}:
         raise ValueError("unsupported_source")
     if not playable_targets:
         raise UnsupportedTargetMediaError("target_source_unsupported")
@@ -104,6 +105,20 @@ async def async_play_on_players(
             blocking=True,
             target={"entity_id": playable_targets},
         )
+    elif source == "http":
+        service_data = build_stream_request(
+            {
+                "stream_url": target,
+                "media_content_type": media_content_type or "audio/mpeg",
+            }
+        )
+        await hass.services.async_call(
+            "media_player",
+            "play_media",
+            service_data,
+            blocking=True,
+            target={"entity_id": playable_targets},
+        )
     else:
         for entity_id, service_data in requests.items():
             await hass.services.async_call(
@@ -113,6 +128,13 @@ async def async_play_on_players(
                 blocking=True,
                 target={"entity_id": entity_id},
             )
+    await client.async_update_session(
+        source,
+        target,
+        playable_targets,
+        media_content_type=media_content_type,
+        volume_level=volume_level,
+    )
     return {
         "source": source,
         "selected_count": len(targets),

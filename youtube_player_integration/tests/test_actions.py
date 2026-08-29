@@ -64,6 +64,9 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                     "media_content_type": "audio/mpeg",
                 }
             ),
+            async_update_session=AsyncMock(
+                return_value={"success": True, "session": {"state": "playing"}}
+            ),
         )
 
     async def test_youtube_dispatches_for_each_platform_and_sets_group_volume(self):
@@ -98,6 +101,13 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         cast_call = self.hass.services.calls[1]
         self.assertEqual("cast", cast_call["service_data"]["media_content_type"])
         self.assertEqual(2, len(self.hass.services.calls))
+        self.client.async_update_session.assert_awaited_once_with(
+            "youtube",
+            "dQw4w9WgXcQ",
+            ["media_player.cast"],
+            media_content_type=None,
+            volume_level=0.35,
+        )
 
     async def test_zing_creates_one_signed_stream_for_all_selected_speakers(self):
         target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
@@ -111,12 +121,53 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.client.async_create_stream.assert_awaited_once_with("zing", target)
-        self.assertEqual("audio/mpeg", self.hass.services.calls[0]["service_data"]["media_content_type"])
+        self.assertEqual(
+            "audio/mpeg",
+            self.hass.services.calls[0]["service_data"]["media_content_type"],
+        )
         self.assertEqual(
             {"entity_id": ["media_player.living_room", "media_player.kitchen"]},
             self.hass.services.calls[0]["target"],
         )
         self.assertEqual("zing", result["source"])
+        self.client.async_update_session.assert_awaited_once_with(
+            "zing",
+            target,
+            ["media_player.living_room", "media_player.kitchen"],
+            media_content_type=None,
+            volume_level=None,
+        )
+
+    async def test_http_audio_dispatches_and_records_session(self):
+        target = "https://audio.example/music/song.flac"
+
+        result = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="http",
+            target=target,
+            entity_ids=["media_player.esp32"],
+            target_platforms={"media_player.esp32": "esphome"},
+            media_content_type="audio/flac",
+        )
+
+        self.assertEqual(
+            "audio/flac",
+            self.hass.services.calls[0]["service_data"]["media_content_type"],
+        )
+        self.assertEqual(
+            target,
+            self.hass.services.calls[0]["service_data"]["media_content_id"],
+        )
+        self.client.async_create_stream.assert_not_awaited()
+        self.client.async_update_session.assert_awaited_once_with(
+            "http",
+            target,
+            ["media_player.esp32"],
+            media_content_type="audio/flac",
+            volume_level=None,
+        )
+        self.assertEqual("http", result["source"])
 
     async def test_incompatible_youtube_targets_fail_before_mutating_server(self):
         with self.assertRaises(self.actions.UnsupportedTargetMediaError):

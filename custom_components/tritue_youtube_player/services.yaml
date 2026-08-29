@@ -1,6 +1,6 @@
 play_on_players:
   name: Play on selected media players
-  description: Resolve a YouTube or public Zing result and play it on one or more media players.
+  description: Resolve YouTube, public Zing or direct HTTP audio and play it on one or more media players.
   fields:
     entry_id:
       name: Config entry
@@ -19,11 +19,19 @@ play_on_players:
           options:
             - youtube
             - zing
+            - http
     target:
       name: Media target
       description: YouTube video ID or URL, or a public Zing song URL returned by search.
       required: true
       example: dQw4w9WgXcQ
+      selector:
+        text:
+    media_content_type:
+      name: HTTP media type
+      description: Optional MIME type for a direct HTTP audio URL, such as audio/flac.
+      required: false
+      example: audio/mpeg
       selector:
         text:
     entity_id:

@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
 from search import SearchUnavailableError, search_youtube, search_zing
+from session import PlaybackSession
 from streaming import (
     InvalidStreamTokenError,
     StreamUnavailableError,
@@ -40,7 +41,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.5.0"
 API_VERSION = "1"
 
 
@@ -121,7 +122,7 @@ class PlayerServer(ThreadingHTTPServer):
         self.stream_lock = threading.Lock()
         self.zing_result_cache = {}
         self.stream_cache = {}
-        self.current_item = None
+        self.playback_session = PlaybackSession()
 
     @property
     def history_path(self):
@@ -164,26 +165,68 @@ class PlayerServer(ThreadingHTTPServer):
 
     def get_player(self):
         with self.player_lock:
-            item = dict(self.current_item) if self.current_item else None
-        return {"state": "playing" if item else "idle", "item": item}
+            session = self.playback_session.snapshot()
+        return {"state": session["state"], "item": session["item"]}
 
-    def play(self, target):
-        self.add_history(target)
+    def get_session(self):
         with self.player_lock:
-            self.current_item = dict(target)
+            return self.playback_session.snapshot()
+
+    def play(self, target, *, raw_target=""):
+        with self.player_lock:
+            session = self.playback_session.start(
+                "youtube", raw_target or target.get("id"), fallback_item=target
+            )
+        self.add_history(session["item"])
+        return session
+
+    def record_session(
+        self,
+        source,
+        target,
+        *,
+        output_entity_ids,
+        media_content_type="",
+        volume_level=None,
+    ):
+        if source == "youtube":
+            fallback = normalize_target(target)
+        elif source == "zing":
+            target = self.require_public_zing_result(target)
+            fallback = {"source": "zing", "kind": "song", "id": target, "url": target}
+        elif source == "http":
+            fallback = None
+        else:
+            raise ValueError("unsupported_session_source")
+        with self.player_lock:
+            session = self.playback_session.start(
+                source,
+                target,
+                fallback_item=fallback,
+                output_entity_ids=output_entity_ids,
+                media_content_type=media_content_type,
+                volume_level=volume_level,
+            )
+        self.add_history(session["item"])
+        return session
 
     def stop(self):
         with self.player_lock:
-            self.current_item = None
+            return self.playback_session.stop()
 
     def search(self, source, query, limit):
         """Run one metadata search at a time to bound child processes."""
         with self.search_lock:
             if source == "youtube":
-                return search_youtube(query, limit=limit)
+                results = search_youtube(query, limit=limit)
+                with self.player_lock:
+                    self.playback_session.remember_search(source, results)
+                return results
             if source == "zing":
                 results = search_zing(query, limit=limit)
                 self.remember_public_zing_results(results)
+                with self.player_lock:
+                    self.playback_session.remember_search(source, results)
                 return results
             raise ValueError("invalid_search_source")
 
@@ -293,11 +336,13 @@ class PlayerHandler(BaseHTTPRequestHandler):
                         "history",
                         "play",
                         "search",
+                        "session",
                         "status",
                         "stop",
                         "zing_stream",
                     ],
                     "sources": ["youtube", "zing"],
+                    "playback_sources": ["youtube", "zing", "http"],
                 },
             )
             return
@@ -333,6 +378,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/integration/status":
             player = self.server.get_player()
+            session = self.server.get_session()
             self.send_json(
                 200,
                 {
@@ -341,6 +387,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     "app_version": APP_VERSION,
                     "state": player["state"],
                     "item": player["item"],
+                    "session": session,
                     "history_count": len(self.server.load_history()),
                 },
             )
@@ -360,8 +407,41 @@ class PlayerHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/integration/") and not self.authorize_integration():
             return
         if path == "/api/integration/stop":
-            self.server.stop()
-            self.send_json(200, {"success": True, "state": "idle"})
+            session = self.server.stop()
+            self.send_json(
+                200, {"success": True, "state": "idle", "session": session}
+            )
+            return
+        if path == "/api/integration/session":
+            try:
+                payload = self.read_json_body(maximum=8192)
+                source = str(payload.get("source") or "").lower()
+                session = self.server.record_session(
+                    source,
+                    payload.get("target"),
+                    output_entity_ids=payload.get("output_entity_ids"),
+                    media_content_type=payload.get("media_content_type") or "",
+                    volume_level=payload.get("volume_level"),
+                )
+            except ValueError as error:
+                error_code = str(error)
+                if error_code == "unverified_zing_target":
+                    self.send_json(403, {"error": error_code})
+                    return
+                if error_code not in {
+                    "invalid_http_audio_target",
+                    "invalid_output_entity_ids",
+                    "invalid_volume_level",
+                    "invalid_youtube_target",
+                    "unsupported_session_source",
+                }:
+                    error_code = "invalid_request"
+                self.send_json(400, {"error": error_code})
+                return
+            except (AttributeError, json.JSONDecodeError, UnicodeDecodeError):
+                self.send_json(400, {"error": "invalid_request"})
+                return
+            self.send_json(200, {"success": True, "session": session})
             return
         if path == "/api/integration/stream":
             try:
@@ -413,11 +493,9 @@ class PlayerHandler(BaseHTTPRequestHandler):
             self.send_json(404, {"error": "not_found"})
             return
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length < 1 or length > 4096:
-                raise ValueError("invalid_request")
-            payload = json.loads(self.rfile.read(length))
-            target = normalize_target(payload.get("target"))
+            payload = self.read_json_body(maximum=4096)
+            raw_target = payload.get("target")
+            target = normalize_target(raw_target)
         except ValueError as error:
             error_code = str(error)
             if error_code not in {"invalid_request", "invalid_youtube_target"}:
@@ -428,11 +506,11 @@ class PlayerHandler(BaseHTTPRequestHandler):
             self.send_json(400, {"error": "invalid_request"})
             return
 
-        self.server.play(target)
+        session = self.server.play(target, raw_target=raw_target)
         if path == "/api/integration/play":
-            self.send_json(200, {"success": True, "item": target})
+            self.send_json(200, {"success": True, "item": session["item"]})
         else:
-            self.send_json(201, target)
+            self.send_json(201, session["item"])
 
     def do_DELETE(self):
         if urlsplit(self.path).path != "/api/history":
@@ -444,6 +522,15 @@ class PlayerHandler(BaseHTTPRequestHandler):
     def send_json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_bytes(status, body, "application/json; charset=utf-8")
+
+    def read_json_body(self, *, maximum):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length < 1 or length > maximum:
+            raise ValueError("invalid_request")
+        payload = json.loads(self.rfile.read(length))
+        if not isinstance(payload, dict):
+            raise ValueError("invalid_request")
+        return payload
 
     def proxy_stream(self, token):
         """Resolve and relay a signed public Zing audio request to a speaker."""

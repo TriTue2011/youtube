@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -91,38 +92,93 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
         return MediaPlayerState.IDLE
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
+    def session(self) -> dict[str, Any]:
+        """Return the current shared add-on playback session."""
+        value = self.coordinator.data.get("session") or {}
+        return value if isinstance(value, dict) else {}
+
+    @property
+    def current_item(self) -> dict[str, Any]:
+        """Return rich session metadata with the v1 item as a fallback."""
+        value = self.session.get("item") or self.coordinator.data.get("item") or {}
+        return value if isinstance(value, dict) else {}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Expose the selected output and dispatch mode."""
+        queue = self.session.get("queue") or {}
         return {
             "config_entry_id": self.entry.entry_id,
             "target_entity_id": self.target_entity_id or None,
             "target_platform": self._target_platform(),
+            "session_source": self.current_item.get("source"),
+            "output_entity_ids": self.session.get("output_entity_ids") or [],
+            "queue_index": queue.get("index", -1),
+            "queue_size": len(queue.get("items") or []),
+            "session_updated_at": self.session.get("updated_at"),
+            "session_supported_actions": self.session.get("supported_actions") or [],
         }
 
     @property
     def media_content_id(self) -> str | None:
         """Return the current YouTube identifier."""
-        item = self.coordinator.data.get("item") or {}
-        return item.get("id")
+        return self.current_item.get("id")
 
     @property
     def media_content_type(self) -> str | None:
         """Return whether the current item is a video or playlist."""
-        item = self.coordinator.data.get("item") or {}
-        return item.get("kind")
+        return self.current_item.get("media_content_type") or self.current_item.get(
+            "kind"
+        )
 
     @property
     def media_title(self) -> str | None:
-        """Use the normalized identifier as the current media title."""
-        return self.media_content_id
+        """Return title metadata retained from add-on search results."""
+        return self.current_item.get("title") or self.media_content_id
+
+    @property
+    def media_artist(self) -> str | None:
+        """Return the current artist/channel."""
+        return self.current_item.get("artist")
+
+    @property
+    def media_album_name(self) -> str | None:
+        """Return the current album when the provider supplies one."""
+        return self.current_item.get("album")
+
+    @property
+    def media_duration(self) -> int | None:
+        """Return duration in seconds."""
+        value = self.session.get("duration") or self.current_item.get("duration")
+        return int(value) if value else None
+
+    @property
+    def media_position(self) -> int | None:
+        """Return the server's last known playback position."""
+        if self.state == MediaPlayerState.IDLE:
+            return None
+        return int(self.session.get("position") or 0)
+
+    @property
+    def media_position_updated_at(self) -> datetime | None:
+        """Return when the server last updated position/state metadata."""
+        value = self.session.get("updated_at")
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
 
     @property
     def media_image_url(self) -> str | None:
         """Return a YouTube thumbnail for video items."""
-        item = self.coordinator.data.get("item") or {}
-        if item.get("kind") != "video" or not item.get("id"):
-            return None
-        return f"https://i.ytimg.com/vi/{item['id']}/hqdefault.jpg"
+        item = self.current_item
+        if thumbnail := item.get("thumbnail"):
+            return thumbnail
+        if item.get("kind") == "video" and item.get("id"):
+            return f"https://i.ytimg.com/vi/{item['id']}/hqdefault.jpg"
+        return None
 
     async def async_browse_media(
         self,
@@ -284,7 +340,7 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
     ) -> BrowseMedia:
         """Convert stable API metadata into a playable HA browser item."""
         title = str(item.get("title") or item.get("id") or "YouTube")
-        if channel := str(item.get("channel") or ""):
+        if channel := str(item.get("artist") or item.get("channel") or ""):
             title = f"{title} — {channel}"
         return BrowseMedia(
             title=title,

@@ -130,6 +130,18 @@ class PlaybackRequestTests(unittest.TestCase):
             request,
         )
 
+    def test_direct_hls_audio_is_accepted_for_ha_media_players(self):
+        request = self.playback.build_stream_request(
+            {
+                "stream_url": "https://audio.example/live/playlist.m3u8",
+                "media_content_type": "application/vnd.apple.mpegurl",
+            }
+        )
+
+        self.assertEqual(
+            "application/vnd.apple.mpegurl", request["media_content_type"]
+        )
+
     def test_capability_matrix_routes_sources_by_transport(self):
         cases = {
             "cast_tv": (

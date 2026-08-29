@@ -57,6 +57,11 @@ Card có tìm kiếm YouTube/Zing, nhập HTTP audio, chọn nhiều thiết b�
 trạng thái đang phát, play/pause/stop/next/previous và âm lượng theo capability
 thật của từng entity.
 
+Add-on giữ phiên phát dùng chung gồm metadata, hàng đợi và danh sách đầu ra, nên
+card trên trình duyệt khác vẫn thấy bài đã phát. Xem kết quả phân tích clean-room
+[APK YouTube Music](docs/YOUTUBE_MUSIC_APK_ANALYSIS.md) làm cơ sở cho hợp đồng
+này.
+
 ## Tuyến phát hiện có
 
 - **YouTube:** dùng receiver YouTube chính thức trên Cast TV hoặc deep link

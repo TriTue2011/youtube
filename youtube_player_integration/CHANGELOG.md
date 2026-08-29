@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0 - 2026-08-29
+
+### Added
+
+- Entity công bố title, artist, album, ảnh bìa, duration, position, queue và danh
+  sách thiết bị đầu ra từ phiên phát dùng chung của add-on.
+- HTTP audio trực tiếp đi qua action của integration để mọi card/browser cùng
+  thấy trạng thái đang phát.
+- Hỗ trợ MIME HLS chuẩn bên cạnh MP3/AAC/M4A/FLAC/OGG/OPUS/WAV.
+
+### Changed
+
+- Card ưu tiên metadata phiên từ entity Home Assistant; `localStorage` chỉ còn
+  là fallback trong lúc coordinator chưa poll xong.
+
 ## 0.6.0 - 2026-08-29
 
 ### Added

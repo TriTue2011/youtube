@@ -150,6 +150,39 @@ class YouTubePlayerClientTests(unittest.IsolatedAsyncioTestCase):
             stream["stream_url"].startswith("http://192.0.2.10:8099/api/stream/")
         )
 
+    async def test_client_updates_the_shared_playback_session(self):
+        target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
+        with patch(
+            "server.search_zing",
+            return_value=[
+                {
+                    "source": "zing",
+                    "kind": "song",
+                    "id": "ZZ90FD0B",
+                    "url": target,
+                    "title": "Thức Giấc",
+                    "channel": "Da LAB",
+                    "duration": 269,
+                    "thumbnail": "",
+                }
+            ],
+        ):
+            await self.client.async_search("Da LAB", source="zing", limit=5)
+
+        payload = await self.client.async_update_session(
+            "zing",
+            target,
+            ["media_player.phong_khach"],
+            media_content_type="audio/mpeg",
+        )
+
+        self.assertEqual("playing", payload["session"]["state"])
+        self.assertEqual("Thức Giấc", payload["session"]["item"]["title"])
+        self.assertEqual(
+            ["media_player.phong_khach"],
+            payload["session"]["output_entity_ids"],
+        )
+
     async def test_client_maps_invalid_token_to_authentication_error(self):
         client = self.api.YouTubePlayerClient(
             f"http://127.0.0.1:{self.server.server_port}",

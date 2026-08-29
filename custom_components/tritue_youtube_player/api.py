@@ -74,6 +74,28 @@ class YouTubePlayerClient:
             "POST", "/api/integration/play", json={"target": target}
         )
 
+    async def async_update_session(
+        self,
+        source: str,
+        target: str,
+        output_entity_ids: list[str],
+        *,
+        media_content_type: str | None = None,
+        volume_level: float | None = None,
+    ) -> dict[str, Any]:
+        """Share now-playing metadata and physical outputs with all HA clients."""
+        return await self._async_request(
+            "POST",
+            "/api/integration/session",
+            json={
+                "source": source,
+                "target": target,
+                "output_entity_ids": output_entity_ids,
+                "media_content_type": media_content_type,
+                "volume_level": volume_level,
+            },
+        )
+
     async def async_stop(self) -> dict[str, Any]:
         """Stop the active web player."""
         return await self._async_request("POST", "/api/integration/stop")

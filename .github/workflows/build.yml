@@ -7,16 +7,18 @@ on:
       - "youtube_player/**"
       - "custom_components/tritue_youtube_player/**"
       - "youtube_player_integration/**"
+      - "docs/**"
       - "hacs.json"
-      - ".github/workflows/build-youtube-player.yml"
+      - ".github/workflows/build.yml"
   push:
     branches: [main]
     paths:
       - "youtube_player/**"
       - "custom_components/tritue_youtube_player/**"
       - "youtube_player_integration/**"
+      - "docs/**"
       - "hacs.json"
-      - ".github/workflows/build-youtube-player.yml"
+      - ".github/workflows/build.yml"
   workflow_dispatch:
 
 permissions:
@@ -46,7 +48,7 @@ jobs:
 
       - name: Check Python and JavaScript syntax
         run: |
-          python -m py_compile youtube_player/app/server.py
+          python -m py_compile youtube_player/app/server.py youtube_player/app/session.py
           python -m compileall -q custom_components/tritue_youtube_player
           node --check youtube_player/app/static/app.js
           node --check custom_components/tritue_youtube_player/www/tritue-youtube-player-card.js

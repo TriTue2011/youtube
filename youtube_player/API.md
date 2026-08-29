@@ -27,15 +27,54 @@ Kiểm tra xác thực, phiên bản API và capability. Response thành công:
   "success": true,
   "status": "ok",
   "api_version": "1",
-  "app_version": "0.4.1",
-  "capabilities": ["history", "play", "search", "status", "stop", "zing_stream"],
-  "sources": ["youtube", "zing"]
+  "app_version": "0.5.0",
+  "capabilities": ["history", "play", "search", "session", "status", "stop", "zing_stream"],
+  "sources": ["youtube", "zing"],
+  "playback_sources": ["youtube", "zing", "http"]
 }
 ```
 
 ### `GET /api/integration/status`
 
-Trả về `state` (`idle` hoặc `playing`), mục đang phát và `history_count`.
+Trả về `state`, item tương thích API cũ, `history_count` và `session` dùng chung:
+
+```json
+{
+  "state": "playing",
+  "position": 0,
+  "duration": 213,
+  "updated_at": "2026-08-29T12:00:00+00:00",
+  "volume_level": null,
+  "item": {
+    "source": "youtube",
+    "id": "dQw4w9WgXcQ",
+    "title": "Never Gonna Give You Up",
+    "artist": "Rick Astley",
+    "album": "",
+    "thumbnail": "https://...",
+    "duration": 213
+  },
+  "queue": {"index": 0, "items": []},
+  "output_entity_ids": ["media_player.phong_khach"],
+  "supported_actions": ["stop"]
+}
+```
+
+### `POST /api/integration/session`
+
+Integration gọi endpoint này sau khi Home Assistant gửi media thành công tới
+thiết bị vật lý. `source` nhận `youtube`, `zing` hoặc `http`; target YouTube/Zing
+được đối chiếu với kết quả tìm kiếm gần nhất để giữ metadata và queue.
+
+```json
+{
+  "source": "zing",
+  "target": "https://zingmp3.vn/bai-hat/Ten-Bai/SONGID.html",
+  "output_entity_ids": ["media_player.phong_khach"],
+  "media_content_type": "audio/mpeg",
+  "volume_level": 0.35
+}
+```
 
 ### `GET /api/integration/history`
 

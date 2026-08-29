@@ -50,7 +50,11 @@ def build_stream_request(payload: dict[str, Any]) -> dict[str, str]:
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
-        or not content_type.startswith("audio/")
+        or (
+            not content_type.startswith("audio/")
+            and content_type
+            not in {"application/vnd.apple.mpegurl", "application/x-mpegurl"}
+        )
     ):
         raise ValueError("invalid_stream_response")
     return {

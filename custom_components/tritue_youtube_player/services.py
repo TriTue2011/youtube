@@ -13,6 +13,7 @@ from .actions import async_play_on_players
 from .api import InvalidTargetError, YouTubePlayerApiError
 from .const import (
     CONF_ENTRY_ID,
+    CONF_MEDIA_CONTENT_TYPE,
     CONF_SOURCE,
     CONF_TARGET,
     CONF_VOLUME_LEVEL,
@@ -29,9 +30,10 @@ from .playback import (
 PLAY_ON_PLAYERS_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTRY_ID): cv.string,
-        vol.Required(CONF_SOURCE): vol.In({"youtube", "zing"}),
+        vol.Required(CONF_SOURCE): vol.In({"youtube", "zing", "http"}),
         vol.Required(CONF_TARGET): cv.string,
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Optional(CONF_MEDIA_CONTENT_TYPE): cv.string,
         vol.Optional(CONF_VOLUME_LEVEL): vol.All(
             vol.Coerce(float), vol.Range(min=0, max=1)
         ),
@@ -101,8 +103,10 @@ async def _async_handle_play_on_players(
             target_device_classes=device_classes,
             target_supported_features=supported_features,
             volume_level=call.data.get(CONF_VOLUME_LEVEL),
+            media_content_type=call.data.get(CONF_MEDIA_CONTENT_TYPE),
             excluded_entity_ids=excluded,
         )
+        await entry.runtime_data.async_request_refresh()
     except InvalidTargetError as error:
         raise _validation_error("invalid_target") from error
     except UnsupportedCastMediaError as error:

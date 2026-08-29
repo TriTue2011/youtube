@@ -38,7 +38,6 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('data-source="http"', script)
         self.assertIn('this._prepareHttpResult(query)', script)
         self.assertIn('media_content_type: item.media_content_type', script)
-        self.assertIn('callService("media_player", "play_media"', script)
         self.assertIn('callService("media_player", "volume_set"', script)
         self.assertIn('this._transport("media_previous_track")', script)
         self.assertIn('this._transport("media_play_pause")', script)
@@ -52,6 +51,9 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('aria-label="Bài tiếp theo"', script)
         self.assertIn('class="now-playing"', script)
         self.assertIn("attributes.media_title", script)
+        self.assertIn("session_source", script)
+        self.assertIn("output_entity_ids", script)
+        self.assertIn('source: this._source', script)
         self.assertIn("this._syncNowPlaying()", script)
         self.assertNotIn("eval(", script)
 
@@ -64,6 +66,8 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("http", manifest["dependencies"])
         self.assertIn("play_on_players:", services)
         self.assertIn("multiple: true", services)
+        self.assertIn("- http", services)
+        self.assertIn("media_content_type:", services)
 
     def test_manifest_key_order_matches_hassfest(self):
         manifest = json.loads(

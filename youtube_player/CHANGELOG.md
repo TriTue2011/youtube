@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 - 2026-08-29
+
+### Added
+
+- Hợp đồng phiên phát clean-room gồm state, metadata, position, queue, thiết bị
+  đầu ra và supported actions, dựa trên mô hình MediaSession quan sát từ APK.
+- Endpoint xác thực `POST /api/integration/session` cho YouTube, Zing và HTTP
+  audio trực tiếp.
+
+### Changed
+
+- Giữ title, artist, album, thumbnail và duration của kết quả tìm kiếm khi phát,
+  thay vì chỉ còn video ID.
+- Lịch sử và trạng thái player dùng cùng một item đã chuẩn hóa.
+
 ## 0.4.1 - 2026-08-29
 
 ### Fixed

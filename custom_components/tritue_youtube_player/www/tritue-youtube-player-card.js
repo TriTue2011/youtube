@@ -535,9 +535,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const active = selected.find(([, state]) => state.state === "playing")
       || selected.find(([, state]) => state.state === "paused")
       || selected.find(([, state]) => state.state === "buffering");
-    const state = active?.[1];
-    const attributes = state?.attributes || {};
-    const fallback = this._currentItem || {};
+    const serverState = this._hass.states[this._config.entity];
+    const serverAttributes = serverState?.attributes || {};
+    const state = active?.[1] || serverState;
+    const attributes = active?.[1]?.attributes || serverAttributes;
+    const sharedSession = serverAttributes.media_title ? {
+      source: serverAttributes.session_source,
+      id: serverAttributes.media_content_id,
+      title: serverAttributes.media_title,
+      channel: serverAttributes.media_artist,
+      thumbnail: serverAttributes.entity_picture || serverAttributes.media_image_url,
+      duration: serverAttributes.media_duration,
+      entity_ids: serverAttributes.output_entity_ids,
+    } : null;
+    const fallback = sharedSession || this._currentItem || {};
     const title = attributes.media_title || fallback.title || "";
     const artist = attributes.media_artist || fallback.channel || "";
     const duration = this._formatDuration(attributes.media_duration || fallback.duration);
@@ -722,36 +733,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       );
       return;
     }
-    const entryId = this._source === "http" ? "" : this._entryId();
-    if (this._source !== "http" && !entryId) {
+    const entryId = this._entryId();
+    if (!entryId) {
       this._setStatus("Không tìm thấy config entry của integration.", true);
       return;
     }
     button.disabled = true;
     this._setStatus(`Đang phát “${item.title || item.id}”…`);
     try {
-      if (this._source === "http") {
-        const volumeTargets = entityIds.filter((entityId) => this._supportsFeature(entityId, 4));
-        if (volumeTargets.length) {
-          await this._hass.callService("media_player", "volume_set", {
-            entity_id: volumeTargets,
-            volume_level: Number(this.shadowRoot.querySelector(".volume").value),
-          });
-        }
-        await this._hass.callService("media_player", "play_media", {
-          entity_id: entityIds,
-          media_content_id: item.url || item.id,
-          media_content_type: item.media_content_type,
-        });
-      } else {
-        await this._hass.callService("tritue_youtube_player", "play_on_players", {
-          entry_id: entryId,
-          source: this._source,
-          target: item.url || item.id,
-          entity_id: entityIds,
-          volume_level: Number(this.shadowRoot.querySelector(".volume").value),
-        });
-      }
+      await this._hass.callService("tritue_youtube_player", "play_on_players", {
+        entry_id: entryId,
+        source: this._source,
+        target: item.url || item.id,
+        entity_id: entityIds,
+        volume_level: Number(this.shadowRoot.querySelector(".volume").value),
+        media_content_type: item.media_content_type,
+      });
       this._rememberNowPlaying(item, entityIds);
       this._syncNowPlaying();
       const ignored = requestedCount - entityIds.length;

@@ -157,6 +157,63 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual("dQw4w9WgXcQ", body["items"][0]["id"])
         search_youtube.assert_called_once_with("Rick Astley", limit=5)
 
+    @patch("server.search_youtube")
+    def test_playing_a_search_result_preserves_metadata_and_queue(
+        self, search_youtube
+    ):
+        search_youtube.return_value = [
+            {
+                "source": "youtube",
+                "kind": "video",
+                "id": "dQw4w9WgXcQ",
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "title": "Never Gonna Give You Up",
+                "channel": "Rick Astley",
+                "album": "Whenever You Need Somebody",
+                "duration": 213,
+                "thumbnail": "https://img.example/cover.jpg",
+            },
+            {
+                "source": "youtube",
+                "kind": "video",
+                "id": "M7lc1UVf-VE",
+                "url": "https://www.youtube.com/watch?v=M7lc1UVf-VE",
+                "title": "YouTube Developers Live",
+                "channel": "YouTube Developers",
+                "duration": 160,
+                "thumbnail": "https://img.example/next.jpg",
+            },
+        ]
+        headers = {"Authorization": "Bearer test-integration-token"}
+        self.request(
+            "/api/integration/search?q=Rick+Astley&limit=5",
+            headers=headers,
+        )
+
+        self.request(
+            "/api/integration/play",
+            method="POST",
+            payload={"target": "https://youtu.be/dQw4w9WgXcQ"},
+            headers=headers,
+        )
+        _, status = self.request("/api/integration/status", headers=headers)
+
+        self.assertEqual("playing", status["session"]["state"])
+        self.assertEqual("youtube", status["session"]["item"]["source"])
+        self.assertEqual(
+            "Never Gonna Give You Up", status["session"]["item"]["title"]
+        )
+        self.assertEqual("Rick Astley", status["session"]["item"]["artist"])
+        self.assertEqual(213, status["session"]["duration"])
+        self.assertEqual(0, status["session"]["position"])
+        self.assertEqual(0, status["session"]["queue"]["index"])
+        self.assertEqual(2, len(status["session"]["queue"]["items"]))
+        self.assertIn("stop", status["session"]["supported_actions"])
+        self.assertRegex(
+            status["session"]["updated_at"],
+            r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",
+        )
+
     @patch("server.search_zing")
     def test_integration_can_select_the_zing_search_provider(self, search_zing):
         search_zing.return_value = [
@@ -181,6 +238,92 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual("zing", body["source"])
         self.assertEqual("ZZ90FD0B", body["items"][0]["id"])
         search_zing.assert_called_once_with("Da LAB", limit=5)
+
+    @patch("server.search_zing")
+    def test_integration_records_zing_outputs_in_shared_session(
+        self, search_zing
+    ):
+        target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
+        search_zing.return_value = [
+            {
+                "source": "zing",
+                "kind": "song",
+                "id": "ZZ90FD0B",
+                "url": target,
+                "title": "Thức Giấc",
+                "channel": "Da LAB",
+                "duration": 269,
+                "thumbnail": "https://photo-resize-zmp3.zmdcdn.me/cover.jpg",
+            }
+        ]
+        headers = {"Authorization": "Bearer test-integration-token"}
+        self.request(
+            "/api/integration/search?source=zing&q=Da+LAB&limit=5",
+            headers=headers,
+        )
+
+        status, body = self.request(
+            "/api/integration/session",
+            method="POST",
+            payload={
+                "source": "zing",
+                "target": target,
+                "output_entity_ids": [
+                    "media_player.phong_khach",
+                    "media_player.nha_bep",
+                ],
+                "volume_level": 0.42,
+            },
+            headers=headers,
+        )
+
+        self.assertEqual(200, status)
+        self.assertEqual("Thức Giấc", body["session"]["item"]["title"])
+        self.assertEqual(
+            ["media_player.phong_khach", "media_player.nha_bep"],
+            body["session"]["output_entity_ids"],
+        )
+        self.assertEqual(0.42, body["session"]["volume_level"])
+
+    def test_integration_records_valid_direct_http_audio_session(self):
+        headers = {"Authorization": "Bearer test-integration-token"}
+
+        status, body = self.request(
+            "/api/integration/session",
+            method="POST",
+            payload={
+                "source": "http",
+                "target": "https://audio.example/album/My%20Song.flac",
+                "media_content_type": "audio/flac",
+                "output_entity_ids": ["media_player.esp32"],
+            },
+            headers=headers,
+        )
+
+        self.assertEqual(200, status)
+        self.assertEqual("My Song.flac", body["session"]["item"]["title"])
+        self.assertEqual(
+            "audio/flac", body["session"]["item"]["media_content_type"]
+        )
+
+    def test_integration_rejects_a_web_page_as_direct_http_audio(self):
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            self.request(
+                "/api/integration/session",
+                method="POST",
+                payload={
+                    "source": "http",
+                    "target": "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "output_entity_ids": ["media_player.speaker"],
+                },
+                headers={"Authorization": "Bearer test-integration-token"},
+            )
+
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual(
+            {"error": "invalid_http_audio_target"},
+            json.load(raised.exception),
+        )
 
     def test_integration_rejects_unknown_search_provider(self):
         with self.assertRaises(urllib.error.HTTPError) as raised:

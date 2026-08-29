@@ -69,14 +69,14 @@ Khi image đã được phát hành lên GHCR, bỏ phần `build` trong Compose
 tải image dựng sẵn:
 
 ```bash
-docker pull ghcr.io/tritue2011/youtube-player:0.4.1
+docker pull ghcr.io/tritue2011/youtube-player:0.5.0
 docker run -d \
   --name tritue-youtube-player \
   --restart unless-stopped \
   -p 8099:8099 \
   -e PUBLIC_BASE_URL='http://IP-máy-Docker:8099' \
   -v tritue-youtube-player-data:/data \
-  ghcr.io/tritue2011/youtube-player:0.4.1
+  ghcr.io/tritue2011/youtube-player:0.5.0
 ```
 
 Xem token tự sinh bằng `docker logs tritue-youtube-player`. Nếu muốn tự đặt
@@ -91,7 +91,7 @@ token, thêm `-e INTEGRATION_TOKEN='<chuỗi-ngẫu-nhiên-dài>'` khi chạy co
 
 Chi tiết request và response nằm trong [API.md](API.md).
 
-## Giới hạn của phiên bản 0.4.1
+## Giới hạn của phiên bản 0.5.0
 
 - Không tách hoặc proxy âm thanh YouTube. YouTube chỉ phát qua trang nhúng hoặc
   ứng dụng Cast chính thức.

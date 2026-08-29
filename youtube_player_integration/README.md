@@ -1,7 +1,7 @@
 # TriTue YouTube Player Integration
 
 Custom integration clean-room kết nối Home Assistant với TriTue YouTube Player
-`0.4.0` trở lên, chạy dưới dạng Home Assistant App hoặc Docker độc lập.
+`0.5.0` trở lên, chạy dưới dạng Home Assistant App hoặc Docker độc lập.
 
 ## Cài thủ công để kiểm thử
 
@@ -96,6 +96,8 @@ phép phát công khai. Action có thể gọi trực tiếp trong automation:
 Ở tab `HTTP Audio`, dán URL công khai mà chính thiết bị phát có thể truy cập.
 Card nhận diện MP3, AAC, M4A, FLAC, OGG, OPUS, WAV và HLS; có thể đặt
 `http_content_type` trong cấu hình card nếu URL ký số không có phần mở rộng.
+HTTP Audio cũng đi qua action của integration để add-on lưu phiên phát; vì vậy
+card trên máy khác có thể thấy title, nguồn và các loa đã nhận bài.
 
 ```yaml
 action: tritue_youtube_player.play_on_players
@@ -109,6 +111,19 @@ data:
   volume_level: 0.35
 ```
 
+Ví dụ HTTP audio trực tiếp:
+
+```yaml
+action: tritue_youtube_player.play_on_players
+data:
+  entry_id: 01J00000000000000000000000
+  source: http
+  target: https://audio.example/music/song.flac
+  media_content_type: audio/flac
+  entity_id:
+    - media_player.phong_khach
+```
+
 YouTube dùng Cast/trình phát chính thức và không relay audio. Với Zing, add-on
 chỉ relay bài công khai mà extractor hiện tại giải được, từ chối VIP. Hãy đặt
 `public_base_url` trong add-on thành URL LAN `http://IP:8099` mà tất cả loa truy
@@ -116,11 +131,12 @@ cập được. Phải chọn bài từ kết quả search của card/API; URL Z
 sẽ bị từ chối. Endpoint web của Zing không có tài liệu chính thức nên có thể
 thay đổi.
 
-Trạng thái của entity là **assumed state**: nó phản ánh lệnh phát/dừng gần nhất
-mà server đã nhận, không phải telemetry từ video bên trong iframe. Vì vậy entity
-có thể vẫn hiện `playing` khi không có trang player nào đang mở hoặc video đã tự
-kết thúc. Sensor lịch sử chỉ lưu số đếm để không ghi cả danh sách URL vào
-Recorder sau mỗi lần polling; danh sách đầy đủ vẫn có ở API và giao diện player.
+Entity công bố phiên dùng chung gồm title, artist, album, ảnh bìa, duration,
+queue và `output_entity_ids`. Trạng thái vẫn là **assumed state** khi không có
+thiết bị mặc định: nó phản ánh lệnh gần nhất, không phải telemetry từ iframe.
+Khi có thiết bị mặc định, entity ưu tiên trạng thái thật của thiết bị đó. Sensor
+lịch sử chỉ lưu số đếm để không ghi cả danh sách URL vào Recorder sau mỗi lần
+polling; danh sách đầy đủ vẫn có ở API và giao diện player.
 
 Component nằm ở `custom_components/tritue_youtube_player` tại gốc repository để
 HACS có thể nhận diện, đồng thời contract test bảo đảm nó luôn tương thích với
