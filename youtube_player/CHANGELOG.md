@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 - 2026-08-29
+
+### Fixed
+
+- Đọc được body POST dạng **chunked** (Home Assistant Ingress gửi body kiểu này,
+  không có Content-Length). Trước đây mọi POST từ panel add-on qua Ingress bị
+  `400 invalid_request` — Web UI báo "Không thể mở nội dung". Nay Web UI của
+  add-on chạy đúng khi mở qua Ingress.
+
 ## 0.6.1 - 2026-08-29
 
 ### Fixed

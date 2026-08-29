@@ -43,7 +43,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.6.1"
+APP_VERSION = "0.6.2"
 API_VERSION = "1"
 
 
@@ -635,11 +635,44 @@ class PlayerHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_bytes(status, body, "application/json; charset=utf-8")
 
-    def read_json_body(self, *, maximum):
+    def read_request_body(self, *, maximum):
+        """Read a request body sent either with Content-Length or chunked.
+
+        Home Assistant Ingress re-streams POST bodies with
+        ``Transfer-Encoding: chunked`` and no Content-Length, so relying on
+        Content-Length alone drops the body for every request from the panel.
+        """
+        if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
+            return self._read_chunked_body(maximum)
         length = int(self.headers.get("Content-Length", "0"))
         if length < 1 or length > maximum:
             raise ValueError("invalid_request")
-        payload = json.loads(self.rfile.read(length))
+        return self.rfile.read(length)
+
+    def _read_chunked_body(self, maximum):
+        body = bytearray()
+        while True:
+            size_line = self.rfile.readline(72)
+            if not size_line:
+                raise ValueError("invalid_request")
+            try:
+                size = int(size_line.split(b";", 1)[0].strip(), 16)
+            except ValueError as error:
+                raise ValueError("invalid_request") from error
+            if size == 0:
+                while self.rfile.readline(72).strip():
+                    pass
+                break
+            if len(body) + size > maximum:
+                raise ValueError("invalid_request")
+            body.extend(self.rfile.read(size))
+            self.rfile.read(2)  # trailing CRLF after each chunk
+        if not body:
+            raise ValueError("invalid_request")
+        return bytes(body)
+
+    def read_json_body(self, *, maximum):
+        payload = json.loads(self.read_request_body(maximum=maximum))
         if not isinstance(payload, dict):
             raise ValueError("invalid_request")
         return payload

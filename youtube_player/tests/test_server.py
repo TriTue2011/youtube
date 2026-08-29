@@ -726,6 +726,34 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         _, history = self.request("/api/history")
         self.assertEqual([], history["items"])
 
+    def test_history_accepts_a_chunked_request_body(self):
+        # Home Assistant Ingress re-streams POST bodies with
+        # Transfer-Encoding: chunked and no Content-Length.
+        import socket
+
+        body = b'{"target": "dQw4w9WgXcQ"}'
+        chunked = f"{len(body):x}\r\n".encode() + body + b"\r\n0\r\n\r\n"
+        request = (
+            b"POST /api/history HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Content-Type: application/json\r\n"
+            b"Transfer-Encoding: chunked\r\n"
+            b"Connection: close\r\n\r\n" + chunked
+        )
+        with socket.create_connection(
+            ("127.0.0.1", self.server.server_port), timeout=3
+        ) as sock:
+            sock.sendall(request)
+            response = b""
+            while True:
+                part = sock.recv(4096)
+                if not part:
+                    break
+                response += part
+
+        self.assertIn(b"201", response.split(b"\r\n", 1)[0])
+        self.assertIn(b'"id": "dQw4w9WgXcQ"', response)
+
     def test_web_ui_and_runtime_config_are_served(self):
         with urllib.request.urlopen(f"{self.base_url}/", timeout=2) as response:
             page = response.read().decode("utf-8")
