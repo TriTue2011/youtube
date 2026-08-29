@@ -69,8 +69,13 @@ class LovelaceCardContractTests(unittest.TestCase):
     def test_card_is_auto_registered_and_version_busted(self):
         source = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
 
-        self.assertIn("add_extra_js_url", source)
+        # Primary path: register a Lovelace resource after HA has started.
+        self.assertIn("async_register_static_paths", source)
+        self.assertIn("EVENT_HOMEASSISTANT_STARTED", source)
+        self.assertIn("async_create_item", source)
         self.assertIn("integration.version", source)
+        # Fallback for YAML-mode dashboards / unavailable collection.
+        self.assertIn("add_extra_js_url", source)
         manifest = json.loads(
             (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")
         )

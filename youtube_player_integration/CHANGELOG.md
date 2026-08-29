@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.4 - 2026-08-30
+
+### Changed
+
+- Card tự đăng ký thành **Lovelace resource** thật (hiện trong danh sách Tài
+  nguyên, nạp giống mọi card HACS) thay vì chỉ chèn qua `add_extra_js_url` — nhờ
+  vậy không bị service worker của HA giữ bản cũ, và không phải thêm resource thủ
+  công. Đăng ký sau khi HA khởi động xong và chỉ khi collection đã nạp, để không
+  xoá nhầm các resource sẵn có; dashboard YAML thì tự quay lại `add_extra_js_url`.
+
 ## 0.8.3 - 2026-08-29
 
 ### Added
