@@ -9,7 +9,6 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant
-from homeassistant.helpers.event import async_call_later
 from homeassistant.loader import async_get_integration
 
 from .const import CARD_URL, DOMAIN, LOGGER
@@ -46,42 +45,48 @@ async def _async_register_card_resource(hass: HomeAssistant, versioned_url: str)
     """Add or update the card in the storage-mode Lovelace resource list."""
     lovelace = hass.data.get("lovelace")
     resources = getattr(lovelace, "resources", None)
-    # YAML-mode dashboards (or an unavailable collection) can't take a stored
-    # resource; fall back to loading the card globally instead.
-    if getattr(lovelace, "mode", "yaml") != "storage" or resources is None:
+    # A YAML-mode resource collection is read-only (no async_create_item), and
+    # LovelaceData exposes no reliable "mode" attribute, so detect writability by
+    # capability. If we can't write resources, load the card globally instead.
+    if resources is None or not hasattr(resources, "async_create_item"):
         add_extra_js_url(hass, versioned_url)
         return
 
-    async def _apply(_now: Any = None) -> None:
-        try:
-            if not getattr(resources, "loaded", False):
-                await resources.async_load()
-            if not getattr(resources, "loaded", False):
-                async_call_later(hass, 5, _apply)
-                return
-            existing = next(
-                (
-                    item
-                    for item in resources.async_items()
-                    if str(item.get("url", "")).split("?", 1)[0] == CARD_URL
-                ),
-                None,
-            )
-            if existing is None:
-                await resources.async_create_item(
-                    {"res_type": "module", "url": versioned_url}
-                )
-                LOGGER.info("Auto-registered card resource %s", versioned_url)
-            elif existing.get("url") != versioned_url:
+    try:
+        # Force the collection to load from storage before we read or write it,
+        # so we never operate on (and then persist) an empty list.
+        if hasattr(resources, "async_get_info"):
+            await resources.async_get_info()
+        elif hasattr(resources, "async_load"):
+            await resources.async_load()
+        items = list(resources.async_items())
+        existing = next(
+            (
+                item
+                for item in items
+                if str(item.get("url", "")).split("?", 1)[0] == CARD_URL
+            ),
+            None,
+        )
+        if existing is not None:
+            if existing.get("url") != versioned_url:
                 await resources.async_update_item(
                     existing["id"], {"res_type": "module", "url": versioned_url}
                 )
                 LOGGER.info("Updated card resource to %s", versioned_url)
-        except Exception as error:  # noqa: BLE001 - never break setup over the card
-            LOGGER.warning(
-                "Could not register card resource, loading it globally instead: %s",
-                error,
+        elif items:
+            # Other resources are present, so the list really did load; safe to add.
+            await resources.async_create_item(
+                {"res_type": "module", "url": versioned_url}
             )
+            LOGGER.info("Auto-registered card resource %s", versioned_url)
+        else:
+            # Empty collection (fresh dashboard, or not loaded): don't risk a
+            # create that could clobber; load the card globally instead.
             add_extra_js_url(hass, versioned_url)
-
-    await _apply()
+    except Exception as error:  # noqa: BLE001 - never break setup over the card
+        LOGGER.warning(
+            "Could not register card resource, loading it globally instead: %s",
+            error,
+        )
+        add_extra_js_url(hass, versioned_url)
