@@ -10,6 +10,27 @@ from urllib.parse import urlsplit
 
 MEDIA_PLAYER_ENTITY_ID = re.compile(r"^media_player\.[a-z0-9_]+$")
 PLAY_MEDIA_FEATURE = 512
+YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+}
+DIRECT_AUDIO_TYPES = {
+    ".aac": "audio/aac",
+    ".flac": "audio/flac",
+    ".m3u8": "application/vnd.apple.mpegurl",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".wav": "audio/wav",
+}
+ALLOWED_DIRECT_CONTENT_TYPES = {
+    *DIRECT_AUDIO_TYPES.values(),
+    "application/x-mpegurl",
+}
 
 
 class UnsupportedTargetMediaError(ValueError):
@@ -61,6 +82,37 @@ def build_stream_request(payload: dict[str, Any]) -> dict[str, str]:
         "media_content_id": stream_url,
         "media_content_type": content_type,
     }
+
+
+def build_direct_audio_request(
+    stream_url: str, media_content_type: str | None = None
+) -> dict[str, str]:
+    """Normalize direct HTTP audio before any physical player is mutated."""
+    parsed = urlsplit(str(stream_url or ""))
+    hostname = (parsed.hostname or "").lower()
+    if hostname in YOUTUBE_HOSTS or hostname.endswith(".youtube.com"):
+        raise ValueError("invalid_http_audio_target")
+    path = parsed.path.lower()
+    inferred_type = next(
+        (
+            content_type
+            for extension, content_type in DIRECT_AUDIO_TYPES.items()
+            if path.endswith(extension)
+        ),
+        "audio/mpeg",
+    )
+    content_type = str(media_content_type or inferred_type)
+    if content_type not in ALLOWED_DIRECT_CONTENT_TYPES:
+        raise ValueError("invalid_http_audio_target")
+    try:
+        return build_stream_request(
+            {
+                "stream_url": stream_url,
+                "media_content_type": content_type,
+            }
+        )
+    except ValueError as error:
+        raise ValueError("invalid_http_audio_target") from error
 
 
 def _media_type_value(value: Any, fallback: str) -> str:

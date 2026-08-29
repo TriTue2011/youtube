@@ -205,6 +205,10 @@ class PlaybackSession:
                 item = fallback
                 queue = [item]
                 index = 0
+            if media_content_type:
+                item["media_content_type"] = _bounded_text(
+                    media_content_type, 128
+                )
         if not item.get("id"):
             raise ValueError("invalid_session_target")
         self._session = {

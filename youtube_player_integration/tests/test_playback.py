@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PLAYBACK_MODULE_PATH = (
     ROOT / "custom_components" / "tritue_youtube_player" / "playback.py"
 )
+SESSION_MODULE_PATH = ROOT / "youtube_player" / "app" / "session.py"
 
 
 def load_playback_module():
@@ -17,6 +18,18 @@ def load_playback_module():
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("unable_to_load_playback_module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_session_module():
+    spec = importlib.util.spec_from_file_location(
+        "tritue_youtube_player_session", SESSION_MODULE_PATH
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("unable_to_load_session_module")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -141,6 +154,32 @@ class PlaybackRequestTests(unittest.TestCase):
         self.assertEqual(
             "application/vnd.apple.mpegurl", request["media_content_type"]
         )
+
+    def test_direct_audio_request_infers_the_codec_from_the_url(self):
+        request = self.playback.build_direct_audio_request(
+            "https://audio.example/music/song.flac"
+        )
+
+        self.assertEqual("audio/flac", request["media_content_type"])
+
+    def test_direct_audio_request_rejects_youtube_pages_before_dispatch(self):
+        with self.assertRaises(ValueError):
+            self.playback.build_direct_audio_request(
+                "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+                "audio/webm",
+            )
+
+    def test_direct_audio_codec_contract_matches_the_addon_session(self):
+        session = load_session_module()
+        extensions = ("mp3", "aac", "m4a", "flac", "ogg", "opus", "wav", "m3u8")
+        for extension in extensions:
+            with self.subTest(extension=extension):
+                target = f"https://audio.example/music/song.{extension}"
+                request = self.playback.build_direct_audio_request(target)
+                item = session.build_direct_http_item(target)
+                self.assertEqual(
+                    item["media_content_type"], request["media_content_type"]
+                )
 
     def test_capability_matrix_routes_sources_by_transport(self):
         cases = {

@@ -67,6 +67,7 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             async_update_session=AsyncMock(
                 return_value={"success": True, "session": {"state": "playing"}}
             ),
+            async_stop=AsyncMock(return_value={"success": True, "state": "idle"}),
         )
 
     async def test_youtube_dispatches_for_each_platform_and_sets_group_volume(self):
@@ -134,7 +135,7 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             "zing",
             target,
             ["media_player.living_room", "media_player.kitchen"],
-            media_content_type=None,
+            media_content_type="audio/mpeg",
             volume_level=None,
         )
 
@@ -169,6 +170,24 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("http", result["source"])
 
+    async def test_http_audio_is_validated_before_volume_or_playback(self):
+        with self.assertRaises(ValueError):
+            await self.actions.async_play_on_players(
+                self.hass,
+                self.client,
+                source="http",
+                target="https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+                entity_ids=["media_player.speaker"],
+                target_platforms={"media_player.speaker": "cast"},
+                target_device_classes={"media_player.speaker": "speaker"},
+                target_supported_features={"media_player.speaker": 516},
+                volume_level=0.4,
+                media_content_type="audio/webm",
+            )
+
+        self.assertEqual([], self.hass.services.calls)
+        self.client.async_update_session.assert_not_awaited()
+
     async def test_incompatible_youtube_targets_fail_before_mutating_server(self):
         with self.assertRaises(self.actions.UnsupportedTargetMediaError):
             await self.actions.async_play_on_players(
@@ -184,6 +203,26 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
 
         self.client.async_play.assert_not_awaited()
         self.assertEqual([], self.hass.services.calls)
+
+    async def test_failed_youtube_dispatch_rolls_back_the_addon_session(self):
+        self.hass.services.async_call = AsyncMock(
+            side_effect=RuntimeError("cast failed")
+        )
+
+        with self.assertRaises(RuntimeError):
+            await self.actions.async_play_on_players(
+                self.hass,
+                self.client,
+                source="youtube",
+                target="dQw4w9WgXcQ",
+                entity_ids=["media_player.cast"],
+                target_platforms={"media_player.cast": "cast"},
+                target_device_classes={"media_player.cast": "tv"},
+                target_supported_features={"media_player.cast": 512},
+            )
+
+        self.client.async_stop.assert_awaited_once()
+        self.client.async_update_session.assert_not_awaited()
 
 
 if __name__ == "__main__":

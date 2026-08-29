@@ -132,6 +132,22 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         _, player = self.request("/api/player")
         self.assertEqual({"state": "idle", "item": None}, player)
 
+    def test_integration_status_is_derived_from_one_session_snapshot(self):
+        headers = {"Authorization": "Bearer test-integration-token"}
+
+        with patch.object(
+            self.server,
+            "get_player",
+            side_effect=AssertionError("status requested a second snapshot"),
+        ):
+            status, body = self.request(
+                "/api/integration/status", headers=headers
+            )
+
+        self.assertEqual(200, status)
+        self.assertEqual(body["session"]["state"], body["state"])
+        self.assertEqual(body["session"]["item"], body["item"])
+
     @patch("server.search_youtube")
     def test_integration_can_search_music_metadata(self, search_youtube):
         search_youtube.return_value = [

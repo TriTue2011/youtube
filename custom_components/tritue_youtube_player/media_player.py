@@ -248,7 +248,22 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
 
         if self.target_entity_id:
             try:
+                await self.coordinator.client.async_update_session(
+                    "youtube",
+                    media_id,
+                    [self.target_entity_id],
+                    media_content_type=None,
+                    volume_level=None,
+                )
                 await self._async_play_on_target(played.get("item") or {}, media_type)
+            except YouTubePlayerApiError as error:
+                with suppress(YouTubePlayerApiError):
+                    await self.coordinator.client.async_stop()
+                await self.coordinator.async_request_refresh()
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="communication_error",
+                ) from error
             except HomeAssistantError:
                 with suppress(YouTubePlayerApiError):
                     await self.coordinator.client.async_stop()

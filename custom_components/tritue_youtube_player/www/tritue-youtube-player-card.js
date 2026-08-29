@@ -11,6 +11,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._capabilities = new Map();
     this._capabilityEntryId = "";
     this._capabilitiesLoading = false;
+    this._sharedSessionMarker = "";
   }
 
   setConfig(config) {
@@ -28,6 +29,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._bindEvents();
       this._rendered = true;
     }
+    this._applySharedOutputs();
     this._syncPlayers();
     this._updateSourceButtons();
     this._loadCapabilities();
@@ -318,6 +320,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     );
   }
 
+  _applySharedOutputs() {
+    const attributes = this._hass?.states?.[this._config.entity]?.attributes || {};
+    const sharedOutputs = Array.isArray(attributes.output_entity_ids)
+      ? attributes.output_entity_ids.filter((entityId) => this._hass.states[entityId])
+      : [];
+    const marker = `${attributes.session_updated_at || ""}:${sharedOutputs.join(",")}`;
+    if (!sharedOutputs.length || marker === this._sharedSessionMarker) return;
+    this._selectedPlayers = new Set(sharedOutputs);
+    this._sharedSessionMarker = marker;
+    this._defaultsApplied = true;
+  }
+
   _syncPlayers() {
     if (!this._hass) return;
     const virtualEntity = this._config.entity;
@@ -547,11 +561,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       thumbnail: serverAttributes.entity_picture || serverAttributes.media_image_url,
       duration: serverAttributes.media_duration,
       entity_ids: serverAttributes.output_entity_ids,
+      queue_index: Number(serverAttributes.queue_index ?? -1),
+      queue_size: Number(serverAttributes.queue_size || 0),
     } : null;
     const fallback = sharedSession || this._currentItem || {};
     const title = attributes.media_title || fallback.title || "";
     const artist = attributes.media_artist || fallback.channel || "";
     const duration = this._formatDuration(attributes.media_duration || fallback.duration);
+    const queuePosition = fallback.queue_size > 1 && fallback.queue_index >= 0
+      ? `Hàng đợi ${fallback.queue_index + 1}/${fallback.queue_size}`
+      : "";
     const imageUrl = attributes.entity_picture || attributes.media_image_url || fallback.thumbnail || "";
     const targetIds = fallback.entity_ids?.length ? fallback.entity_ids : [...this._selectedPlayers];
     const targetNames = targetIds
@@ -560,7 +579,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
     this.shadowRoot.querySelector(".now-title").textContent = title || "Chưa phát bài nào";
     this.shadowRoot.querySelector(".now-meta").textContent = title
-      ? [artist, duration, fallback.source === "zing" ? "Zing MP3" : fallback.source === "youtube" ? "YouTube" : fallback.source === "http" ? "HTTP Audio" : ""]
+      ? [artist, duration, queuePosition, fallback.source === "zing" ? "Zing MP3" : fallback.source === "youtube" ? "YouTube" : fallback.source === "http" ? "HTTP Audio" : ""]
         .filter(Boolean).join(" · ")
       : "Chọn một bài trong kết quả để bắt đầu.";
     this.shadowRoot.querySelector(".now-targets").textContent = targetNames.length

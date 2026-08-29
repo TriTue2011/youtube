@@ -377,7 +377,6 @@ class PlayerHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/integration/status":
-            player = self.server.get_player()
             session = self.server.get_session()
             self.send_json(
                 200,
@@ -385,8 +384,8 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     "success": True,
                     "api_version": API_VERSION,
                     "app_version": APP_VERSION,
-                    "state": player["state"],
-                    "item": player["item"],
+                    "state": session["state"],
+                    "item": session["item"],
                     "session": session,
                     "history_count": len(self.server.load_history()),
                 },

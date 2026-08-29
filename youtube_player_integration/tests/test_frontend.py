@@ -53,6 +53,9 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("attributes.media_title", script)
         self.assertIn("session_source", script)
         self.assertIn("output_entity_ids", script)
+        self.assertIn("queuePosition", script)
+        self.assertIn("this._applySharedOutputs()", script)
+        self.assertIn("this._selectedPlayers = new Set(sharedOutputs)", script)
         self.assertIn('source: this._source', script)
         self.assertIn("this._syncNowPlaying()", script)
         self.assertNotIn("eval(", script)
@@ -68,6 +71,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("multiple: true", services)
         self.assertIn("- http", services)
         self.assertIn("media_content_type:", services)
+
+    def test_native_play_media_records_its_physical_output(self):
+        source = (COMPONENT_DIR / "media_player.py").read_text(encoding="utf-8")
+
+        self.assertIn("client.async_update_session", source)
+        self.assertIn("[self.target_entity_id]", source)
 
     def test_manifest_key_order_matches_hassfest(self):
         manifest = json.loads(

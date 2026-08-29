@@ -9,11 +9,15 @@
 - HTTP audio trực tiếp đi qua action của integration để mọi card/browser cùng
   thấy trạng thái đang phát.
 - Hỗ trợ MIME HLS chuẩn bên cạnh MP3/AAC/M4A/FLAC/OGG/OPUS/WAV.
+- Trình duyệt khác tự chọn lại `output_entity_ids` của phiên để các nút điều
+  khiển tác động đúng loa đang phát.
 
 ### Changed
 
 - Card ưu tiên metadata phiên từ entity Home Assistant; `localStorage` chỉ còn
   là fallback trong lúc coordinator chưa poll xong.
+- Direct HTTP audio được chuẩn hóa MIME trước khi đặt âm lượng hoặc gửi tới loa;
+  add-on và integration có contract test chung chống lệch codec.
 
 ## 0.6.0 - 2026-08-29
 
