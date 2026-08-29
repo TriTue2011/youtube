@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.2 - 2026-08-29
+
+### Added
+
+- Card: tích một loa trong lúc đang phát thì loa đó **tự vào bài đang phát**; bỏ
+  tích thì chỉ loa đó dừng, các loa còn lại tiếp tục. Sau khi tự chọn loa, card
+  không ghi đè lựa chọn theo phiên dùng chung nữa.
+
 ## 0.8.1 - 2026-08-29
 
 ### Added

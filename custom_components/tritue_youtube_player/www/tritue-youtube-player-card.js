@@ -18,6 +18,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._activeVolumeEntity = null;
     this._autoAdvance = false;
     this._trackPlaying = false;
+    this._manualSelection = false;
   }
 
   setConfig(config) {
@@ -325,6 +326,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _applySharedOutputs() {
+    // Once the user hand-picks speakers on this card, stop mirroring the shared
+    // session's outputs so their selection (and joins/leaves) stays put.
+    if (this._manualSelection) return;
     const attributes = this._hass?.states?.[this._config.entity]?.attributes || {};
     const sharedOutputs = Array.isArray(attributes.output_entity_ids)
       ? attributes.output_entity_ids.filter((entityId) => this._hass.states[entityId])
@@ -377,8 +381,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       checkbox.type = "checkbox";
       checkbox.checked = this._selectedPlayers.has(entityId);
       checkbox.addEventListener("change", () => {
-        if (checkbox.checked) this._selectedPlayers.add(entityId);
-        else this._selectedPlayers.delete(entityId);
+        this._manualSelection = true;
+        if (checkbox.checked) {
+          this._selectedPlayers.add(entityId);
+          this._onSpeakerAdded(entityId);
+        } else {
+          this._selectedPlayers.delete(entityId);
+          this._onSpeakerRemoved(entityId);
+        }
         this._updateSelectedCount();
         this._updateTransportState();
         this._syncNowPlaying();
@@ -611,6 +621,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._currentItem = {
       source: this._source,
       id: String(item.id || ""),
+      target: String(item.url || item.id || ""),
+      media_content_type: item.media_content_type,
       title: String(item.title || item.id || "Không rõ tên"),
       channel: String(item.channel || ""),
       thumbnail: /^https?:\/\//.test(item.thumbnail || "") ? item.thumbnail : "",
@@ -665,7 +677,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ? `Hàng đợi ${fallback.queue_index + 1}/${fallback.queue_size}`
       : "";
     const imageUrl = attributes.entity_picture || attributes.media_image_url || fallback.thumbnail || "";
-    const targetIds = fallback.entity_ids?.length ? fallback.entity_ids : [...this._selectedPlayers];
+    const targetIds = this._manualSelection
+      ? [...this._selectedPlayers]
+      : (fallback.entity_ids?.length ? fallback.entity_ids : [...this._selectedPlayers]);
     const targetNames = targetIds
       .map((entityId) => this._hass.states[entityId]?.attributes?.friendly_name || entityId)
       .filter(Boolean);
@@ -920,6 +934,51 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     } else {
       this._autoAdvance = false;
       this._setStatus("Đã phát hết hàng đợi.");
+    }
+  }
+
+  _isPlaying() {
+    return this._autoAdvance && !!this._currentItem?.target;
+  }
+
+  async _onSpeakerAdded(entityId) {
+    // Ticking a speaker while something is playing makes it join the song now.
+    if (!this._isPlaying()) return;
+    const source = this._currentItem.source || this._source;
+    const state = this._hass?.states?.[entityId];
+    if (!state || state.state === "unavailable") return;
+    if (!this._supportsFeature(entityId, 512) || !this._supportsSource(entityId, source)) {
+      this._setStatus(
+        `${state.attributes?.friendly_name || entityId} không nhận nguồn đang phát.`,
+        true,
+      );
+      return;
+    }
+    const entryId = this._entryId();
+    if (!entryId) return;
+    try {
+      await this._hass.callService("tritue_youtube_player", "play_on_players", {
+        entry_id: entryId,
+        source,
+        target: this._currentItem.target,
+        entity_id: [entityId],
+        media_content_type: this._currentItem.media_content_type,
+      });
+      this._setStatus(`Đã thêm ${state.attributes?.friendly_name || entityId} vào bài đang phát.`);
+    } catch (error) {
+      this._setStatus(error?.message || "Không thêm được loa vào bài đang phát.", true);
+    }
+  }
+
+  async _onSpeakerRemoved(entityId) {
+    // Un-ticking a playing speaker stops just that one; the rest keep going.
+    const state = this._hass?.states?.[entityId];
+    if (!state || !["playing", "paused", "buffering"].includes(state.state)) return;
+    try {
+      await this._hass.callService("media_player", "media_stop", { entity_id: entityId });
+      this._setStatus(`Đã tắt ${state.attributes?.friendly_name || entityId}.`);
+    } catch (error) {
+      this._setStatus(error?.message || "Không tắt được loa.", true);
     }
   }
 
