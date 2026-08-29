@@ -3,11 +3,11 @@
   "name": "TriTue YouTube Player",
   "codeowners": ["@TriTue2011"],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/TriTue2011/youtube/tree/main/youtube_player_integration",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/TriTue2011/youtube/issues",
   "requirements": [],
-  "version": "0.8.2"
+  "version": "0.8.3"
 }

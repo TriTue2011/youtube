@@ -66,6 +66,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._syncNowPlaying()", script)
         self.assertNotIn("eval(", script)
 
+    def test_card_is_auto_registered_and_version_busted(self):
+        source = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
+
+        self.assertIn("add_extra_js_url", source)
+        self.assertIn("integration.version", source)
+        manifest = json.loads(
+            (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("frontend", manifest["dependencies"])
+
     def test_http_dependency_and_service_description_are_packaged(self):
         manifest = json.loads(
             (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")

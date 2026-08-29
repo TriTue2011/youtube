@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.3 - 2026-08-29
+
+### Added
+
+- Card tự đăng ký (dùng `add_extra_js_url`) nên **không cần thêm resource thủ
+  công** trong Lovelace nữa. URL card kèm `?v=<phiên_bản>` để trình duyệt tự nạp
+  bản mới mỗi lần integration lên phiên bản, khỏi phải hard-refresh.
+
 ## 0.8.2 - 2026-08-29
 
 ### Added
