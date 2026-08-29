@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1 - 2026-08-29
+
+### Added
+
+- Card: chỉnh âm lượng **từng loa** riêng (mỗi loa đã chọn một thanh trượt),
+  không còn ép một mức chung cho tất cả khi phát.
+- Card: nút **Bài trước/Bài tiếp** phát mục liền kề trong hàng đợi kết quả tìm
+  kiếm (trước đây gửi lệnh transport tới loa vốn chỉ phát một luồng nên không có
+  bài kế) — bật/tắt theo vị trí trong hàng đợi.
+
 ## 0.8.0 - 2026-08-29
 
 ### Added
