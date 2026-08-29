@@ -130,15 +130,17 @@ class PlaybackSession:
 
     def __init__(self):
         self._search_queues = {}
-        self._session = self._idle_session()
+        self._revision = 0
+        self._session = self._idle_session(self._revision)
 
     @staticmethod
     def _timestamp():
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     @classmethod
-    def _idle_session(cls):
+    def _idle_session(cls, revision):
         return {
+            "revision": revision,
             "state": "idle",
             "position": 0,
             "duration": 0,
@@ -211,7 +213,9 @@ class PlaybackSession:
                 )
         if not item.get("id"):
             raise ValueError("invalid_session_target")
+        self._revision += 1
         self._session = {
+            "revision": self._revision,
             "state": "playing",
             "position": 0,
             "duration": item.get("duration", 0),
@@ -227,9 +231,15 @@ class PlaybackSession:
         }
         return self.snapshot()
 
-    def stop(self):
-        self._session = self._idle_session()
-        return self.snapshot()
+    def stop(self, expected_revision=None):
+        if (
+            expected_revision is not None
+            and expected_revision != self._session["revision"]
+        ):
+            return {"stopped": False, "session": self.snapshot()}
+        self._revision += 1
+        self._session = self._idle_session(self._revision)
+        return {"stopped": True, "session": self.snapshot()}
 
     def snapshot(self):
         session = self._session

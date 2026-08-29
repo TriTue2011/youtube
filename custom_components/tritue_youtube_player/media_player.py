@@ -112,6 +112,7 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
             "target_entity_id": self.target_entity_id or None,
             "target_platform": self._target_platform(),
             "session_source": self.current_item.get("source"),
+            "session_revision": self.session.get("revision"),
             "output_entity_ids": self.session.get("output_entity_ids") or [],
             "queue_index": queue.get("index", -1),
             "queue_size": len(queue.get("items") or []),
@@ -246,30 +247,41 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
                 translation_domain=DOMAIN, translation_key="communication_error"
             ) from error
 
+        session_revision = played.get("session_revision")
         if self.target_entity_id:
             try:
-                await self.coordinator.client.async_update_session(
+                updated = await self.coordinator.client.async_update_session(
                     "youtube",
                     media_id,
                     [self.target_entity_id],
                     media_content_type=None,
                     volume_level=None,
                 )
+                session_revision = (updated.get("session") or {}).get(
+                    "revision", session_revision
+                )
                 await self._async_play_on_target(played.get("item") or {}, media_type)
             except YouTubePlayerApiError as error:
-                with suppress(YouTubePlayerApiError):
-                    await self.coordinator.client.async_stop()
+                await self._async_rollback_session(session_revision)
                 await self.coordinator.async_request_refresh()
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="communication_error",
                 ) from error
             except HomeAssistantError:
-                with suppress(YouTubePlayerApiError):
-                    await self.coordinator.client.async_stop()
+                await self._async_rollback_session(session_revision)
                 await self.coordinator.async_request_refresh()
                 raise
         await self.coordinator.async_request_refresh()
+
+    async def _async_rollback_session(self, revision: Any) -> None:
+        """Stop only the session revision created by this entity command."""
+        if not isinstance(revision, int):
+            return
+        with suppress(YouTubePlayerApiError):
+            await self.coordinator.client.async_stop(
+                expected_revision=revision
+            )
 
     async def async_media_stop(self) -> None:
         """Stop the player page and selected HA media player."""

@@ -52,6 +52,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('class="now-playing"', script)
         self.assertIn("attributes.media_title", script)
         self.assertIn("session_source", script)
+        self.assertIn("session_revision", script)
         self.assertIn("output_entity_ids", script)
         self.assertIn("queuePosition", script)
         self.assertIn("this._applySharedOutputs()", script)

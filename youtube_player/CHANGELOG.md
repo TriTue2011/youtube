@@ -14,6 +14,8 @@
 - Giữ title, artist, album, thumbnail và duration của kết quả tìm kiếm khi phát,
   thay vì chỉ còn video ID.
 - Lịch sử và trạng thái player dùng cùng một item đã chuẩn hóa.
+- Rollback dùng revision có điều kiện để một lệnh Cast lỗi không dừng nhầm phiên
+  mới hơn của người dùng khác.
 
 ## 0.4.1 - 2026-08-29
 

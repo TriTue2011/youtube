@@ -40,6 +40,7 @@ Trả về `state`, item tương thích API cũ, `history_count` và `session` d
 
 ```json
 {
+  "revision": 42,
   "state": "playing",
   "position": 0,
   "duration": 213,
@@ -119,7 +120,16 @@ player đang mở nhận lệnh trong tối đa khoảng hai giây.
 
 ### `POST /api/integration/stop`
 
-Dừng và xóa nội dung khỏi trang web player đang mở. Request không cần body.
+Dừng và xóa nội dung khỏi trang web player đang mở. Request thông thường không
+cần body. Khi rollback một lệnh phát lỗi, integration gửi revision mà chính
+lệnh đó đã tạo để không dừng nhầm phiên mới hơn của trình duyệt khác:
+
+```json
+{"expected_revision": 42}
+```
+
+Nếu revision hiện tại đã khác, response có `"stopped": false` và giữ nguyên
+session mới.
 
 ## Lỗi ổn định
 

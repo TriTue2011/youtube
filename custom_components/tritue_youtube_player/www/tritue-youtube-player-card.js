@@ -325,7 +325,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const sharedOutputs = Array.isArray(attributes.output_entity_ids)
       ? attributes.output_entity_ids.filter((entityId) => this._hass.states[entityId])
       : [];
-    const marker = `${attributes.session_updated_at || ""}:${sharedOutputs.join(",")}`;
+    const marker = `${attributes.session_revision ?? attributes.session_updated_at ?? ""}:${sharedOutputs.join(",")}`;
     if (!sharedOutputs.length || marker === this._sharedSessionMarker) return;
     this._selectedPlayers = new Set(sharedOutputs);
     this._sharedSessionMarker = marker;

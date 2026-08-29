@@ -18,6 +18,8 @@
   là fallback trong lúc coordinator chưa poll xong.
 - Direct HTTP audio được chuẩn hóa MIME trước khi đặt âm lượng hoặc gửi tới loa;
   add-on và integration có contract test chung chống lệch codec.
+- Giới hạn URL HTTP được kiểm tra trước khi phát; rollback YouTube chỉ dừng đúng
+  revision do lệnh đang lỗi tạo ra.
 
 ## 0.6.0 - 2026-08-29
 

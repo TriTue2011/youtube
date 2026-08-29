@@ -169,6 +169,13 @@ class PlaybackRequestTests(unittest.TestCase):
                 "audio/webm",
             )
 
+    def test_direct_audio_request_rejects_an_oversized_url_before_dispatch(self):
+        target = "https://audio.example/" + ("a" * 2030) + ".mp3"
+        self.assertGreater(len(target), 2048)
+
+        with self.assertRaises(ValueError):
+            self.playback.build_direct_audio_request(target)
+
     def test_direct_audio_codec_contract_matches_the_addon_session(self):
         session = load_session_module()
         extensions = ("mp3", "aac", "m4a", "flac", "ogg", "opus", "wav", "m3u8")
@@ -180,6 +187,14 @@ class PlaybackRequestTests(unittest.TestCase):
                 self.assertEqual(
                     item["media_content_type"], request["media_content_type"]
                 )
+
+        oversized = "https://audio.example/" + ("a" * 2030) + ".mp3"
+        for validator in (
+            self.playback.build_direct_audio_request,
+            session.build_direct_http_item,
+        ):
+            with self.assertRaises(ValueError):
+                validator(oversized)
 
     def test_capability_matrix_routes_sources_by_transport(self):
         cases = {

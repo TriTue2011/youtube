@@ -55,7 +55,8 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                         "source": "youtube",
                         "kind": "video",
                         "id": "dQw4w9WgXcQ",
-                    }
+                    },
+                    "session_revision": 1,
                 }
             ),
             async_create_stream=AsyncMock(
@@ -221,8 +222,44 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                 target_supported_features={"media_player.cast": 512},
             )
 
-        self.client.async_stop.assert_awaited_once()
+        self.client.async_stop.assert_awaited_once_with(expected_revision=1)
         self.client.async_update_session.assert_not_awaited()
+
+    async def test_partial_youtube_dispatch_keeps_successful_output_session(self):
+        self.hass.services.async_call = AsyncMock(
+            side_effect=[None, RuntimeError("second cast failed")]
+        )
+
+        result = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="youtube",
+            target="dQw4w9WgXcQ",
+            entity_ids=["media_player.first", "media_player.second"],
+            target_platforms={
+                "media_player.first": "cast",
+                "media_player.second": "cast",
+            },
+            target_device_classes={
+                "media_player.first": "tv",
+                "media_player.second": "tv",
+            },
+            target_supported_features={
+                "media_player.first": 512,
+                "media_player.second": 512,
+            },
+        )
+
+        self.assertEqual(1, result["target_count"])
+        self.assertEqual(["media_player.second"], result["skipped_targets"])
+        self.client.async_stop.assert_not_awaited()
+        self.client.async_update_session.assert_awaited_once_with(
+            "youtube",
+            "dQw4w9WgXcQ",
+            ["media_player.first"],
+            media_content_type=None,
+            volume_level=None,
+        )
 
 
 if __name__ == "__main__":

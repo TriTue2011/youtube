@@ -88,7 +88,10 @@ def build_direct_audio_request(
     stream_url: str, media_content_type: str | None = None
 ) -> dict[str, str]:
     """Normalize direct HTTP audio before any physical player is mutated."""
-    parsed = urlsplit(str(stream_url or ""))
+    stream_url = str(stream_url or "")
+    if len(stream_url) > 2048:
+        raise ValueError("invalid_http_audio_target")
+    parsed = urlsplit(stream_url)
     hostname = (parsed.hostname or "").lower()
     if hostname in YOUTUBE_HOSTS or hostname.endswith(".youtube.com"):
         raise ValueError("invalid_http_audio_target")

@@ -67,11 +67,14 @@ async def async_play_on_players(
 
     requests = {}
     youtube_session_started = False
+    youtube_session_revision = None
+    physical_dispatch_completed = False
     try:
         first_error = None
         if source == "youtube":
             played = await client.async_play(target)
             youtube_session_started = True
+            youtube_session_revision = played.get("session_revision")
             item = played.get("item") or {}
             for entity_id in playable_targets:
                 try:
@@ -117,6 +120,7 @@ async def async_play_on_players(
                 blocking=True,
                 target={"entity_id": playable_targets},
             )
+            physical_dispatch_completed = True
         elif source == "http":
             await hass.services.async_call(
                 "media_player",
@@ -125,15 +129,28 @@ async def async_play_on_players(
                 blocking=True,
                 target={"entity_id": playable_targets},
             )
+            physical_dispatch_completed = True
         else:
+            dispatched_targets = []
+            first_dispatch_error = None
             for entity_id, service_data in requests.items():
-                await hass.services.async_call(
-                    "media_player",
-                    "play_media",
-                    service_data,
-                    blocking=True,
-                    target={"entity_id": entity_id},
-                )
+                try:
+                    await hass.services.async_call(
+                        "media_player",
+                        "play_media",
+                        service_data,
+                        blocking=True,
+                        target={"entity_id": entity_id},
+                    )
+                except Exception as error:
+                    first_dispatch_error = first_dispatch_error or error
+                    skipped_targets.append(entity_id)
+                else:
+                    dispatched_targets.append(entity_id)
+                    physical_dispatch_completed = True
+            playable_targets = dispatched_targets
+            if not playable_targets and first_dispatch_error is not None:
+                raise first_dispatch_error
         await client.async_update_session(
             source,
             target,
@@ -142,9 +159,15 @@ async def async_play_on_players(
             volume_level=volume_level,
         )
     except Exception:
-        if youtube_session_started:
+        if (
+            youtube_session_started
+            and not physical_dispatch_completed
+            and isinstance(youtube_session_revision, int)
+        ):
             with suppress(Exception):
-                await client.async_stop()
+                await client.async_stop(
+                    expected_revision=youtube_session_revision
+                )
         raise
     return {
         "source": source,

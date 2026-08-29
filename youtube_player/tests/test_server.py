@@ -148,6 +148,39 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual(body["session"]["state"], body["state"])
         self.assertEqual(body["session"]["item"], body["item"])
 
+    def test_conditional_stop_does_not_stop_a_newer_session(self):
+        headers = {"Authorization": "Bearer test-integration-token"}
+        _, first = self.request(
+            "/api/integration/play",
+            method="POST",
+            payload={"target": "dQw4w9WgXcQ"},
+            headers=headers,
+        )
+        _, second = self.request(
+            "/api/integration/play",
+            method="POST",
+            payload={"target": "M7lc1UVf-VE"},
+            headers=headers,
+        )
+
+        _, stale_stop = self.request(
+            "/api/integration/stop",
+            method="POST",
+            payload={"expected_revision": first["session_revision"]},
+            headers=headers,
+        )
+        self.assertFalse(stale_stop["stopped"])
+        self.assertEqual("M7lc1UVf-VE", stale_stop["session"]["item"]["id"])
+
+        _, current_stop = self.request(
+            "/api/integration/stop",
+            method="POST",
+            payload={"expected_revision": second["session_revision"]},
+            headers=headers,
+        )
+        self.assertTrue(current_stop["stopped"])
+        self.assertEqual("idle", current_stop["session"]["state"])
+
     @patch("server.search_youtube")
     def test_integration_can_search_music_metadata(self, search_youtube):
         search_youtube.return_value = [

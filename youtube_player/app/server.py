@@ -210,9 +210,9 @@ class PlayerServer(ThreadingHTTPServer):
         self.add_history(session["item"])
         return session
 
-    def stop(self):
+    def stop(self, expected_revision=None):
         with self.player_lock:
-            return self.playback_session.stop()
+            return self.playback_session.stop(expected_revision)
 
     def search(self, source, query, limit):
         """Run one metadata search at a time to bound child processes."""
@@ -406,9 +406,30 @@ class PlayerHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/integration/") and not self.authorize_integration():
             return
         if path == "/api/integration/stop":
-            session = self.server.stop()
+            try:
+                expected_revision = None
+                if int(self.headers.get("Content-Length", "0")):
+                    payload = self.read_json_body(maximum=256)
+                    expected_revision = payload.get("expected_revision")
+                    if (
+                        isinstance(expected_revision, bool)
+                        or not isinstance(expected_revision, int)
+                        or expected_revision < 0
+                    ):
+                        raise ValueError("invalid_session_revision")
+                result = self.server.stop(expected_revision)
+            except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+                self.send_json(400, {"error": "invalid_session_revision"})
+                return
+            session = result["session"]
             self.send_json(
-                200, {"success": True, "state": "idle", "session": session}
+                200,
+                {
+                    "success": True,
+                    "stopped": result["stopped"],
+                    "state": session["state"],
+                    "session": session,
+                },
             )
             return
         if path == "/api/integration/session":
@@ -507,7 +528,14 @@ class PlayerHandler(BaseHTTPRequestHandler):
 
         session = self.server.play(target, raw_target=raw_target)
         if path == "/api/integration/play":
-            self.send_json(200, {"success": True, "item": session["item"]})
+            self.send_json(
+                200,
+                {
+                    "success": True,
+                    "item": session["item"],
+                    "session_revision": session["revision"],
+                },
+            )
         else:
             self.send_json(201, session["item"])
 

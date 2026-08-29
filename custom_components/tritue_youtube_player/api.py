@@ -96,9 +96,18 @@ class YouTubePlayerClient:
             },
         )
 
-    async def async_stop(self) -> dict[str, Any]:
+    async def async_stop(
+        self, *, expected_revision: int | None = None
+    ) -> dict[str, Any]:
         """Stop the active web player."""
-        return await self._async_request("POST", "/api/integration/stop")
+        kwargs = (
+            {"json": {"expected_revision": expected_revision}}
+            if expected_revision is not None
+            else {}
+        )
+        return await self._async_request(
+            "POST", "/api/integration/stop", **kwargs
+        )
 
     async def _async_request(
         self, method: str, path: str, **kwargs: Any

@@ -183,6 +183,21 @@ class YouTubePlayerClientTests(unittest.IsolatedAsyncioTestCase):
             payload["session"]["output_entity_ids"],
         )
 
+    async def test_client_can_conditionally_stop_only_its_own_session(self):
+        first = await self.client.async_play("dQw4w9WgXcQ")
+        second = await self.client.async_play("M7lc1UVf-VE")
+
+        stale = await self.client.async_stop(
+            expected_revision=first["session_revision"]
+        )
+        current = await self.client.async_stop(
+            expected_revision=second["session_revision"]
+        )
+
+        self.assertFalse(stale["stopped"])
+        self.assertEqual("M7lc1UVf-VE", stale["session"]["item"]["id"])
+        self.assertTrue(current["stopped"])
+
     async def test_client_maps_invalid_token_to_authentication_error(self):
         client = self.api.YouTubePlayerClient(
             f"http://127.0.0.1:{self.server.server_port}",
