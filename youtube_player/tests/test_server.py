@@ -601,6 +601,43 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         # asking yt-dlp to resolve the short-lived googlevideo URL twice.
         resolve.assert_called_once_with("dQw4w9WgXcQ")
 
+    @patch("server.urlopen")
+    @patch("server.resolve_youtube_audio")
+    def test_stream_proxy_answers_head_for_dlna_renderers(
+        self, resolve, open_upstream
+    ):
+        resolve.return_value = {
+            "url": "https://rr3---sn-abc.googlevideo.com/videoplayback",
+            "headers": {"User-Agent": "TriTue"},
+            "content_type": "audio/mp4",
+        }
+        upstream = io.BytesIO(b"")
+        upstream.headers = {
+            "Content-Type": "audio/mp4",
+            "Content-Range": "bytes 0-0/3449447",
+        }
+        open_upstream.return_value = upstream
+        _, created = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={"source": "youtube", "target": "dQw4w9WgXcQ"},
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        token = created["stream_url"].rsplit("/", 1)[-1]
+
+        request = urllib.request.Request(
+            f"{self.base_url}/api/stream/{token}", method="HEAD"
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            self.assertEqual(200, response.status)
+            self.assertEqual("audio/mp4", response.headers["Content-Type"])
+            self.assertEqual("bytes", response.headers["Accept-Ranges"])
+            self.assertEqual("3449447", response.headers["Content-Length"])
+        # HEAD probes upstream with a zero-length range, never the whole body.
+        self.assertEqual(
+            "bytes=0-0", open_upstream.call_args.args[0].get_header("Range")
+        )
+
     def test_video_url_is_normalized_and_persisted(self):
         status, target = self.request(
             "/api/history",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 - 2026-08-29
+
+### Fixed
+
+- Proxy stream trả lời request `HEAD` (trước đây trả `501`): renderer DLNA
+  thường HEAD để lấy Content-Type/Content-Length/Accept-Ranges trước khi GET.
+  Nay trả đúng các header đó (kích thước lấy từ một probe range 0-0), giúp loa
+  DLNA khó tính phát được thay vì bỏ cuộc.
+
 ## 0.6.0 - 2026-08-29
 
 ### Added

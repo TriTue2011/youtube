@@ -43,7 +43,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.6.1"
 API_VERSION = "1"
 
 
@@ -424,6 +424,63 @@ class PlayerHandler(BaseHTTPRequestHandler):
             self.send_file(STATIC_DIR / filename, content_type)
             return
         self.send_json(404, {"error": "not_found"})
+
+    def do_HEAD(self):
+        """Answer DLNA renderers that probe the stream with HEAD before GET."""
+        path = urlsplit(self.path).path
+        if not path.startswith("/api/stream/"):
+            self.send_head_only(404)
+            return
+        self.head_stream(path.removeprefix("/api/stream/"))
+
+    def send_head_only(self, status, headers=None):
+        self.send_response(status)
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
+        if not headers or "Content-Length" not in headers:
+            self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def head_stream(self, token):
+        """Return stream headers (type, size, ranges) without transferring audio."""
+        if not token or len(token) > 4096:
+            self.send_head_only(403)
+            return
+        try:
+            source, target = verify_stream_token(token, self.server.integration_token)
+            resolved = self.server.resolve_stream(source, target)
+        except InvalidStreamTokenError:
+            self.send_head_only(403)
+            return
+        except (StreamUnavailableError, ValueError, OSError):
+            self.send_head_only(502)
+            return
+        content_type = resolved.get("content_type", "audio/mpeg")
+        total = None
+        try:
+            headers = {
+                **resolved["headers"],
+                "Accept-Encoding": "identity",
+                "Range": "bytes=0-0",
+            }
+            with urlopen(Request(resolved["url"], headers=headers), timeout=15) as up:
+                content_type = up.headers.get("Content-Type", content_type)
+                content_range = up.headers.get("Content-Range", "")
+                if "/" in content_range:
+                    tail = content_range.rsplit("/", 1)[-1].strip()
+                    if tail.isdigit():
+                        total = int(tail)
+        except (OSError, ValueError):
+            pass
+        head_headers = {
+            "Content-Type": content_type,
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        }
+        if total is not None:
+            head_headers["Content-Length"] = str(total)
+        self.send_head_only(200, head_headers)
 
     def do_POST(self):
         path = urlsplit(self.path).path

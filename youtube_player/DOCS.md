@@ -69,14 +69,14 @@ Khi image đã được phát hành lên GHCR, bỏ phần `build` trong Compose
 tải image dựng sẵn:
 
 ```bash
-docker pull ghcr.io/tritue2011/youtube-player:0.6.0
+docker pull ghcr.io/tritue2011/youtube-player:0.6.1
 docker run -d \
   --name tritue-youtube-player \
   --restart unless-stopped \
   -p 8099:8099 \
   -e PUBLIC_BASE_URL='http://IP-máy-Docker:8099' \
   -v tritue-youtube-player-data:/data \
-  ghcr.io/tritue2011/youtube-player:0.6.0
+  ghcr.io/tritue2011/youtube-player:0.6.1
 ```
 
 Xem token tự sinh bằng `docker logs tritue-youtube-player`. Nếu muốn tự đặt
