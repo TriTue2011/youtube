@@ -95,20 +95,40 @@ Chọn loa phát mặc định (tùy chọn) trong phần cấu hình của inte
 
 ## 3) Thêm card
 
-Integration tự đăng ký JavaScript resource. Thêm một **Manual card**:
+Integration **tự đăng ký card thành Lovelace resource** (hiện trong Settings →
+Dashboards → Resources, kèm `?v=<phiên_bản>` để tự cập nhật). Việc đăng ký chạy
+khi **HA khởi động** hoặc khi **reload integration**, nên sau khi cài lần đầu hãy
+**restart HA** một lần. Sau đó chỉ cần thêm một **Manual card**:
 
 ```yaml
 type: custom:tritue-youtube-player-card
-entity: media_player.tritue_youtube_player_172_16_10_200
+entity: media_player.tritue_youtube_player_<host_add_on>
 title: Nhạc YouTube & Zing
 ```
 
 Thay `entity` bằng đúng media player ảo của bạn (tên có kèm host/URL add-on).
 Chỉ cần ba dòng trên là đủ — card tự đọc các loa `media_player` khác trong nhà.
+Nếu entity đôi lúc chớp tắt, thêm dòng `entry_id: <id_config_entry>` để card khỏi
+phụ thuộc trạng thái entity.
 
-> Nếu sau khi cập nhật mà card không đổi, đổi URL resource của card thành
-> `…/tritue-youtube-player-card.js?v=<phiên_bản>` rồi hard-refresh — trình duyệt
-> hay giữ bản card cũ trong cache.
+### Card không hiện / báo "Custom element doesn't exist"
+
+Card đã đăng ký đúng ở server nhưng trình duyệt vẫn giữ bản cũ. Làm theo thứ tự:
+
+1. **Restart Home Assistant** (Settings → System → Restart) — để integration
+   đăng ký/ cập nhật resource. Hoặc reload nhanh: Settings → Devices & services →
+   TriTue YouTube Player → ⋮ → **Reload**.
+2. **Xoá cache trình duyệt** — HA có service worker nên `Ctrl/Cmd+Shift+R`
+   thường *không đủ*. Mở **DevTools → Application → Storage → Clear site data**
+   (sẽ đăng xuất, đăng nhập lại), rồi tải lại trang. Trên app HA điện thoại:
+   thoát hẳn app mở lại, hoặc Settings → Companion App → Debugging → *Reset
+   frontend cache*.
+3. **Kiểm resource** ở Settings → Dashboards → ⋮ → **Resources**: phải có dòng
+   `/tritue_youtube_player/tritue-youtube-player-card.js?v=<phiên_bản>`.
+4. **Thêm resource thủ công** (nếu vì lý do nào đó chưa có): **Add resource** →
+   URL `/tritue_youtube_player/tritue-youtube-player-card.js`, loại **JavaScript
+   Module** → Save → tải lại trang. Integration sẽ tự gắn `?v=` vào lần restart
+   sau.
 
 ## Lưu ý quan trọng
 
