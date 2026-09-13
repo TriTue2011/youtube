@@ -20,7 +20,7 @@ Hỗ trợ **`amd64` và `aarch64`** (đã kiểm chứng chạy thật trên c�
 
 ## Tính năng
 
-- **YouTube ra loa (mới):** TV/Android box mở app YouTube gốc (có hình); loa
+- **YouTube ra loa (mới):** TV/Android box và tivi LG webOS mở app YouTube gốc (có hình); loa
   (Cast audio, DLNA, ESPHome…) nhận YouTube dưới dạng **luồng audio** — add-on
   dùng `yt-dlp` lấy `bestaudio`, ký một URL ngắn hạn rồi tự tải và tiếp sóng qua
   `/api/stream/<token>`. Nhờ vậy loa không gọi thẳng `googlevideo.com` nên tránh

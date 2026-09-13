@@ -240,6 +240,46 @@ class PlaybackRequestTests(unittest.TestCase):
                 self.assertEqual(sources, set(capability["sources"]))
                 self.assertEqual(youtube_transport, capability["youtube_transport"])
 
+    def test_lg_webos_tv_opens_native_youtube_app(self):
+        capability = self.playback.build_target_capabilities(
+            target_platform="webostv", target_device_class="tv", supported_features=24381
+        )
+        self.assertEqual("lg_webos", capability["transport"])
+        self.assertEqual("native", capability["youtube_transport"])
+        self.assertTrue(self.playback.is_native_youtube_transport("lg_webos"))
+
+        call = self.playback.build_target_call(
+            {"kind": "video", "id": "dQw4w9WgXcQ"},
+            target_platform="webostv",
+            requested_media_type="video",
+        )
+        self.assertEqual(
+            (
+                "webostv",
+                "command",
+                {
+                    "command": "system.launcher/launch",
+                    "payload": {"id": "youtube.leanback.v4", "contentId": "dQw4w9WgXcQ"},
+                },
+            ),
+            call,
+        )
+        with self.assertRaises(self.playback.UnsupportedTargetMediaError):
+            self.playback.build_target_call(
+                {"kind": "playlist", "id": "PL123"},
+                target_platform="webostv",
+                requested_media_type="video",
+            )
+
+    def test_cast_and_android_tv_calls_still_use_play_media(self):
+        domain, service, data = self.playback.build_target_call(
+            {"kind": "video", "id": "dQw4w9WgXcQ"},
+            target_platform="androidtv",
+            requested_media_type="video",
+        )
+        self.assertEqual(("media_player", "play_media"), (domain, service))
+        self.assertEqual("url", data["media_content_type"])
+
     def test_players_without_play_media_take_no_sources(self):
         capability = self.playback.build_target_capabilities(
             target_platform=None,

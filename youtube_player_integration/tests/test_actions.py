@@ -129,6 +129,30 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             volume_level=0.35,
         )
 
+    async def test_youtube_launches_native_app_on_lg_webos_tv(self):
+        result = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="youtube",
+            target="dQw4w9WgXcQ",
+            entity_ids=["media_player.lg_tv"],
+            target_platforms={"media_player.lg_tv": "webostv"},
+            target_device_classes={"media_player.lg_tv": "tv"},
+            target_supported_features={"media_player.lg_tv": 24381},
+        )
+
+        self.assertEqual(1, result["target_count"])
+        calls = self.hass.services.calls
+        self.assertEqual(
+            [("webostv", "command", {"entity_id": "media_player.lg_tv"})],
+            [(c["domain"], c["service"], c["target"]) for c in calls],
+        )
+        self.assertEqual(
+            {"id": "youtube.leanback.v4", "contentId": "dQw4w9WgXcQ"},
+            calls[0]["service_data"]["payload"],
+        )
+        self.client.async_create_stream.assert_not_awaited()
+
     async def test_youtube_streams_audio_to_a_screenless_speaker(self):
         result = await self.actions.async_play_on_players(
             self.hass,

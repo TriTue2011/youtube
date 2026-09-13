@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.5 - 2026-09-14
+
+### Added
+
+- **Tivi LG webOS mở app YouTube gốc (có hình).** Loa `webostv` trước đây rơi
+  vào nhánh "phát audio" nên tivi LG chỉ nhận luồng tiếng. Nay integration gọi
+  `webostv.command` với `system.launcher/launch` (`youtube.leanback.v4`,
+  `contentId` = mã video) — cả ở action `play_on_players` lẫn media player ảo.
+  Playlist trên LG báo lỗi rõ ràng thay vì im lặng phát sai.
+
 ## 0.8.4 - 2026-08-30
 
 ### Changed

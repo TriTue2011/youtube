@@ -157,6 +157,8 @@ def build_target_capabilities(
             transport = "google_cast_unknown"
     elif platform in {"androidtv", "androidtv_remote"}:
         transport = "android_tv"
+    elif platform == "webostv":
+        transport = "lg_webos"
     elif platform == "dlna_dmr":
         transport = "dlna"
     elif supports_play_media:
@@ -173,14 +175,16 @@ def build_target_capabilities(
         "sources": sources,
         "supports_play_media": supports_play_media,
         "youtube_transport": (
-            "native"
-            if transport in {"google_cast_video", "android_tv"}
-            else "audio"
+            "native" if transport in NATIVE_YOUTUBE_TRANSPORTS else "audio"
         ),
     }
 
 
-NATIVE_YOUTUBE_TRANSPORTS = {"google_cast_video", "android_tv"}
+NATIVE_YOUTUBE_TRANSPORTS = {"google_cast_video", "android_tv", "lg_webos"}
+
+# LG webOS TVs open YouTube through the launcher with the video ID as
+# ``contentId``; ``media_player.play_media`` cannot start the native app there.
+WEBOS_YOUTUBE_APP_ID = "youtube.leanback.v4"
 
 
 def is_native_youtube_transport(transport: str | None) -> bool:
@@ -221,3 +225,41 @@ def build_target_request(
         }
 
     raise UnsupportedTargetMediaError("youtube_transport_unsupported")
+
+
+def build_target_call(
+    item: dict[str, Any],
+    *,
+    target_platform: str | None,
+    requested_media_type: Any,
+    target_device_class: str | None = None,
+) -> tuple[str, str, dict[str, Any]]:
+    """Return ``(domain, service, data)`` that opens native YouTube on a player.
+
+    Cast and Android TV go through ``media_player.play_media``; LG webOS needs
+    ``webostv.command`` to launch the YouTube app on the requested video.
+    """
+    if target_platform == "webostv":
+        if item.get("kind") != "video" or not item.get("id"):
+            raise UnsupportedTargetMediaError("webos_playlist_requires_video")
+        return (
+            "webostv",
+            "command",
+            {
+                "command": "system.launcher/launch",
+                "payload": {
+                    "id": WEBOS_YOUTUBE_APP_ID,
+                    "contentId": str(item["id"]),
+                },
+            },
+        )
+    return (
+        "media_player",
+        "play_media",
+        build_target_request(
+            item,
+            target_platform=target_platform,
+            requested_media_type=requested_media_type,
+            target_device_class=target_device_class,
+        ),
+    )

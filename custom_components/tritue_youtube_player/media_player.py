@@ -7,11 +7,8 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.components.media_player import (
-    ATTR_MEDIA_CONTENT_ID,
-    ATTR_MEDIA_CONTENT_TYPE,
     BrowseMedia,
     DOMAIN as MEDIA_PLAYER_DOMAIN,
-    SERVICE_PLAY_MEDIA,
     MediaClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
@@ -33,7 +30,7 @@ from .entity import YouTubePlayerEntity
 from .playback import (
     UnsupportedCastMediaError,
     UnsupportedTargetMediaError,
-    build_target_request,
+    build_target_call,
     canonical_youtube_url,
 )
 
@@ -333,7 +330,7 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
         """Dispatch normalized media to the configured physical entity."""
         target = self._target_or_raise()
         try:
-            service_data = build_target_request(
+            domain, service, service_data = build_target_call(
                 item,
                 target_platform=self._target_platform(),
                 target_device_class=self._target_device_class(),
@@ -351,12 +348,9 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
             ) from error
 
         await self.hass.services.async_call(
-            MEDIA_PLAYER_DOMAIN,
-            SERVICE_PLAY_MEDIA,
-            {
-                ATTR_MEDIA_CONTENT_ID: service_data[ATTR_MEDIA_CONTENT_ID],
-                ATTR_MEDIA_CONTENT_TYPE: service_data[ATTR_MEDIA_CONTENT_TYPE],
-            },
+            domain,
+            service,
+            service_data,
             blocking=True,
             target={ATTR_ENTITY_ID: target},
         )

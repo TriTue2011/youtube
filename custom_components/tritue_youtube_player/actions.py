@@ -9,8 +9,8 @@ from .playback import (
     UnsupportedTargetMediaError,
     build_direct_audio_request,
     build_stream_request,
+    build_target_call,
     build_target_capabilities,
-    build_target_request,
     is_native_youtube_transport,
     normalize_target_entity_ids,
 )
@@ -85,7 +85,7 @@ async def async_play_on_players(
                     youtube_audio_targets.append(entity_id)
                     continue
                 try:
-                    requests[entity_id] = build_target_request(
+                    requests[entity_id] = build_target_call(
                         item,
                         target_platform=target_platforms.get(entity_id),
                         target_device_class=target_device_classes.get(entity_id),
@@ -140,11 +140,11 @@ async def async_play_on_players(
         else:
             dispatched_targets = []
             first_dispatch_error = None
-            for entity_id, service_data in requests.items():
+            for entity_id, (domain, service, service_data) in requests.items():
                 try:
                     await hass.services.async_call(
-                        "media_player",
-                        "play_media",
+                        domain,
+                        service,
                         service_data,
                         blocking=True,
                         target={"entity_id": entity_id},
