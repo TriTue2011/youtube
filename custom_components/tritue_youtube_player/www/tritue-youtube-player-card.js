@@ -19,6 +19,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._autoAdvance = false;
     this._trackPlaying = false;
     this._manualSelection = false;
+    // Players hidden from this card. Stored by the integration in HA storage so
+    // the list survives restarts and card reloads; restorable from the card.
+    this._hiddenPlayers = new Set();
+    this._hiddenLoading = false;
+    this._hiddenLoaded = false;
+    this._showHidden = false;
   }
 
   setConfig(config) {
@@ -40,6 +46,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._syncPlayers();
     this._updateSourceButtons();
     this._loadCapabilities();
+    this._loadHiddenPlayers();
     this._checkAutoAdvance();
   }
 
@@ -127,6 +134,49 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .player-chip input { accent-color: var(--primary-color); }
         .player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .device-icon { --mdc-icon-size: 17px; color: var(--secondary-text-color); }
+        .hide-player {
+          display: grid;
+          place-items: center;
+          width: 22px;
+          height: 22px;
+          margin: -2px -4px -2px 0;
+          padding: 0;
+          border: 0;
+          border-radius: 50%;
+          color: var(--secondary-text-color);
+          background: transparent;
+          --mdc-icon-size: 15px;
+        }
+        .hide-player:hover { color: var(--error-color); background: var(--divider-color); }
+        .hidden-players { margin-top: 8px; }
+        .hidden-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 2px;
+          border: 0;
+          color: var(--secondary-text-color);
+          background: transparent;
+          font-size: .82rem;
+        }
+        .hidden-toggle ha-icon { --mdc-icon-size: 16px; transition: transform .15s; }
+        .hidden-toggle[aria-expanded="true"] ha-icon { transform: rotate(180deg); }
+        .hidden-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .restore-player {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          max-width: 100%;
+          padding: 5px 10px;
+          border: 1px dashed var(--divider-color);
+          border-radius: 999px;
+          color: var(--secondary-text-color);
+          background: transparent;
+          font-size: .82rem;
+          --mdc-icon-size: 15px;
+        }
+        .restore-player:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .restore-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .now-playing {
           display: grid;
           grid-template-columns: 70px minmax(0, 1fr);
@@ -237,6 +287,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <span class="hint selected-count">0 đã chọn</span>
             </div>
             <div class="players"></div>
+            <div class="hidden-players"></div>
           </section>
 
           <section class="section">
@@ -343,9 +394,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _syncPlayers() {
     if (!this._hass) return;
     const virtualEntity = this._config.entity;
-    const players = Object.entries(this._hass.states)
+    const allPlayers = Object.entries(this._hass.states)
       .filter(([entityId]) => entityId.startsWith("media_player.") && entityId !== virtualEntity)
       .sort((left, right) => this._friendlyName(left).localeCompare(this._friendlyName(right), "vi"));
+    const players = allPlayers.filter(([entityId]) => !this._hiddenPlayers.has(entityId));
 
     if (!this._defaultsApplied) {
       const configuredDefaults = Array.isArray(this._config.entities)
@@ -364,7 +416,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!players.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = "Không tìm thấy media_player nào khác.";
+      empty.textContent = this._hiddenPlayers.size
+        ? "Mọi thiết bị đang ẩn — mở mục Đã ẩn để khôi phục."
+        : "Không tìm thấy media_player nào khác.";
       container.append(empty);
     }
     for (const [entityId, state] of players) {
@@ -401,12 +455,108 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       deviceIcon.setAttribute("icon", capability?.transport === "dlna"
         ? "mdi:cast-audio"
         : isAudioOnly ? "mdi:speaker" : "mdi:television-play");
-      label.append(checkbox, name, deviceIcon);
+      const hide = document.createElement("button");
+      hide.type = "button";
+      hide.className = "hide-player";
+      hide.title = `Ẩn ${name.textContent} khỏi thẻ (khôi phục ở mục Đã ẩn)`;
+      hide.setAttribute("aria-label", hide.title);
+      const hideIcon = document.createElement("ha-icon");
+      hideIcon.setAttribute("icon", "mdi:close");
+      hide.append(hideIcon);
+      hide.addEventListener("click", (event) => {
+        // The button sits inside the chip's <label>: keep the click from toggling the checkbox.
+        event.preventDefault();
+        event.stopPropagation();
+        this._setHidden([entityId], true);
+      });
+      label.append(checkbox, name, deviceIcon, hide);
       container.append(label);
     }
+    this._renderHiddenPlayers(allPlayers.filter(([entityId]) => this._hiddenPlayers.has(entityId)));
     this._updateSelectedCount();
     this._updateTransportState();
     this._syncNowPlaying();
+  }
+
+  _renderHiddenPlayers(hiddenPlayers) {
+    const container = this.shadowRoot.querySelector(".hidden-players");
+    container.replaceChildren();
+    if (!hiddenPlayers.length) return;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "hidden-toggle";
+    toggle.setAttribute("aria-expanded", String(this._showHidden));
+    const chevron = document.createElement("ha-icon");
+    chevron.setAttribute("icon", "mdi:chevron-down");
+    toggle.append(chevron, document.createTextNode(`Đã ẩn (${hiddenPlayers.length})`));
+    toggle.addEventListener("click", () => {
+      this._showHidden = !this._showHidden;
+      this._syncPlayers();
+    });
+    container.append(toggle);
+    if (!this._showHidden) return;
+    const list = document.createElement("div");
+    list.className = "hidden-list";
+    const restoreButton = (label, entityIds) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "restore-player";
+      button.title = entityIds.length === 1 ? entityIds[0] : "Khôi phục mọi thiết bị đã ẩn";
+      const icon = document.createElement("ha-icon");
+      icon.setAttribute("icon", "mdi:backup-restore");
+      const text = document.createElement("span");
+      text.textContent = label;
+      button.append(icon, text);
+      button.addEventListener("click", () => this._setHidden(entityIds, false));
+      return button;
+    };
+    for (const player of hiddenPlayers) {
+      list.append(restoreButton(this._friendlyName(player), [player[0]]));
+    }
+    if (hiddenPlayers.length > 1) {
+      list.append(restoreButton("Khôi phục tất cả", hiddenPlayers.map(([entityId]) => entityId)));
+    }
+    container.append(list);
+  }
+
+  async _loadHiddenPlayers() {
+    if (this._hiddenLoaded || this._hiddenLoading || !this._hass) return;
+    this._hiddenLoading = true;
+    try {
+      const payload = await this._hass.callApi("GET", "tritue_youtube_player/hidden_players");
+      this._hiddenPlayers = new Set(Array.isArray(payload.entity_ids) ? payload.entity_ids : []);
+      this._hiddenLoaded = true;
+      this._syncPlayers();
+    } catch (_error) {
+      // Integration still loading (or an older version without the view): show every player.
+    } finally {
+      this._hiddenLoading = false;
+    }
+  }
+
+  async _setHidden(entityIds, hidden) {
+    try {
+      const payload = await this._hass.callApi("POST", "tritue_youtube_player/hidden_players", {
+        entity_ids: entityIds,
+        hidden,
+      });
+      this._hiddenPlayers = new Set(Array.isArray(payload.entity_ids) ? payload.entity_ids : []);
+      this._hiddenLoaded = true;
+      if (hidden) entityIds.forEach((entityId) => this._selectedPlayers.delete(entityId));
+      this._syncPlayers();
+      const names = entityIds.map((entityId) => this._hass.states[entityId]?.attributes?.friendly_name || entityId);
+      this._setStatus(hidden
+        ? `Đã ẩn ${names.join(", ")}. Khôi phục ở mục Đã ẩn.`
+        : `Đã khôi phục ${names.length > 3 ? `${names.length} thiết bị` : names.join(", ")}.`);
+    } catch (error) {
+      const message = String(error?.body?.error || error?.error || error?.message || "");
+      this._setStatus(
+        message === "admin_required"
+          ? "Chỉ tài khoản quản trị mới ẩn hoặc khôi phục được thiết bị."
+          : message || "Không lưu được danh sách thiết bị ẩn.",
+        true,
+      );
+    }
   }
 
   _friendlyName([entityId, state]) {

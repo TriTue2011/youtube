@@ -12,7 +12,7 @@ from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .const import CARD_URL, DOMAIN, LOGGER
-from .http import TriTueCapabilitiesView, TriTueSearchView
+from .http import TriTueCapabilitiesView, TriTueHiddenPlayersView, TriTueSearchView
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
@@ -26,6 +26,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         pass  # Static path already registered on a previous setup.
     hass.http.register_view(TriTueSearchView)
     hass.http.register_view(TriTueCapabilitiesView)
+    hass.http.register_view(TriTueHiddenPlayersView())
 
     integration = await async_get_integration(hass, DOMAIN)
     versioned_url = f"{CARD_URL}?v={integration.version}"

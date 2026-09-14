@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 from http import HTTPStatus
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.storage import Store
 
 from .api import YouTubePlayerApiError
 from .const import DOMAIN
+from .hidden_players import (
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    apply_hidden_change,
+    normalize_hidden,
+)
 from .playback import build_target_capabilities
 
 
@@ -106,3 +114,52 @@ class TriTueCapabilitiesView(HomeAssistantView):
                 }
             )
         return self.json({"items": items})
+
+
+class TriTueHiddenPlayersView(HomeAssistantView):
+    """Players hidden from the card, persisted in Home Assistant storage."""
+
+    url = "/api/tritue_youtube_player/hidden_players"
+    name = "api:tritue_youtube_player:hidden_players"
+    requires_auth = True
+
+    def __init__(self) -> None:
+        self._store: Store | None = None
+        self._hidden: list[str] | None = None
+        self._lock = asyncio.Lock()
+
+    async def _load(self, hass) -> list[str]:
+        if self._store is None:
+            self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        if self._hidden is None:
+            self._hidden = normalize_hidden(await self._store.async_load())
+        return self._hidden
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return the hidden players (any signed-in user sees the same card)."""
+        async with self._lock:
+            hidden = await self._load(request.app["hass"])
+        return self.json({"entity_ids": hidden})
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Hide or restore players; admin only, like editing a dashboard."""
+        user = request.get("hass_user")
+        if user is None or not user.is_admin:
+            return self.json({"error": "admin_required"}, HTTPStatus.FORBIDDEN)
+        try:
+            payload = await request.json()
+        except ValueError:
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        if not isinstance(payload, dict):
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        async with self._lock:
+            current = await self._load(request.app["hass"])
+            try:
+                hidden = apply_hidden_change(
+                    current, payload.get("entity_ids"), payload.get("hidden")
+                )
+            except ValueError as error:
+                return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            await self._store.async_save({"entity_ids": hidden})
+            self._hidden = hidden
+        return self.json({"entity_ids": hidden})

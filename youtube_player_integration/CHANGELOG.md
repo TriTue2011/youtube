@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.6 - 2026-09-14
+
+### Added
+
+- **Ẩn loa/tivi không dùng khỏi card, khôi phục được.** Mỗi thiết bị trong
+  "Chọn loa / màn hình" có nút × để ẩn; mục "Đã ẩn (n)" bên dưới khôi phục từng
+  thiết bị hoặc tất cả. Danh sách lưu trong `.storage` của Home Assistant
+  (`tritue_youtube_player.hidden_players`) nên còn nguyên sau khi khởi động lại
+  HA, tải lại card hay cập nhật integration, và mọi card dùng chung một danh
+  sách. Chỉ tài khoản quản trị ẩn/khôi phục được, giống sửa dashboard.
+
 ## 0.8.5 - 2026-09-14
 
 ### Added

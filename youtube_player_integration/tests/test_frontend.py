@@ -64,7 +64,25 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._selectedPlayers = new Set(sharedOutputs)", script)
         self.assertIn('source: this._source', script)
         self.assertIn("this._syncNowPlaying()", script)
+        # Hidden players: loaded from and saved to the integration's HA storage.
+        self.assertIn('callApi("GET", "tritue_youtube_player/hidden_players")', script)
+        self.assertIn('callApi("POST", "tritue_youtube_player/hidden_players"', script)
+        self.assertIn("this._loadHiddenPlayers()", script)
+        self.assertIn("!this._hiddenPlayers.has(entityId)", script)
+        self.assertIn("this._renderHiddenPlayers(", script)
+        self.assertIn("this._setHidden([entityId], true)", script)
+        self.assertIn("this._setHidden(entityIds, false)", script)
         self.assertNotIn("eval(", script)
+
+    def test_hidden_players_view_is_registered_and_persisted(self):
+        frontend = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
+        http = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
+
+        self.assertIn("hass.http.register_view(TriTueHiddenPlayersView())", frontend)
+        self.assertIn('url = "/api/tritue_youtube_player/hidden_players"', http)
+        self.assertIn("Store(hass, STORAGE_VERSION, STORAGE_KEY)", http)
+        self.assertIn("await self._store.async_save(", http)
+        self.assertIn("if user is None or not user.is_admin:", http)
 
     def test_card_is_auto_registered_and_version_busted(self):
         source = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
