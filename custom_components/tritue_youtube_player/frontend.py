@@ -15,6 +15,7 @@ from .const import CARD_URL, DOMAIN, LOGGER
 from .http import (
     TriTueCapabilitiesView,
     TriTueHiddenPlayersView,
+    TriTuePlaylistsView,
     TriTueSearchView,
     TriTueStreamView,
 )
@@ -32,6 +33,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     hass.http.register_view(TriTueSearchView)
     hass.http.register_view(TriTueCapabilitiesView)
     hass.http.register_view(TriTueStreamView)
+    hass.http.register_view(TriTuePlaylistsView)
     hass.http.register_view(TriTueHiddenPlayersView())
 
     integration = await async_get_integration(hass, DOMAIN)

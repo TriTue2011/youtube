@@ -235,6 +235,86 @@ def _build_zing_api_url(song_id: str, version: str, current_time: int) -> str:
     return f"{ZING_API_BASE}{ZING_API_PATH}?{query}"
 
 
+ZING_PLAYLIST_PATH = "/api/v2/page/get/playlist"
+
+
+def zing_playlist_id(text: str) -> str | None:
+    """Album/playlist id in a Zing MP3 link (/album/…/ID.html, /playlist/…/ID.html)."""
+    parsed = urlsplit(str(text or "").strip())
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not (host == "zingmp3.vn" or host.endswith(".zingmp3.vn")):
+        return None
+    if not parsed.path.startswith(("/album/", "/playlist/")):
+        return None
+    playlist_id = parsed.path.rsplit("/", 1)[-1].removesuffix(".html")
+    return playlist_id if ZING_ID.fullmatch(playlist_id) else None
+
+
+def fetch_zing_playlist(text: str, *, timeout: int = 20, now: int | None = None) -> tuple[str, list[dict]]:
+    """(title, public songs) of a Zing MP3 album/playlist.
+
+    Signed like the song stream API, only the path differs. Measured 14/09/2026 on
+    album n1mqFnz65jGl: 28 songs, each with `streamingStatus` (1 playable, 2 VIP — skipped)."""
+    playlist_id = zing_playlist_id(text)
+    if playlist_id is None:
+        raise ValueError("invalid_playlist_link")
+    cookie_jar = CookieJar()
+    opener = build_opener(_ZingRedirectHandler(), HTTPCookieProcessor(cookie_jar))
+    home = f"{ZING_API_BASE}/"
+    try:
+        with opener.open(Request(home, headers={"User-Agent": ZING_USER_AGENT}), timeout=timeout) as response:
+            response.read(1)
+        params = {
+            "id": playlist_id,
+            "ctime": str(int(round(time.time()) if now is None else now)),
+            "version": _cookie_web_version(cookie_jar),
+        }
+        digest = hashlib.sha256("".join(f"{key}={params[key]}" for key in sorted(params)).encode()).hexdigest()
+        signature = hmac.new(
+            ZING_API_SECRET.encode(), f"{ZING_PLAYLIST_PATH}{digest}".encode(), hashlib.sha512
+        ).hexdigest()
+        url = f"{ZING_API_BASE}{ZING_PLAYLIST_PATH}?{urlencode({**params, 'apiKey': ZING_API_KEY, 'sig': signature})}"
+        with opener.open(
+            Request(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip",
+                    "Referer": home,
+                    "User-Agent": ZING_USER_AGENT,
+                },
+            ),
+            timeout=timeout,
+        ) as response:
+            payload = json.loads(_read_limited_response(response, limit=4_000_000))
+    except StreamUnavailableError:
+        raise
+    except (OSError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise StreamUnavailableError("stream_provider_failed") from error
+    data = payload.get("data") if isinstance(payload, dict) and payload.get("err") == 0 else None
+    if not isinstance(data, dict):
+        raise StreamUnavailableError("stream_provider_failed")
+    items = []
+    for song in (data.get("song") or {}).get("items") or []:
+        if not isinstance(song, dict) or song.get("streamingStatus") != 1:
+            continue
+        link = str(song.get("link") or "")
+        song_id = str(song.get("encodeId") or "")
+        if not link.startswith("/bai-hat/") or not ZING_ID.fullmatch(song_id):
+            continue
+        items.append({
+            "source": "zing",
+            "kind": "song",
+            "id": song_id,
+            "url": f"https://zingmp3.vn{link}",
+            "title": str(song.get("title") or song_id),
+            "channel": str(song.get("artistsNames") or ""),
+            "duration": song.get("duration"),
+            "thumbnail": str(song.get("thumbnailM") or song.get("thumbnail") or ""),
+        })
+    return str(data.get("title") or "Album Zing MP3"), items
+
+
 def resolve_zing_stream(
     target_url: str, *, timeout: int = 30, now: int | None = None
 ) -> dict:

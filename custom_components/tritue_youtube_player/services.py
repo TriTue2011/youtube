@@ -38,6 +38,7 @@ from .sessions import (
 
 CONF_SESSION_ID = "session_id"
 CONF_JOIN = "join"
+CONF_PLAYLIST_ID = "playlist_id"
 CONF_STEP = "step"
 STOP_FEATURE = 4096
 
@@ -54,6 +55,7 @@ PLAY_ON_PLAYERS_SCHEMA = vol.Schema(
         ),
         vol.Optional(CONF_SESSION_ID): cv.string,
         vol.Optional(CONF_JOIN, default=False): cv.boolean,
+        vol.Optional(CONF_PLAYLIST_ID): cv.string,
     }
 )
 SKIP_SCHEMA = vol.Schema(
@@ -113,6 +115,7 @@ async def async_dispatch(
     media_content_type: str | None = None,
     session_id: str | None = None,
     join_entity_ids: list[str] | None = None,
+    playlist_id: str | None = None,
 ) -> dict:
     """Play one item on physical players as one session controlled by ``entry``.
 
@@ -161,6 +164,7 @@ async def async_dispatch(
             session_id=session_id,
             controller=controller_id(entry.entry_id),
             join_entity_ids=join_entity_ids,
+            playlist_id=playlist_id,
         )
         await entry.runtime_data.async_refresh()
     except InvalidTargetError as error:
@@ -196,6 +200,7 @@ async def _async_handle_play_on_players(
         media_content_type=call.data.get(CONF_MEDIA_CONTENT_TYPE),
         session_id=session_id,
         join_entity_ids=join,
+        playlist_id=call.data.get(CONF_PLAYLIST_ID) or None,
     )
 
 

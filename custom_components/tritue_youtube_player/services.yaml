@@ -62,6 +62,10 @@ play_on_players:
       default: false
       selector:
         boolean:
+    playlist_id:
+      required: false
+      selector:
+        text:
 skip:
   fields:
     entry_id:

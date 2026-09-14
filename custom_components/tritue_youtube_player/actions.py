@@ -32,6 +32,7 @@ async def async_play_on_players(
     session_id: str | None = None,
     controller: str | None = None,
     join_entity_ids: list[str] | None = None,
+    playlist_id: str | None = None,
 ) -> dict[str, Any]:
     """Resolve one source item and dispatch it to one or more HA players.
 
@@ -89,6 +90,7 @@ async def async_play_on_players(
         volume_level=volume_level,
         session_id=session_id,
         controller=controller,
+        **({"playlist_id": playlist_id} if playlist_id else {}),
     )
     session = recorded.get("session") or {}
     session_id = session.get("session_id") or session_id

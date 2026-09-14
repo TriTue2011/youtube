@@ -68,6 +68,18 @@ class YouTubePlayerClient:
             request_timeout=35,
         )
 
+    async def async_playlists(self) -> dict[str, Any]:
+        """The household playlists kept by the player server."""
+        return await self._async_request("GET", "/api/integration/playlists")
+
+    async def async_playlist_action(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """One playlist command (create, add, import a link or share code, …).
+
+        Importing a long YouTube playlist runs yt-dlp on the server for a while."""
+        return await self._async_request(
+            "POST", "/api/integration/playlists", json=payload, request_timeout=150
+        )
+
     async def async_play(self, target: str) -> dict[str, Any]:
         """Send a YouTube URL or identifier to the web player."""
         return await self._async_request(
@@ -84,6 +96,7 @@ class YouTubePlayerClient:
         volume_level: float | None = None,
         session_id: str | None = None,
         controller: str | None = None,
+        playlist_id: str | None = None,
     ) -> dict[str, Any]:
         """Share now-playing metadata and physical outputs with all HA clients.
 
@@ -100,6 +113,9 @@ class YouTubePlayerClient:
             payload["session_id"] = session_id
         if controller:
             payload["controller"] = controller
+        if playlist_id:
+            # The session's queue becomes this saved playlist.
+            payload["playlist_id"] = playlist_id
         return await self._async_request(
             "POST", "/api/integration/session", json=payload
         )

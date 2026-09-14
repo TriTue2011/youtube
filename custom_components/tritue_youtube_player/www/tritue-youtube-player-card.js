@@ -17,6 +17,19 @@ function streamTarget(mediaContentId) {
 
 const LISTEN_SCREEN_OFF_KEY = "tritue-youtube-player:listen-screen-off";
 const SEARCH_KEY = "tritue-youtube-player:search:";
+// Links the player server can save as a whole playlist (it checks them properly).
+const PLAYLIST_LINK = /^(TTPL1\.|https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be)\/\S*[?&]list=[A-Za-z0-9_-]+|https?:\/\/([a-z0-9-]+\.)*zingmp3\.vn\/(album|playlist)\/)/i;
+const PLAYLIST_ERRORS = {
+  invalid_playlist_link: "Dán link playlist YouTube, link album/playlist Zing MP3 hoặc mã chia sẻ (TTPL1.…).",
+  invalid_share_code: "Mã chia sẻ không đúng hoặc bị cắt mất một đoạn.",
+  playlist_unavailable: "Không đọc được playlist này — link sai, playlist riêng tư, hoặc YouTube/Zing đang lỗi.",
+  playlist_empty: "Playlist này không có bài nào nghe được (riêng tư, VIP hoặc đã xoá).",
+  playlist_full: "Playlist đã đủ 500 bài.",
+  too_many_playlists: "Đã có 100 playlist — xoá bớt rồi thêm.",
+  playlist_name_required: "Đặt tên cho playlist.",
+  playlist_not_found: "Playlist này vừa bị xoá.",
+  cannot_connect: "Không kết nối được máy phát nhạc.",
+};
 // Half a second of silence, played inside the tap so Safari/iOS unlocks the audio
 // element before the player server answers with the song's stream.
 const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
@@ -294,6 +307,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._mirrorHoldUntil = 0;
     this._alongSeekHold = 0;
     this._needsRestore = false;
+    // Household playlists on the player server (null until loaded).
+    this._view = "search";
+    this._playlists = null;
+    this._openPlaylist = "";
+    this._playlistsRequested = false;
+    this._addMenuFor = null;
     this._onDeviceAudio = (message, isError) => this._deviceAudioChanged(message, isError);
   }
 
@@ -321,6 +340,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._updateSourceButtons();
     this._loadCapabilities();
     this._loadHiddenPlayers();
+    if (this._playlists === null && !this._playlistsRequested && this._entryId()) {
+      this._playlistsRequested = true;
+      this._loadPlaylists();
+    }
     this._syncVideo();
     if (this._needsRestore) {
       this._needsRestore = false;
@@ -629,7 +652,80 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: var(--primary-color);
           --mdc-icon-size: 20px;
         }
-        .result-actions { display: flex; gap: 6px; }
+        .result-actions { display: flex; align-items: center; gap: 6px; }
+        .view-tabs { display: flex; gap: 16px; margin-top: 12px; }
+        .view-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 2px 6px;
+          border: 0;
+          border-bottom: 2px solid transparent;
+          color: var(--secondary-text-color);
+          background: transparent;
+          font-weight: 650;
+          --mdc-icon-size: 17px;
+        }
+        .view-tab[aria-pressed="true"] { border-bottom-color: var(--primary-color); color: var(--primary-text-color); }
+        .icon-button {
+          display: grid;
+          place-items: center;
+          width: 30px;
+          height: 30px;
+          padding: 0;
+          border: 0;
+          border-radius: 50%;
+          color: var(--secondary-text-color);
+          background: transparent;
+          --mdc-icon-size: 18px;
+        }
+        .icon-button:hover:not(:disabled) { color: var(--primary-text-color); background: var(--divider-color); }
+        .icon-button.danger:hover:not(:disabled) { color: var(--error-color); }
+        .save-playlist {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          width: 100%;
+          margin-top: 8px;
+          padding: 7px 10px;
+          border: 1px dashed var(--primary-color);
+          border-radius: 11px;
+          color: var(--primary-color);
+          background: transparent;
+          font-weight: 650;
+          --mdc-icon-size: 18px;
+        }
+        .add-menu { grid-column: 1 / -1; display: grid; gap: 4px; padding: 6px; border-radius: 9px; background: var(--card-background-color, var(--secondary-background-color)); }
+        .add-menu button.add-to { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 7px; color: var(--primary-text-color); background: transparent; text-align: left; --mdc-icon-size: 16px; }
+        .add-menu button.add-to:hover { background: var(--divider-color); }
+        .add-menu .count, .playlist-count { color: var(--secondary-text-color); font-size: .78rem; }
+        .add-menu .add-to span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .add-menu form, .playlist-panel form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+        .playlist-panel { display: grid; gap: 8px; margin-top: 10px; }
+        .playlist-panel input, .add-menu input {
+          min-width: 0;
+          border: 1px solid var(--divider-color);
+          border-radius: 10px;
+          padding: 8px 11px;
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color);
+          outline: none;
+        }
+        .playlist { border: 1px solid var(--divider-color); border-radius: 12px; overflow: hidden; }
+        .playlist-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 6px 6px 6px 8px; }
+        .playlist-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; color: var(--primary-text-color); background: transparent; text-align: left; --mdc-icon-size: 18px; }
+        .playlist-toggle ha-icon { transition: transform .15s; color: var(--secondary-text-color); }
+        .playlist-toggle[aria-expanded="true"] ha-icon { transform: rotate(180deg); }
+        .playlist-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+        .playlist-tools { display: flex; align-items: center; gap: 2px; }
+        .playlist-items { display: grid; gap: 2px; padding: 4px 6px 6px; border-top: 1px solid var(--divider-color); }
+        .playlist-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 3px 0; }
+        .playlist-item .num { text-align: right; color: var(--secondary-text-color); font-size: .74rem; font-variant-numeric: tabular-nums; }
+        .playlist-item .title { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: .86rem; line-height: 1.25; }
+        .playlist-item .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary-text-color); font-size: .74rem; }
+        .playlist-item .play-result { width: 30px; height: 30px; --mdc-icon-size: 17px; }
+        .playlist-empty { padding: 12px 6px; text-align: center; color: var(--secondary-text-color); font-size: .84rem; }
         .play-result.listen { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
         .device-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 6px; }
         .pill {
@@ -755,6 +851,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             <div class="others" aria-label="Nhóm loa khác đang phát"></div>
           </section>
 
+          <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
+            <button class="view-tab" type="button" data-view="search" aria-pressed="true"><ha-icon icon="mdi:magnify"></ha-icon><span>Tìm nhạc</span></button>
+            <button class="view-tab" type="button" data-view="playlists" aria-pressed="false"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
+          </div>
+
           <div class="source-switch" role="group" aria-label="Nguồn nhạc">
             <button class="source-button" type="button" data-source="youtube">YouTube</button>
             <button class="source-button" type="button" data-source="zing">Zing MP3</button>
@@ -765,6 +866,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             <input type="search" maxlength="2048" autocomplete="off" aria-label="Tìm tên bài hát hoặc ca sĩ" placeholder="Tìm tên bài hát, ca sĩ hoặc dán link YouTube…" required />
             <button class="primary search-button" type="submit" aria-label="Tìm kiếm" title="Tìm kiếm"><ha-icon icon="mdi:magnify"></ha-icon><span class="search-label">Tìm kiếm</span></button>
           </form>
+          <button class="save-playlist" type="button" hidden><ha-icon icon="mdi:playlist-plus"></ha-icon><span>Lưu cả playlist này vào Playlist</span></button>
+          <div class="playlist-panel" hidden>
+            <form class="playlist-form">
+              <input type="text" class="playlist-input" maxlength="300000" autocomplete="off" aria-label="Link playlist, mã chia sẻ hoặc tên playlist mới" placeholder="Dán link playlist YouTube, album Zing, mã chia sẻ — hoặc gõ tên để tạo mới" />
+              <button class="primary playlist-submit" type="submit">Lưu</button>
+            </form>
+            <div class="playlist-list"></div>
+          </div>
           <p class="status" role="status" aria-live="polite"></p>
 
           <section class="section">
@@ -792,12 +901,34 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._updateSourceButtons();
         this._syncPlayers();
         this._renderResults();
+        this._syncSavePlaylist();
         this._setStatus("");
       });
     });
     this.shadowRoot.querySelector("form").addEventListener("submit", (event) => {
       event.preventDefault();
       this._search();
+    });
+    const searchInput = this.shadowRoot.querySelector('input[type="search"]');
+    searchInput.addEventListener("input", () => this._syncSavePlaylist());
+    this.shadowRoot.querySelectorAll(".view-tab").forEach((tab) => {
+      tab.addEventListener("click", () => this._showView(tab.dataset.view));
+    });
+    this.shadowRoot.querySelector(".save-playlist").addEventListener("click", () => this._importPlaylist(searchInput.value, true));
+    const playlistInput = this.shadowRoot.querySelector(".playlist-input");
+    playlistInput.addEventListener("input", () => this._syncPlaylistSubmit());
+    this.shadowRoot.querySelector(".playlist-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const text = playlistInput.value.trim();
+      if (!text) return;
+      // Anything that looks like a link or a code goes to the server, which says what
+      // it can't read; only plain words name a new playlist.
+      if (PLAYLIST_LINK.test(text) || /^(https?:\/\/|TTPL)/i.test(text)) this._importPlaylist(text, false);
+      else this._playlistCommand({ action: "create", name: text, items: [] }, (payload) => {
+        playlistInput.value = "";
+        this._openPlaylist = payload.playlist.id;
+        return `Đã tạo “${payload.playlist.name}”. Bấm + ở kết quả tìm để thêm bài.`;
+      });
     });
     this.shadowRoot.querySelector(".previous").addEventListener("click", () => this._skip(-1));
     this.shadowRoot.querySelector(".play-pause").addEventListener("click", () => this._togglePlay());
@@ -898,6 +1029,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._updateSelectedCount();
         this._updateTransportState();
         this._syncNowPlaying();
+        // Playlist buttons read "play on the speakers" or "listen here".
+        if (this._view === "playlists") this._renderPlaylists();
       });
       const name = document.createElement("span");
       name.className = "player-name";
@@ -1087,11 +1220,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
   }
 
-  _playTargets() {
+  _playTargets(source = this._source) {
     return [...this._selectedPlayers].filter((entityId) => {
       const state = this._hass?.states?.[entityId];
       if (!state || state.state === "unavailable" || !this._supportsFeature(entityId, 512)) return false;
-      return this._supportsSource(entityId, this._source);
+      return this._supportsSource(entityId, source);
     });
   }
 
@@ -1588,6 +1721,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         button.addEventListener("click", () => this._playResult(item, button, index, watch));
         actions.append(button);
       };
+      if ((item.source || this._source) !== "http") {
+        const add = document.createElement("button");
+        add.type = "button";
+        add.className = "icon-button add-playlist";
+        add.title = `Thêm “${title.textContent}” vào playlist`;
+        add.setAttribute("aria-label", add.title);
+        const addIcon = document.createElement("ha-icon");
+        addIcon.setAttribute("icon", "mdi:playlist-plus");
+        add.append(addIcon);
+        add.addEventListener("click", () => this._toggleAddMenu(row, { ...item, source: item.source || this._source }));
+        actions.append(add);
+      }
       if (this._isVideoItem(item, item.source || this._source)) action("mdi:television-play", "Xem video", true);
       action("mdi:headphones", "Nghe (chỉ tiếng)", false);
       row.append(image, track, actions);
@@ -2113,13 +2258,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._updateTransportState();
   }
 
-  async _playResult(item, button, index = -1, watch = true) {
+  async _playResult(item, button, index = -1, watch = true, playlist = null) {
     const source = item.source || this._source;
     const requestedCount = this._selectedPlayers.size;
     const isVideo = this._isVideoItem(item, source);
     if (!requestedCount) {
-      // No speaker ticked: listen or watch right here, with the results as the queue.
-      const queue = (this._results.includes(item) ? this._results : [item])
+      // No speaker ticked: listen or watch right here, with the results (or the
+      // playlist) as the queue.
+      const queue = (playlist ? playlist.items : this._results.includes(item) ? this._results : [item])
         .map((entry) => ({ ...entry, source: entry.source || source }));
       const position = Math.max(0, index >= 0
         ? index
@@ -2149,7 +2295,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._setStatus(`Đang nghe “${name}” trên máy này.`);
       return;
     }
-    const entityIds = this._playTargets();
+    const entityIds = this._playTargets(source);
     if (!entityIds.length) {
       this._setStatus("Thiết bị đã chọn không hỗ trợ nguồn này.", true);
       return;
@@ -2170,6 +2316,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         target: item.url || item.id,
         entity_id: entityIds,
         media_content_type: item.media_content_type,
+        // A saved playlist: the speakers' queue is the whole playlist.
+        ...(playlist ? { playlist_id: playlist.id } : {}),
       });
       if (deviceAudio.item) deviceAudio.stop();
       if ((watch && isVideo) || this._video.open) {
@@ -2376,6 +2524,294 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const minutes = Math.floor((value % 3600) / 60);
     const rest = String(Math.floor(value % 60)).padStart(2, "0");
     return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
+  }
+
+  _showView(view) {
+    this._view = view === "playlists" ? "playlists" : "search";
+    const playlists = this._view === "playlists";
+    this.shadowRoot.querySelectorAll(".view-tab").forEach((tab) => {
+      tab.setAttribute("aria-pressed", String(tab.dataset.view === this._view));
+    });
+    for (const selector of [".source-switch", "form", ".results"]) {
+      this.shadowRoot.querySelector(selector).hidden = playlists;
+    }
+    this.shadowRoot.querySelector(".playlist-panel").hidden = !playlists;
+    this._syncSavePlaylist();
+    if (playlists) this._loadPlaylists();
+  }
+
+  _syncSavePlaylist() {
+    const value = this.shadowRoot.querySelector('input[type="search"]').value.trim();
+    this.shadowRoot.querySelector(".save-playlist").hidden =
+      this._view !== "search" || this._source === "http" || !PLAYLIST_LINK.test(value);
+  }
+
+  _syncPlaylistSubmit() {
+    const value = this.shadowRoot.querySelector(".playlist-input").value.trim();
+    const link = PLAYLIST_LINK.test(value) || /^(https?:\/\/|TTPL)/i.test(value);
+    this.shadowRoot.querySelector(".playlist-submit").textContent = link ? "Lưu cả playlist" : "Tạo";
+  }
+
+  _playlistError(error) {
+    const code = String(error?.body?.error || error?.error || error?.message || "");
+    return PLAYLIST_ERRORS[code] || code || "Không thực hiện được lệnh playlist.";
+  }
+
+  async _loadPlaylists() {
+    const entryId = this._entryId();
+    if (!entryId || !this._hass) return;
+    try {
+      const payload = await this._hass.callApi("GET", `tritue_youtube_player/playlists?entry_id=${encodeURIComponent(entryId)}`);
+      this._playlists = Array.isArray(payload.playlists) ? payload.playlists : [];
+      this._renderPlaylists();
+    } catch (error) {
+      if (this._view === "playlists") this._setStatus(this._playlistError(error), true);
+    }
+  }
+
+  /** One playlist command; `done(payload)` returns the status line to show. */
+  async _playlistCommand(body, done, busy = null) {
+    const entryId = this._entryId();
+    if (!entryId) return null;
+    if (busy) busy.disabled = true;
+    try {
+      const payload = await this._hass.callApi("POST", "tritue_youtube_player/playlists", { entry_id: entryId, ...body });
+      this._playlists = Array.isArray(payload.playlists) ? payload.playlists : this._playlists;
+      const message = done ? done(payload) : "";
+      this._renderPlaylists();
+      if (this._addMenuFor) this._renderAddMenu();
+      if (message) this._setStatus(message);
+      return payload;
+    } catch (error) {
+      this._setStatus(this._playlistError(error), true);
+      return null;
+    } finally {
+      if (busy) busy.disabled = false;
+    }
+  }
+
+  async _importPlaylist(text, fromSearch) {
+    const value = String(text || "").trim();
+    if (!value) return;
+    const button = this.shadowRoot.querySelector(fromSearch ? ".save-playlist" : ".playlist-submit");
+    this._setStatus("Đang đọc playlist — playlist dài có thể mất vài chục giây…");
+    const payload = await this._playlistCommand({ action: "import", text: value }, (result) => {
+      this._openPlaylist = result.playlist.id;
+      if (!fromSearch) this.shadowRoot.querySelector(".playlist-input").value = "";
+      return `Đã lưu “${result.playlist.name}” (${result.playlist.items.length} bài) vào Playlist.`;
+    }, button);
+    if (payload && fromSearch) this._showView("playlists");
+  }
+
+  _toggleAddMenu(row, item) {
+    const open = this._addMenuFor?.row === row;
+    this.shadowRoot.querySelectorAll(".add-menu").forEach((menu) => menu.remove());
+    this._addMenuFor = open ? null : { row, item };
+    if (this._addMenuFor) {
+      if (this._playlists === null) this._loadPlaylists().then(() => this._renderAddMenu());
+      this._renderAddMenu();
+    }
+  }
+
+  _renderAddMenu() {
+    const target = this._addMenuFor;
+    if (!target || !target.row.isConnected) return;
+    target.row.querySelector(".add-menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "add-menu";
+    const done = (payload) => {
+      this._addMenuFor = null;
+      menu.remove();
+      return payload.added
+        ? `Đã thêm vào “${payload.playlist.name}”.`
+        : `Bài này đã có trong “${payload.playlist.name}”.`;
+    };
+    for (const playlist of this._playlists || []) {
+      const has = playlist.items.some((entry) => entry.source === target.item.source
+        && (entry.id === target.item.id || entry.url === target.item.url));
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "add-to";
+      const icon = document.createElement("ha-icon");
+      icon.setAttribute("icon", has ? "mdi:check" : "mdi:playlist-music");
+      const name = document.createElement("span");
+      name.textContent = playlist.name;
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = String(playlist.items.length);
+      button.append(icon, name, count);
+      button.addEventListener("click", () =>
+        this._playlistCommand({ action: "add", id: playlist.id, items: [target.item] }, done, button));
+      menu.append(button);
+    }
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 80;
+    input.placeholder = this._playlists?.length ? "Playlist mới…" : "Chưa có playlist — đặt tên để tạo…";
+    input.setAttribute("aria-label", "Tên playlist mới");
+    const create = document.createElement("button");
+    create.type = "submit";
+    create.className = "primary";
+    create.textContent = "Tạo";
+    form.append(input, create);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!input.value.trim()) return;
+      this._playlistCommand({ action: "add", name: input.value.trim(), items: [target.item] }, done, create);
+    });
+    menu.append(form);
+    target.row.append(menu);
+  }
+
+  _renderPlaylists() {
+    const label = this.shadowRoot.querySelector(".playlists-tab-label");
+    label.textContent = this._playlists?.length ? `Playlist (${this._playlists.length})` : "Playlist";
+    const container = this.shadowRoot.querySelector(".playlist-list");
+    container.replaceChildren();
+    if (this._playlists === null) return;
+    if (!this._playlists.length) {
+      const empty = document.createElement("div");
+      empty.className = "playlist-empty";
+      empty.textContent = "Chưa có playlist. Dán link playlist để lưu cả danh sách, hoặc bấm + ở kết quả tìm.";
+      container.append(empty);
+      return;
+    }
+    const iconButton = (icon, label, onClick, extra = "") => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `icon-button ${extra}`.trim();
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      const glyph = document.createElement("ha-icon");
+      glyph.setAttribute("icon", icon);
+      button.append(glyph);
+      button.addEventListener("click", () => onClick(button));
+      return button;
+    };
+    const speakers = this._selectedPlayers.size > 0;
+    for (const playlist of this._playlists) {
+      const box = document.createElement("div");
+      box.className = "playlist";
+      const head = document.createElement("div");
+      head.className = "playlist-head";
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "playlist-toggle";
+      const open = this._openPlaylist === playlist.id;
+      toggle.setAttribute("aria-expanded", String(open));
+      const chevron = document.createElement("ha-icon");
+      chevron.setAttribute("icon", "mdi:chevron-down");
+      const text = document.createElement("span");
+      text.style.minWidth = "0";
+      const name = document.createElement("span");
+      name.className = "playlist-name";
+      name.textContent = playlist.name;
+      const count = document.createElement("span");
+      count.className = "playlist-count";
+      count.textContent = `${playlist.items.length} bài`;
+      text.append(name, count);
+      toggle.append(chevron, text);
+      toggle.addEventListener("click", () => {
+        this._openPlaylist = open ? "" : playlist.id;
+        this._renderPlaylists();
+      });
+      const tools = document.createElement("div");
+      tools.className = "playlist-tools";
+      const play = document.createElement("button");
+      play.type = "button";
+      play.className = "play-result listen";
+      play.disabled = !playlist.items.length;
+      play.title = speakers ? `Phát cả “${playlist.name}” ra loa đã chọn` : `Nghe cả “${playlist.name}” trên máy này`;
+      play.setAttribute("aria-label", play.title);
+      const playIcon = document.createElement("ha-icon");
+      playIcon.setAttribute("icon", speakers ? "mdi:play" : "mdi:headphones");
+      play.append(playIcon);
+      play.addEventListener("click", () => this._playResult(playlist.items[0], play, 0, false, playlist));
+      tools.append(
+        play,
+        iconButton("mdi:content-copy", `Chép mã chia sẻ “${playlist.name}”`, (button) => this._sharePlaylist(playlist, button)),
+        iconButton("mdi:pencil", `Đổi tên “${playlist.name}”`, (button) => {
+          const newName = window.prompt("Tên mới của playlist:", playlist.name);
+          if (newName && newName.trim() && newName.trim() !== playlist.name) {
+            this._playlistCommand({ action: "rename", id: playlist.id, name: newName.trim() }, () => "Đã đổi tên playlist.", button);
+          }
+        }),
+        iconButton("mdi:delete", `Xoá “${playlist.name}”`, (button) => {
+          if (window.confirm(`Xoá playlist “${playlist.name}” (${playlist.items.length} bài)?`)) {
+            this._playlistCommand({ action: "delete", id: playlist.id }, () => `Đã xoá “${playlist.name}”.`, button);
+          }
+        }, "danger"),
+      );
+      head.append(toggle, tools);
+      box.append(head);
+      if (open) {
+        const list = document.createElement("div");
+        list.className = "playlist-items";
+        if (!playlist.items.length) {
+          const empty = document.createElement("div");
+          empty.className = "playlist-empty";
+          empty.textContent = "Playlist trống — bấm + ở kết quả tìm để thêm bài.";
+          list.append(empty);
+        }
+        playlist.items.forEach((item, index) => {
+          const row = document.createElement("div");
+          row.className = "playlist-item";
+          const number = document.createElement("span");
+          number.className = "num";
+          number.textContent = String(index + 1);
+          const copy = document.createElement("div");
+          copy.style.minWidth = "0";
+          const title = document.createElement("div");
+          title.className = "title";
+          title.textContent = item.title || item.id;
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = [item.channel, this._formatDuration(item.duration)].filter(Boolean).join(" · ");
+          copy.append(title, meta);
+          const buttons = document.createElement("div");
+          buttons.className = "playlist-tools";
+          const playButton = (icon, label, watch) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = watch ? "play-result" : "play-result listen";
+            button.title = `${label}: ${title.textContent}`;
+            button.setAttribute("aria-label", button.title);
+            const glyph = document.createElement("ha-icon");
+            glyph.setAttribute("icon", icon);
+            button.append(glyph);
+            button.addEventListener("click", () => this._playResult(item, button, index, watch, playlist));
+            buttons.append(button);
+          };
+          if (this._isVideoItem(item, item.source)) playButton("mdi:television-play", "Xem video", true);
+          playButton(speakers ? "mdi:play" : "mdi:headphones", speakers ? "Phát ra loa" : "Nghe", false);
+          const up = iconButton("mdi:arrow-up", "Lên", (button) =>
+            this._playlistCommand({ action: "move", id: playlist.id, index, to: index - 1 }, null, button));
+          up.disabled = index === 0;
+          const down = iconButton("mdi:arrow-down", "Xuống", (button) =>
+            this._playlistCommand({ action: "move", id: playlist.id, index, to: index + 1 }, null, button));
+          down.disabled = index === playlist.items.length - 1;
+          buttons.append(up, down, iconButton("mdi:close", `Bỏ “${title.textContent}” khỏi playlist`, (button) =>
+            this._playlistCommand({ action: "remove", id: playlist.id, index }, null, button), "danger"));
+          row.append(number, copy, buttons);
+          list.append(row);
+        });
+        box.append(list);
+      }
+      container.append(box);
+    }
+  }
+
+  async _sharePlaylist(playlist, button) {
+    const payload = await this._playlistCommand({ action: "export", id: playlist.id }, null, button);
+    if (!payload?.code) return;
+    try {
+      await navigator.clipboard.writeText(payload.code);
+      this._setStatus(`Đã chép mã chia sẻ “${playlist.name}”. Người nhận dán vào ô Playlist (thẻ này hoặc tab c2a).`);
+    } catch (_error) {
+      // Plain http page or a blocked clipboard: show the code to copy by hand.
+      window.prompt("Mã chia sẻ — chép rồi gửi cho người nhận:", payload.code);
+    }
   }
 
   _setStatus(message, error = false) {

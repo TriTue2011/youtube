@@ -52,6 +52,10 @@ Hỗ trợ **`amd64` và `aarch64`** (đã kiểm chứng chạy thật trên c�
 - **Rời trang vẫn giữ:** sang dashboard khác rồi quay lại vẫn thấy danh sách tìm, bài
   đang phát và video (tiếng trên máy chạy tiếp trong lúc rời trang); mở lại app thì
   còn danh sách tìm lần trước.
+- **Playlist chung cả nhà:** dán link playlist YouTube hoặc album Zing → «Lưu cả
+  playlist này»; nút **+** thêm bài; phát cả playlist ra loa (tự chuyển bài) hoặc nghe
+  trên máy; chép **mã chia sẻ** gửi người khác, dán mã của họ để lưu. Card HA và tab
+  c2a nối cùng máy phát thấy chung danh sách.
 - **Video YouTube không cho nhúng:** một số video của hãng đĩa (VEVO…) bị YouTube từ
   chối khi mở Home Assistant bằng **địa chỉ IP** (mở bằng tên như
   `homeassistant.local` thì xem được). Card tự chuyển sang phát tiếng bài đó.

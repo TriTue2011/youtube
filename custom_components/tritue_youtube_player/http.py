@@ -117,6 +117,42 @@ class TriTueStreamView(HomeAssistantView):
         )
 
 
+class TriTuePlaylistsView(HomeAssistantView):
+    """Household playlists on the player server (the add-on or c2a)."""
+
+    url = "/api/tritue_youtube_player/playlists"
+    name = "api:tritue_youtube_player:playlists"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """List every playlist."""
+        entry = _loaded_entry(request.app["hass"], str(request.query.get("entry_id") or ""))
+        if entry is None:
+            return self.json({"error": "entry_unavailable"}, HTTPStatus.NOT_FOUND)
+        try:
+            return self.json(await entry.runtime_data.client.async_playlists())
+        except YouTubePlayerApiError as error:
+            return self.json({"error": str(error)}, HTTPStatus.BAD_GATEWAY)
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Run one command; the server's error code comes back for the card to explain."""
+        try:
+            payload = await request.json()
+        except ValueError:
+            payload = None
+        if not isinstance(payload, dict):
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        entry = _loaded_entry(request.app["hass"], str(payload.pop("entry_id", "") or ""))
+        if entry is None:
+            return self.json({"error": "entry_unavailable"}, HTTPStatus.NOT_FOUND)
+        try:
+            return self.json(await entry.runtime_data.client.async_playlist_action(payload))
+        except YouTubePlayerApiError as error:
+            code = str(error)
+            status = HTTPStatus.BAD_GATEWAY if code in {"playlist_unavailable", "cannot_connect"} else HTTPStatus.BAD_REQUEST
+            return self.json({"error": code}, status)
+
+
 class TriTueCapabilitiesView(HomeAssistantView):
     """Expose source/transport compatibility without leaking registry details."""
 

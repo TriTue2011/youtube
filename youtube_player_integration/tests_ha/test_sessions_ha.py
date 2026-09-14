@@ -248,3 +248,33 @@ async def test_the_lay_luong_de_nghe_tren_may(hass, addon_server, hass_client, h
                     ({"entry_id": "khong-co", "source": "youtube", "target": KET_QUA[0]["url"]}, 404)):
         assert (await client.post(url, json=sai)).status == ma
     assert (await (await hass_client_no_auth()).post(url, json={"entry_id": entry.entry_id})).status == 401
+
+
+async def test_playlist_luu_qua_the_va_phat_ca_playlist_ra_loa(hass, addon_server, hass_client):
+    """Thẻ HA: lệnh playlist qua view của tích hợp tới add-on thật; phát playlist → hàng đợi là cả playlist."""
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.tritue_youtube_player.http import TriTuePlaylistsView
+
+    entry, calls = await _setup(hass, addon_server)
+    assert await async_setup_component(hass, "http", {})
+    hass.http.register_view(TriTuePlaylistsView)
+    client = await hass_client()
+    url = "/api/tritue_youtube_player/playlists"
+
+    r = await client.post(url, json={"entry_id": entry.entry_id, "action": "create", "name": "Nhà", "items": [KET_QUA[2], KET_QUA[0]]})
+    body = await r.json()
+    assert r.status == 200, body
+    pid = body["playlist"]["id"]
+    r = await client.get(f"{url}?entry_id={entry.entry_id}")
+    assert [p["name"] for p in (await r.json())["playlists"]] == ["Nhà"]
+    # Lỗi của máy phát về tới thẻ nguyên mã để thẻ giải thích.
+    r = await client.post(url, json={"entry_id": entry.entry_id, "action": "import", "text": "https://example.com/x"})
+    assert (r.status, (await r.json())["error"]) == (400, "invalid_playlist_link")
+    assert (await client.get(f"{url}?entry_id=khong-co")).status == 404
+
+    # Phát bài 1 của playlist ra loa: hàng đợi của phiên là playlist (không phải kết quả tìm).
+    await _choi(hass, entry, KET_QUA[2]["url"], [LOA_A], playlist_id=pid)
+    phien = _phien(hass)[0]
+    assert (phien["title"], phien["queue_index"], phien["queue_size"]) == ("Bai 3", 0, 2)
+    assert [d["entity_id"] for s, d in calls if s == "play_media"] == [[LOA_A]]

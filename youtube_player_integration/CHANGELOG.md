@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.10.0 - 2026-09-14
+
+Cần add-on **0.8.0** (hoặc c2a từ commit d0715bd) — máy phát giữ playlist.
+
+### Added
+
+- **Playlist chung cả nhà trên card.** Thẻ "Tìm nhạc | Playlist". Dán link playlist
+  YouTube hoặc album/playlist Zing MP3 vào ô tìm là có nút **«Lưu cả playlist này»**;
+  mỗi kết quả có nút **+** thêm vào playlist có sẵn hoặc playlist mới. Mỗi playlist:
+  phát cả playlist (tích loa thì loa phát và hàng đợi là cả playlist — Home Assistant
+  tự chuyển bài; không tích thì nghe trên máy này), chép **mã chia sẻ**, đổi tên, xoá;
+  từng bài xem video / nghe, lên, xuống, bỏ. Dán mã chia sẻ của người khác (từ card HA
+  khác hoặc tab c2a) để lưu playlist của họ.
+- View `GET/POST /api/tritue_youtube_player/playlists` (cần đăng nhập HA) chuyển lệnh
+  tới máy phát; dịch vụ `play_on_players` nhận thêm `playlist_id`.
+
 ## 0.9.8 - 2026-09-14
 
 ### Added

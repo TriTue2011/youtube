@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0 - 2026-09-14
+
+### Added
+
+- **Playlist chung cả nhà** (lưu trong thư mục dữ liệu của add-on, `playlists.json`):
+  tạo nhiều playlist, thêm/bỏ/đổi chỗ bài; **lưu cả playlist từ link** playlist
+  YouTube (yt-dlp) hoặc album/playlist Zing MP3 (bỏ bài VIP) — đo 14/09/2026: album
+  Zing Sơn Tùng 28 bài trong 0,3 giây; **mã chia sẻ** `TTPL1.…` mở được ở add-on khác
+  và ở c2a. API `GET/POST /api/integration/playlists`.
+- Phát playlist ra loa: `/api/integration/session` nhận `playlist_id`, hàng đợi của
+  phiên là cả playlist; bài Zing đã lưu phát được mà không cần vừa tìm lại.
+
 ## 0.7.1 - 2026-09-14
 
 ### Changed

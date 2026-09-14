@@ -138,6 +138,10 @@
         "join": {
           "name": "Join session",
           "description": "Add these players to the session without restarting its other players."
+        },
+        "playlist_id": {
+          "name": "Playlist",
+          "description": "Queue the whole saved playlist (its id from the card)."
         }
       }
     },

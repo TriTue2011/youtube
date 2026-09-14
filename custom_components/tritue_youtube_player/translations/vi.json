@@ -138,6 +138,10 @@
         "join": {
           "name": "Nhập phiên",
           "description": "Thêm loa vào phiên, không phát lại cho các loa đang nghe."
+        },
+        "playlist_id": {
+          "name": "Playlist",
+          "description": "Hàng đợi là cả playlist đã lưu (mã playlist lấy từ thẻ)."
         }
       }
     },

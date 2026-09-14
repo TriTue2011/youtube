@@ -143,6 +143,23 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._remember();", script)
         self.assertIn("this._restore();", script)
 
+    def test_card_manages_household_playlists(self):
+        script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(encoding="utf-8")
+        frontend = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
+        http = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
+        services = (COMPONENT_DIR / "services.py").read_text(encoding="utf-8")
+
+        self.assertIn("hass.http.register_view(TriTuePlaylistsView)", frontend)
+        self.assertIn('url = "/api/tritue_youtube_player/playlists"', http)
+        self.assertIn('callApi("POST", "tritue_youtube_player/playlists"', script)
+        # A pasted playlist link saves the whole playlist; + adds one song.
+        self.assertIn('class="save-playlist"', script)
+        self.assertIn('{ action: "import", text: value }', script)
+        self.assertIn('{ action: "add", id: playlist.id, items: [target.item] }', script)
+        # Speakers play the whole playlist as their queue.
+        self.assertIn("...(playlist ? { playlist_id: playlist.id } : {}),", script)
+        self.assertIn("vol.Optional(CONF_PLAYLIST_ID): cv.string,", services)
+
     def test_hidden_players_view_is_registered_and_persisted(self):
         frontend = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
         http = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
