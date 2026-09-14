@@ -62,7 +62,7 @@ class YouTubeMetadataSearchTests(unittest.TestCase):
             self.search.parse_search_payload(payload, limit=10),
         )
 
-    def test_search_is_metadata_only_and_uses_youtube_music_songs(self):
+    def test_search_is_metadata_only_and_searches_all_youtube_videos(self):
         completed = subprocess.CompletedProcess(
             args=[], returncode=0, stdout=json.dumps({"entries": []}), stderr=""
         )
@@ -76,7 +76,7 @@ class YouTubeMetadataSearchTests(unittest.TestCase):
         self.assertIn("--skip-download", command)
         self.assertIn("--playlist-end", command)
         self.assertIn("12", command)
-        self.assertEqual("https://music.youtube.com/search?q=da+LAB#songs", command[-1])
+        self.assertEqual("ytsearch12:da LAB", command[-1])
 
     def test_parse_search_payload_adds_a_stable_thumbnail_fallback(self):
         results = self.search.parse_search_payload(

@@ -43,7 +43,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.6.2"
+APP_VERSION = "0.6.3"
 API_VERSION = "1"
 
 

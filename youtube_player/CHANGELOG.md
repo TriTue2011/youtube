@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.3 - 2026-09-14
+
+### Fixed
+
+- Tìm YouTube ra cả **nhạc AI / cover đăng dạng video thường**. Trước đây chỉ
+  tìm trong tab "Bài hát" của YouTube Music nên những video này không bao giờ
+  hiện dù phát được; nay tìm trên YouTube thường (`ytsearch`), kết quả có thêm
+  tên kênh và thời lượng.
+
 ## 0.6.2 - 2026-08-29
 
 ### Fixed

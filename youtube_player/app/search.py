@@ -143,7 +143,10 @@ def search_youtube(query, *, limit=20, timeout=30):
     """Search song metadata without downloading or resolving media streams."""
     query, limit = _validated_query_and_limit(query, limit)
 
-    search_url = f"https://music.youtube.com/search?q={quote_plus(query)}#songs"
+    # Search all of YouTube, not only the YouTube Music "Songs" tab: that tab only
+    # lists tracks with an official music profile, so AI-made music and covers
+    # uploaded as regular videos never showed up even though they play fine.
+    search_url = f"ytsearch{limit}:{query}"
     command = [
         "yt-dlp",
         "--flat-playlist",
