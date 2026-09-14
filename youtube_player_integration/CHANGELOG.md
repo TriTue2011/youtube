@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.1 - 2026-09-14
+
+### Added
+
+- **Mở nhạc bằng Assist.** Tích hợp đăng ký API trợ lý "TriTue Music" với 5
+  công cụ: `tim_nhac` (tối đa 10 bài đánh số, dán link YouTube ra đúng video),
+  `danh_sach_loa` (loa đánh số, bỏ loa đã ẩn trên card), `phat_nhac` (chọn bài
+  theo số, loa theo tên — không dấu cũng được —, theo số, hoặc "tất cả"; mỗi
+  loa một bài được), `dieu_khien_nhac` (tạm dừng, tiếp tục, bài kế, bài trước,
+  dừng — cho vài loa hoặc nhóm mới nhất), `dang_phat` (bài nào ở loa nào, đang
+  ở giây nào). Bật trong Cài đặt → Trợ lý giọng nói → trợ lý dùng LLM → tuỳ
+  chọn → tích "TriTue Music" cạnh "Assist".
+
 ## 0.9.0 - 2026-09-14
 
 Cần add-on 0.7.0 (hoặc c2a cùng đợt) để có nhiều phiên; với add-on cũ vẫn chạy

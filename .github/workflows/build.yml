@@ -51,6 +51,8 @@ jobs:
           python -m pip install pytest-homeassistant-custom-component
           # The integration depends on `frontend`; install the exact frontend build HA pins.
           python -m pip install "$(python -c 'import json, os, homeassistant.components.frontend as f; print(json.load(open(os.path.join(os.path.dirname(f.__file__), "manifest.json")))["requirements"][0])')"
+          # Assist tools go through `conversation`, which needs hassil and the intents package.
+          python -m pip install $(python -c 'import json, os, homeassistant; print(" ".join(json.load(open(os.path.join(os.path.dirname(homeassistant.__file__), "components", "conversation", "manifest.json")))["requirements"]))')
           python -m pytest youtube_player_integration/tests_ha -q -c youtube_player_integration/tests_ha/pytest.ini
 
       - name: Check Python and JavaScript syntax

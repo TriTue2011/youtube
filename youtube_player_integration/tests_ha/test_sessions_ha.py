@@ -175,3 +175,45 @@ async def test_moi_loa_mot_bai_tu_chuyen_bai_va_dieu_khien_theo_phien(hass, addo
     assert sorted(d["entity_id"][0] for s, d in calls if s == "media_stop") == sorted([LOA_A, LOA_B]) or \
         [sorted(d["entity_id"]) for s, d in calls if s == "media_stop"] == [sorted([LOA_A, LOA_B])]
     assert _phien(hass) == []
+
+
+async def test_assist_tim_10_bai_chon_loa_phat_va_dieu_khien(hass, addon_server):
+    from homeassistant.core import Context
+    from homeassistant.helpers import llm
+
+    entry, calls = await _setup(hass, addon_server)
+    ctx = llm.LLMContext(platform="test", context=Context(user_id="u1"), language="vi", assistant="conversation", device_id=None)
+    api = await llm.async_get_api(hass, "tritue_youtube_player", ctx)
+    names = {tool.name for tool in api.tools}
+    assert {"tim_nhac", "danh_sach_loa", "phat_nhac", "dieu_khien_nhac", "dang_phat"} <= names
+
+    async def call(tool, **args):
+        result = await api.async_call_tool(llm.ToolInput(tool_name=tool, tool_args=args))
+        await hass.async_block_till_done()
+        return result
+
+    found = await call("tim_nhac", tu_khoa="trót tin")
+    assert [r["so"] for r in found["ket_qua"]] == [1, 2, 3] and found["ket_qua"][1]["ten"] == "Bai 2"
+    speakers = await call("danh_sach_loa")
+    assert [s["ten"] for s in speakers["loa"]] == ["Bếp", "Phòng khách"]
+
+    # "bài 2 ở tất cả loa"
+    played = await call("phat_nhac", bai="2", loa="tất cả")
+    assert played["da_phat"] == "Bai 2" and sorted(played["tren_loa"]) == ["Bếp", "Phòng khách"]
+    assert sorted(d["entity_id"][0] for s, d in calls if s == "play_media") == sorted([LOA_A, LOA_B])
+
+    # "bài 3 riêng ở phong khach" (không dấu) → mỗi loa một bài
+    calls.clear()
+    played = await call("phat_nhac", bai="3", loa="phong khach")
+    assert played["tren_loa"] == ["Phòng khách"]
+    now = await call("dang_phat")
+    assert sorted((p["bai"], tuple(p["loa"])) for p in now["dang_phat"]) == [("Bai 2", ("Bếp",)), ("Bai 3", ("Phòng khách",))]
+
+    # "bài kế ở bếp", "dừng loa 2" (số theo danh sách), loa lạ
+    calls.clear()
+    await call("dieu_khien_nhac", lenh="bai_ke", loa="bếp")
+    assert [d["entity_id"] for s, d in calls if s == "play_media"] == [[LOA_B]]
+    stopped = await call("dieu_khien_nhac", lenh="dung", loa="2")
+    assert [p["loa"] for p in stopped["dang_phat"]] == [["Bếp"]]
+    wrong = await call("phat_nhac", bai="1", loa="gác xép")
+    assert "loi" in wrong and "Phòng khách" in wrong["loa_co_the_chon"]

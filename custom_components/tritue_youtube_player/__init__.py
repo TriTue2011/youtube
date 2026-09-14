@@ -10,6 +10,7 @@ from .api import YouTubePlayerClient
 from .const import CONF_TOKEN, DOMAIN
 from .coordinator import YouTubePlayerConfigEntry, YouTubePlayerCoordinator
 from .frontend import async_register_frontend
+from .llm_api import async_register_llm_api
 from .services import async_register_services
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -20,6 +21,8 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     """Register domain-wide actions, HTTP API and card assets."""
     async_register_services(hass)
     await async_register_frontend(hass)
+    # Assist: conversation agents can enable the "TriTue Music" LLM API.
+    async_register_llm_api(hass)
     return True
 
 

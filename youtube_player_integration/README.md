@@ -60,6 +60,23 @@ khiển trang web player đang mở qua Ingress hoặc `IP:8099`.
 playlist, ví dụ `https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID`.
 Ứng dụng YouTube chính thức có thể hiển thị quảng cáo như bình thường.
 
+## Mỗi loa một bài, tự chuyển bài, Assist
+
+- **Phiên theo nhóm loa.** Mỗi lần phát ra các loa đã chọn tạo một phiên; một
+  loa chỉ thuộc một phiên, nên phát bài khác ra loa đó thì nó rời phiên cũ. Nhờ
+  vậy vừa phát chung một bài cho nhiều loa, vừa phát mỗi loa một bài.
+- **Tự chuyển bài phía Home Assistant.** Loa hết bài thì tích hợp tự phát bài
+  kế của phiên ra đúng các loa đó — không cần mở card hay trình duyệt. Tạm dừng
+  hoặc dừng giữa bài không làm chuyển bài.
+- **Action:** `tritue_youtube_player.play_on_players` (thêm `session_id`,
+  `join`), `skip` (`step: 1` bài kế, `-1` bài trước), `stop_session`,
+  `remove_players`.
+- **Assist (trợ lý dùng LLM).** Vào **Cài đặt → Trợ lý giọng nói**, mở trợ lý
+  dùng LLM (OpenAI, Google, Ollama, OpenAI tương thích…) → tuỳ chọn → tích
+  **TriTue Music** cạnh **Assist**. Rồi nói hoặc gõ "mở bài trót tin vào lời
+  hứa": trợ lý hiện tối đa 10 bài để chọn, hỏi loa (một, nhiều hay tất cả) rồi
+  phát; "bài kế ở bếp", "dừng loa phòng khách", "đang phát gì" cũng được.
+
 ## Card tìm kiếm và chọn nhiều loa
 
 Sau khi integration đã tải, vào **Settings → Dashboards → Resources**, thêm
