@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.5 - 2026-09-14
+
+### Changed
+
+- **Thiết bị mất kết nối không hiện trên thẻ.** Loa/tivi đang `unavailable` không
+  nằm trong danh sách chọn lẫn mục Đã ẩn, và bị bỏ khỏi lựa chọn; Home Assistant
+  báo kết nối lại thì thiết bị tự hiện. Không còn thiết bị nào kết nối thì thẻ ghi
+  rõ "Chưa có loa hay tivi nào đang kết nối".
+
 ## 0.9.4 - 2026-09-14
 
 ### Fixed

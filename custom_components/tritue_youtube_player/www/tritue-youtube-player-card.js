@@ -511,7 +511,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const allPlayers = Object.entries(this._hass.states)
       .filter(([entityId]) => entityId.startsWith("media_player.") && entityId !== virtualEntity)
       .sort((left, right) => this._friendlyName(left).localeCompare(this._friendlyName(right), "vi"));
-    const players = allPlayers.filter(([entityId]) => !this._hiddenPlayers.has(entityId));
+    // Devices that lost their connection stay off the card (and out of the
+    // selection) until Home Assistant reports them again.
+    const connected = allPlayers.filter(([, state]) => state.state !== "unavailable");
+    const players = connected.filter(([entityId]) => !this._hiddenPlayers.has(entityId));
 
     if (!this._defaultsApplied) {
       const configuredDefaults = Array.isArray(this._config.entities)
@@ -530,9 +533,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!players.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = this._hiddenPlayers.size
+      empty.textContent = connected.length
         ? "Mọi thiết bị đang ẩn — mở mục Đã ẩn để khôi phục."
-        : "Không tìm thấy media_player nào khác.";
+        : allPlayers.length
+          ? "Chưa có loa hay tivi nào đang kết nối — thiết bị tự hiện khi kết nối lại."
+          : "Không tìm thấy media_player nào khác.";
       container.append(empty);
     }
     for (const [entityId, state] of players) {
@@ -587,7 +592,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       label.append(checkbox, name, deviceIcon, hide);
       container.append(label);
     }
-    this._renderHiddenPlayers(allPlayers.filter(([entityId]) => this._hiddenPlayers.has(entityId)));
+    this._renderHiddenPlayers(connected.filter(([entityId]) => this._hiddenPlayers.has(entityId)));
     this._updateSelectedCount();
     this._updateTransportState();
     this._syncNowPlaying();
