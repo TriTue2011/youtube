@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2 - 2026-09-14
+
+### Fixed
+
+- **Assist nhận đúng loa có tên bắt đầu bằng "Tivi"/"Loa".** Nói "tivi LG" trước
+  đây bị bỏ chữ "tivi" rồi mới so, còn "lg" quá ngắn để khớp một phần tên nên
+  loa "Tivi LG" không được chọn. Nay thử cả cụm nguyên trước, rồi mới bỏ chữ loại
+  thiết bị ở đầu.
+
 ## 0.9.1 - 2026-09-14
 
 ### Added

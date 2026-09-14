@@ -36,6 +36,9 @@ class AssistToolTests(unittest.TestCase):
         self.assertEqual((["media_player.bep", "media_player.lg_tv"], []), match("loa 1, 3", SPEAKERS))
         self.assertEqual((["media_player.lg_tv"], []), match("tivi phòng ngủ", SPEAKERS))
         self.assertEqual((["media_player.bep"], ["gac xep"]), match("bếp, gác xép", SPEAKERS))
+        # A name that itself starts with a device word ("Tivi LG") still matches.
+        lg = [{"entity_id": "media_player.lg", "name": "Tivi LG"}, *SPEAKERS]
+        self.assertEqual((["media_player.lg", "media_player.phong_khach"], []), match("tivi lg và loa phòng khách", lg))
 
     def test_results_are_numbered_and_bounded(self):
         items = [{"title": f"Bai {n}", "channel": "K", "duration": 3725 if n == 1 else 216} for n in range(1, 15)]

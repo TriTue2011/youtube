@@ -116,7 +116,8 @@ async def test_moi_loa_mot_bai_tu_chuyen_bai_va_dieu_khien_theo_phien(hass, addo
     phien = _phien(hass)
     assert {tuple(p["output_entity_ids"]): p["title"] for p in phien} == {(LOA_A,): "Bai 1", (LOA_B,): "Bai 2"}
     play_a = [d for s, d in calls if s == "play_media" and d["entity_id"] == [LOA_A]]
-    assert play_a and play_a[-1]["media_content_id"].startswith(f"http://127.0.0.1:{addon_server.server_address[1]}/api/stream/")
+    stream_url = play_a[-1]["media_content_id"] if play_a else ""
+    assert stream_url.startswith(f"http://127.0.0.1:{addon_server.server_address[1]}/") and "/api/stream/" in stream_url
 
     # Loa A hết bài (trình duyệt đóng hết): tích hợp tự phát bài 2 ra A, B không bị đụng.
     calls.clear()

@@ -54,16 +54,19 @@ def match_speakers(query: Any, speakers: list[dict[str, str]]) -> tuple[list[str
     chosen: list[str] = []
     missing: list[str] = []
     for part in [p for p in SPLIT.split(text) if p]:
-        part = re.sub(r"^(loa|tivi|ti vi|man hinh)\s+", "", part).strip() or part
+        # "loa 2", "tivi LG": try the whole phrase first (a name may start with
+        # "Tivi"), then without the leading device word.
+        short = re.sub(r"^(loa|tivi|ti vi|man hinh)\s+", "", part).strip()
         found = None
-        if part.isdigit() and 1 <= int(part) <= len(speakers):
-            found = speakers[int(part) - 1]["entity_id"]
-        else:
-            for speaker in speakers:
-                name = fold(speaker["name"])
-                if part in {speaker["entity_id"], name} or (len(part) >= 3 and part in name):
-                    found = speaker["entity_id"]
-                    break
+        for attempt in dict.fromkeys(x for x in (part, short) if x):
+            if attempt.isdigit() and 1 <= int(attempt) <= len(speakers):
+                found = speakers[int(attempt) - 1]["entity_id"]
+            else:
+                found = next((speaker["entity_id"] for speaker in speakers
+                              if attempt in {speaker["entity_id"], fold(speaker["name"])}
+                              or (len(attempt) >= 3 and attempt in fold(speaker["name"]))), None)
+            if found:
+                break
         if found is None:
             missing.append(part)
         elif found not in chosen:
