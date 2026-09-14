@@ -40,11 +40,21 @@ Hỗ trợ **`amd64` và `aarch64`** (đã kiểm chứng chạy thật trên c�
   nút **«Cho … nghe cùng»** đưa loa khác vào đúng bài, đúng chỗ đang phát.
 - **Tự chuyển bài không cần mở card:** Home Assistant thấy loa hết bài thì phát bài
   kế của nhóm đó, kể cả khi đã đóng trình duyệt.
-- **Xem video trên thẻ:** chưa chọn loa thì bấm ▶ xem video YouTube ngay trên card;
-  có loa thì loa phát tiếng, video tắt tiếng chạy theo loa, nút 🔊 nghe cả trên máy
-  đang mở card. Phóng to, toàn màn hình **tự xoay ngang trên điện thoại** (Chrome
-  Android), video 16:9 không bị cắt. Trình duyệt chặn tự phát có tiếng thì card hiện
-  «Chạm vào video để phát có tiếng».
+- **Mỗi bài hai nút — xem video và nghe (chỉ tiếng):** chưa chọn loa thì phát ngay
+  trên máy đang mở card (nghe: có hàng đợi, tự sang bài, nút trên màn hình khoá); có
+  loa thì loa phát, nút xem mở thêm video tắt tiếng chạy theo loa, nút **«Nghe trên
+  máy này»** cho máy đang mở card nghe cùng loa. Phóng to, toàn màn hình **tự xoay
+  ngang trên điện thoại** (Chrome Android), video 16:9 không bị cắt. Trình duyệt chặn
+  tự phát có tiếng thì card hiện «Chạm vào video để phát có tiếng».
+- **«Nghe khi tắt màn hình»** (mặc định tắt): tắt thì tắt màn hình/chuyển ứng dụng là
+  tiếng trên máy dừng, mở lại phát tiếp; bật thì nghe tiếp. Loa thì luôn phát tiếp
+  kể cả đóng trình duyệt hay app, vì Home Assistant tự chuyển bài.
+- **Rời trang vẫn giữ:** sang dashboard khác rồi quay lại vẫn thấy danh sách tìm, bài
+  đang phát và video (tiếng trên máy chạy tiếp trong lúc rời trang); mở lại app thì
+  còn danh sách tìm lần trước.
+- **Video YouTube không cho nhúng:** một số video của hãng đĩa (VEVO…) bị YouTube từ
+  chối khi mở Home Assistant bằng **địa chỉ IP** (mở bằng tên như
+  `homeassistant.local` thì xem được). Card tự chuyển sang phát tiếng bài đó.
 - **Phát và chuyển bài nhanh:** add-on lấy luồng bằng yt-dlp chạy sẵn trong tiến
   trình (~1,5 s/bài thay vì 5–7 s), dùng lại link tới gần lúc hết hạn và **lấy sẵn
   bài kế** của mỗi nhóm loa.

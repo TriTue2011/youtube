@@ -76,6 +76,47 @@ class TriTueSearchView(HomeAssistantView):
         return self.json(payload)
 
 
+class TriTueStreamView(HomeAssistantView):
+    """Stream URL for the device showing the card (listening, or a refused video)."""
+
+    url = "/api/tritue_youtube_player/stream"
+    name = "api:tritue_youtube_player:stream"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Return the player server's short-lived stream URL for one song."""
+        hass = request.app["hass"]
+        try:
+            payload = await request.json()
+        except ValueError:
+            payload = None
+        if not isinstance(payload, dict):
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        entry = _loaded_entry(hass, str(payload.get("entry_id") or ""))
+        if entry is None:
+            return self.json(
+                {"error": "entry_unavailable"}, HTTPStatus.NOT_FOUND
+            )
+        source = payload.get("source")
+        target = str(payload.get("target") or "").strip()
+        if source not in {"youtube", "zing"} or not 1 <= len(target) <= 2048:
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        try:
+            stream = await entry.runtime_data.client.async_create_stream(
+                source, target
+            )
+        except YouTubePlayerApiError:
+            return self.json(
+                {"error": "stream_unavailable"}, HTTPStatus.BAD_GATEWAY
+            )
+        return self.json(
+            {
+                "stream_url": stream.get("stream_url"),
+                "media_content_type": stream.get("media_content_type"),
+            }
+        )
+
+
 class TriTueCapabilitiesView(HomeAssistantView):
     """Expose source/transport compatibility without leaking registry details."""
 

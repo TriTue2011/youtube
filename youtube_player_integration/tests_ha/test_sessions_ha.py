@@ -218,3 +218,33 @@ async def test_assist_tim_10_bai_chon_loa_phat_va_dieu_khien(hass, addon_server)
     assert [p["loa"] for p in stopped["dang_phat"]] == [["Bếp"]]
     wrong = await call("phat_nhac", bai="1", loa="gác xép")
     assert "loi" in wrong and "Phòng khách" in wrong["loa_co_the_chon"]
+
+
+async def test_the_lay_luong_de_nghe_tren_may(hass, addon_server, hass_client, hass_client_no_auth):
+    """Nút nghe trên thẻ / video YouTube chặn nhúng: thẻ xin luồng tiếng của bài qua HA."""
+    import base64
+    import json
+
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.tritue_youtube_player.http import TriTueStreamView
+
+    entry, _ = await _setup(hass, addon_server)
+    assert await async_setup_component(hass, "http", {})
+    hass.http.register_view(TriTueStreamView)
+    await entry.runtime_data.client.async_search("trót tin", limit=3)
+    client = await hass_client()
+    url = "/api/tritue_youtube_player/stream"
+
+    r = await client.post(url, json={"entry_id": entry.entry_id, "source": "youtube", "target": KET_QUA[1]["url"]})
+    body = await r.json()
+    assert r.status == 200, body
+    assert body["stream_url"].startswith(f"http://127.0.0.1:{addon_server.server_address[1]}/api/stream/")
+    token = body["stream_url"].rsplit("/", 1)[1].split(".", 1)[0]
+    assert json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))["target"] == KET_QUA[1]["id"]
+
+    for sai, ma in (({"entry_id": entry.entry_id, "source": "spotify", "target": "x"}, 400),
+                    ({"entry_id": entry.entry_id, "source": "youtube", "target": ""}, 400),
+                    ({"entry_id": "khong-co", "source": "youtube", "target": KET_QUA[0]["url"]}, 404)):
+        assert (await client.post(url, json=sai)).status == ma
+    assert (await (await hass_client_no_auth()).post(url, json={"entry_id": entry.entry_id})).status == 401

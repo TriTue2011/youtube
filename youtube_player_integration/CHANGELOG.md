@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.9.8 - 2026-09-14
+
+### Added
+
+- **Card giống tab c2a: mỗi bài hai nút xem video / nghe (chỉ tiếng).** Chưa tích loa
+  thì nghe ngay trên máy đang mở card (hàng đợi là kết quả tìm, hết bài tự sang bài,
+  nút trên màn hình khoá); tích loa thì loa phát, nút xem mở thêm video tắt tiếng.
+  Tiếng trên máy lấy luồng của add-on/c2a qua view mới
+  `POST /api/tritue_youtube_player/stream` (cần đăng nhập HA).
+- **«Nghe trên máy này»** khi loa đang phát: máy đang mở card nghe cùng bài, dừng/phát
+  và tua theo loa. **«Nghe khi tắt màn hình»** (mặc định tắt, nhớ theo máy): tắt thì
+  trang bị ẩn là tiếng trên máy dừng, mở lại phát tiếp; bật thì nghe tiếp, video (nếu
+  đang xem) tắt tiếng chạy theo tiếng.
+- **Rời dashboard rồi quay lại vẫn thấy** danh sách tìm, bài đang phát, video; video
+  đang xem có tiếng thì tiếng chạy tiếp trên máy trong lúc rời trang. Tải lại trang
+  (mở lại app) vẫn còn danh sách tìm lần trước.
+
+### Fixed
+
+- **Video bị YouTube chặn nhúng không còn để khung chết.** Video của hãng đĩa (VEVO…)
+  bị từ chối khi mở Home Assistant bằng địa chỉ IP — đo trên chính trang của hai máy
+  HA: "M2M - The Day You Went Away" bị chặn, "Trót tin vào lời hứa" phát được; mở
+  bằng tên (`homeassistant.local`) thì cả hai phát được. Card nhận lỗi của khung
+  nhúng, chuyển sang phát tiếng bài đó và nói rõ lý do.
+
 ## 0.9.7 - 2026-09-14
 
 ### Fixed

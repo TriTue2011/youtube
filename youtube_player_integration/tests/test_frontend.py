@@ -69,7 +69,8 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("join: true", script)
         self.assertIn('class="progress" hidden', script)
         self.assertIn("this._updateProgress()", script)
-        self.assertIn('class="ctl video-sound"', script)
+        self.assertIn('class="pill device-sound"', script)
+        self.assertIn('class="pill screen-off"', script)
         self.assertIn("this._toggleSoundHere()", script)
         self.assertIn("session_revision", script)
         self.assertIn("output_entity_ids", script)
@@ -119,6 +120,28 @@ class LovelaceCardContractTests(unittest.TestCase):
         http = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
         self.assertIn("if not 1 <= len(query) <= 2048", http)
         self.assertNotIn("eval(", script)
+
+    def test_card_listens_on_the_device_like_c2a(self):
+        script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(encoding="utf-8")
+        frontend = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
+        http = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
+
+        # Two buttons per song: watch the video, listen (sound only).
+        self.assertIn('action("mdi:television-play", "Xem video", true);', script)
+        self.assertIn('action("mdi:headphones", "Nghe (chỉ tiếng)", false);', script)
+        # The device's sound comes from the player server through HA.
+        self.assertIn('callApi("POST", "tritue_youtube_player/stream"', script)
+        self.assertIn("hass.http.register_view(TriTueStreamView)", frontend)
+        self.assertIn('url = "/api/tritue_youtube_player/stream"', http)
+        # A video YouTube refuses to embed plays as sound instead of a dead frame.
+        self.assertIn('this._videoCommand("addEventListener", ["onError"]);', script)
+        self.assertIn("this._embedRefused();", script)
+        # Screen-off listening, off by default: hiding the page pauses the sound.
+        self.assertIn('document.addEventListener("visibilitychange"', script)
+        self.assertIn('localStorage.getItem(LISTEN_SCREEN_OFF_KEY) === "1"', script)
+        # Leaving the dashboard keeps the search and what plays.
+        self.assertIn("this._remember();", script)
+        self.assertIn("this._restore();", script)
 
     def test_hidden_players_view_is_registered_and_persisted(self):
         frontend = (COMPONENT_DIR / "frontend.py").read_text(encoding="utf-8")
