@@ -88,12 +88,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   connectedCallback() {
     if (!this._progressTimer) this._progressTimer = setInterval(() => this._updateProgress(), 1000);
+    if (!this._onFullscreenChange) {
+      this._onFullscreenChange = () => {
+        if (document.fullscreenElement) return;
+        try {
+          screen.orientation?.unlock?.();
+        } catch (_error) {
+          // Nothing was locked.
+        }
+      };
+      document.addEventListener("fullscreenchange", this._onFullscreenChange);
+    }
   }
 
   disconnectedCallback() {
     // Leaving the view unloads the iframe anyway; drop its listener and timers with it.
     clearInterval(this._progressTimer);
     this._progressTimer = null;
+    if (this._onFullscreenChange) {
+      document.removeEventListener("fullscreenchange", this._onFullscreenChange);
+      this._onFullscreenChange = null;
+    }
     this._closeVideo();
   }
 
@@ -372,6 +387,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         .player.expanded > *,
         .player:fullscreen > * { width: min(100%, calc((100vh - 150px) * 16 / 9)); margin-left: auto; margin-right: auto; }
+        /* Browser fullscreen on a phone turned sideways: the picture takes the whole
+           height (16:9, never cropped) and only the control bar stays under it. */
+        @media (orientation: landscape) {
+          .player:fullscreen { padding: 4px 8px; }
+          .player:fullscreen .now,
+          .player:fullscreen .speaker-volumes,
+          .player:fullscreen .others { display: none; }
+          .player:fullscreen .video-frame { width: min(100%, calc((100dvh - 64px) * 16 / 9)); margin-bottom: 2px; border-radius: 0; }
+          .player:fullscreen .progress,
+          .player:fullscreen .control-bar { width: min(100%, calc((100dvh - 64px) * 16 / 9)); }
+        }
         .player.expanded .ctl:not(.main),
         .player:fullscreen .ctl:not(.main) { color: #fff; }
         .player.expanded .ctl.stop,
@@ -1484,8 +1510,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._setStatus("Trình duyệt này không hỗ trợ toàn màn hình — dùng nút toàn màn hình trong khung video.", true);
       return;
     }
-    Promise.resolve(request.call(player)).catch(() =>
-      this._setStatus("Không mở được toàn màn hình — dùng nút toàn màn hình trong khung video.", true));
+    Promise.resolve(request.call(player, { navigationUI: "hide" }))
+      .then(() => screen.orientation?.lock?.("landscape"))
+      // Phones: turn sideways for the 16:9 picture. Only browsers that can lock the
+      // orientation while fullscreen (Chrome on Android) rotate; elsewhere the video
+      // still fits the screen without cropping.
+      .catch(() => {
+        if (!document.fullscreenElement) {
+          this._setStatus("Không mở được toàn màn hình — dùng nút toàn màn hình trong khung video.", true);
+        }
+      });
   }
 
   _closeVideo() {

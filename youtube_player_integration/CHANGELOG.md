@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.7 - 2026-09-14
+
+### Fixed
+
+- **Toàn màn hình trên điện thoại tự xoay ngang, video không bị cắt.** Bấm toàn màn
+  hình trên thẻ, trình duyệt hỗ trợ khoá hướng (Chrome Android) sẽ xoay ngang; thoát
+  thì trả hướng tự do. Khi nằm ngang, video 16:9 chiếm hết chiều cao, chỉ còn thanh
+  nút điều khiển bên dưới (ẩn dòng tên bài, âm lượng từng loa, nhóm loa khác).
+
 ## 0.9.6 - 2026-09-14
 
 ### Changed
