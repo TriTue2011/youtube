@@ -43,7 +43,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.6.3"
+APP_VERSION = "0.6.4"
 API_VERSION = "1"
 
 
@@ -376,7 +376,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
             source = str(query_values.get("source", ["youtube"])[0]).strip().lower()
             try:
                 limit = int(query_values.get("limit", ["20"])[0])
-                if not 1 <= len(query) <= 120 or not 1 <= limit <= 30:
+                if not 1 <= len(query) <= 2048 or not 1 <= limit <= 30:
                     raise ValueError
                 items = self.server.search(source, query, limit)
             except ValueError as error:

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.4 - 2026-09-14
+
+### Added
+
+- **Tìm theo link YouTube.** Dán link vào ô tìm là ra đúng video đó (tên, kênh,
+  thời lượng, ảnh) thay vì tìm theo chữ của link. Nhận link chép từ app hay
+  trình duyệt kể cả kèm tham số thừa (`app=desktop`, `list=RD…`, `pp=…`,
+  `si=…`), `youtu.be`, Shorts, embed, live, có hoặc không `https://`; link
+  trang playlist thì liệt kê các video trong playlist. Link từ app YouTube dài
+  hơn 120 ký tự nên giới hạn cho link là 2048, từ khoá chữ vẫn 120.
+
 ## 0.6.3 - 2026-09-14
 
 ### Fixed

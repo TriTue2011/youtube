@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from unittest.mock import patch
@@ -205,6 +206,25 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual(1, body["total"])
         self.assertEqual("dQw4w9WgXcQ", body["items"][0]["id"])
         search_youtube.assert_called_once_with("Rick Astley", limit=5)
+
+    @patch("server.search_youtube")
+    def test_integration_search_accepts_a_pasted_youtube_link(self, search_youtube):
+        search_youtube.return_value = []
+        link = "https://www.youtube.com/watch?app=desktop&v=llPioQNSBLY&list=RDllPioQNSBLY&start_radio=1&pp=ygUadHLDs3QgdGluIHbDoG8gbOG7nWkgaOG7qWGgBwE%3D&ra=m"
+        status, _ = self.request(
+            "/api/integration/search?" + urllib.parse.urlencode({"q": link}),
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        self.assertEqual(200, status)
+        search_youtube.assert_called_once_with(link, limit=20)
+
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            self.request(
+                "/api/integration/search?" + urllib.parse.urlencode({"q": "x" * 2049}),
+                headers={"Authorization": "Bearer test-integration-token"},
+            )
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual({"error": "invalid_search_query"}, json.load(raised.exception))
 
     @patch("server.search_youtube")
     def test_playing_a_search_result_preserves_metadata_and_queue(

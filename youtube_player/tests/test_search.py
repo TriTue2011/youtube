@@ -78,6 +78,81 @@ class YouTubeMetadataSearchTests(unittest.TestCase):
         self.assertIn("12", command)
         self.assertEqual("ytsearch12:da LAB", command[-1])
 
+    def test_youtube_url_query_recognizes_pasted_links(self):
+        link = self.search.youtube_url_query
+        # Copied from the YouTube app while a mix was playing (owner, 2026-09-14).
+        pasted = (
+            "https://www.youtube.com/watch?app=desktop&v=llPioQNSBLY&list=RDllPioQNSBLY"
+            "&start_radio=1&pp=ygUadHLDs3QgdGluIHbDoG8gbOG7nWkgaOG7qWGgBwE%3D&ra=m"
+        )
+        self.assertEqual(("video", "llPioQNSBLY"), link(pasted))
+        for value in (
+            "https://youtu.be/llPioQNSBLY?si=AbCdEf",
+            "https://m.youtube.com/shorts/llPioQNSBLY",
+            "https://music.youtube.com/watch?v=llPioQNSBLY&feature=share",
+            "youtube.com/watch?v=llPioQNSBLY",
+            "https://www.youtube.com/live/llPioQNSBLY",
+        ):
+            self.assertEqual(("video", "llPioQNSBLY"), link(value), value)
+        self.assertEqual(
+            ("playlist", "PL1234567890abc"),
+            link("https://www.youtube.com/playlist?list=PL1234567890abc"),
+        )
+        for value in (
+            "trót tin vào lời hứa",
+            "llPioQNSBLY",
+            "https://example.com/watch?v=llPioQNSBLY",
+            "https://www.youtube.com/@Krmusic",
+            "https://www.youtube.com.evil.test/watch?v=llPioQNSBLY",
+        ):
+            self.assertIsNone(link(value), value)
+
+    def test_search_youtube_looks_up_the_pasted_video_not_its_text(self):
+        video = {
+            "id": "llPioQNSBLY",
+            "title": "Trót Tin Vào Lời Hứa",
+            "channel": "Krmusic",
+            "duration": 232,
+            "thumbnail": "https://i.ytimg.com/vi/llPioQNSBLY/maxresdefault.jpg",
+        }
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps(video), stderr=""
+        )
+        pasted = (
+            "https://www.youtube.com/watch?app=desktop&v=llPioQNSBLY&list=RDllPioQNSBLY"
+            "&start_radio=1&pp=ygUadHLDs3QgdGluIHbDoG8gbOG7nWkgaOG7qWGgBwE%3D&ra=m"
+        )
+        self.assertGreater(len(pasted), 120)
+        with patch("subprocess.run", return_value=completed) as run:
+            results = self.search.search_youtube(pasted, limit=20)
+
+        self.assertEqual(
+            "https://www.youtube.com/watch?v=llPioQNSBLY", run.call_args.args[0][-1]
+        )
+        self.assertEqual(
+            [("llPioQNSBLY", "Trót Tin Vào Lời Hứa", "Krmusic", 232)],
+            [(r["id"], r["title"], r["channel"], r["duration"]) for r in results],
+        )
+
+    def test_search_youtube_lists_a_pasted_playlist(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {"entries": [{"id": "dQw4w9WgXcQ", "title": "A"}, None, {"id": "M7lc1UVf-VE"}]}
+            ),
+            stderr="",
+        )
+        with patch("subprocess.run", return_value=completed) as run:
+            results = self.search.search_youtube(
+                "https://www.youtube.com/playlist?list=PL1234567890abc", limit=5
+            )
+        self.assertEqual(
+            "https://www.youtube.com/playlist?list=PL1234567890abc",
+            run.call_args.args[0][-1],
+        )
+        self.assertEqual(["dQw4w9WgXcQ", "M7lc1UVf-VE"], [r["id"] for r in results])
+
     def test_parse_search_payload_adds_a_stable_thumbnail_fallback(self):
         results = self.search.parse_search_payload(
             {"entries": [{"id": "M7lc1UVf-VE", "title": "Live"}]},

@@ -351,7 +351,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           </div>
 
           <form>
-            <input type="search" maxlength="120" autocomplete="off" aria-label="Tìm tên bài hát hoặc ca sĩ" placeholder="Tìm tên bài hát hoặc ca sĩ…" required />
+            <input type="search" maxlength="2048" autocomplete="off" aria-label="Tìm tên bài hát hoặc ca sĩ" placeholder="Tìm tên bài hát, ca sĩ hoặc dán link YouTube…" required />
             <button class="primary search-button" type="submit">Tìm kiếm</button>
           </form>
           <p class="status" role="status" aria-live="polite"></p>
@@ -961,12 +961,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const isHttp = this._source === "http";
     input.placeholder = isHttp
       ? "Dán URL MP3, AAC, FLAC, OGG hoặc HLS…"
-      : "Tìm tên bài hát hoặc ca sĩ…";
+      : this._source === "youtube"
+        ? "Tìm tên bài hát, ca sĩ hoặc dán link YouTube…"
+        : "Tìm tên bài hát hoặc ca sĩ…";
     input.setAttribute(
       "aria-label",
       isHttp ? "Địa chỉ HTTP audio trực tiếp" : "Tìm tên bài hát hoặc ca sĩ",
     );
-    input.maxLength = isHttp ? 2048 : 120;
+    input.maxLength = this._source === "zing" ? 120 : 2048;
     submit.textContent = isHttp ? "Thêm URL" : "Tìm kiếm";
     const hints = {
       youtube: "TV phát video · loa phát nhạc",

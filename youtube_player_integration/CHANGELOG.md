@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.7 - 2026-09-14
+
+### Added
+
+- Ô tìm của card nhận **link YouTube** (cần add-on 0.6.4 hoặc c2a): dán link là
+  ra đúng video đó. API tìm của integration nhận chuỗi tới 2048 ký tự để link
+  chép từ app YouTube không bị cắt; máy chủ trình phát kiểm giới hạn chính xác.
+
 ## 0.8.6 - 2026-09-14
 
 ### Added

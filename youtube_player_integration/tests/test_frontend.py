@@ -86,6 +86,11 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._toggleVideoExpanded()", script)
         self.assertIn("this._videoFullscreen()", script)
         self.assertIn("[hidden] { display: none !important; }", script)
+        # Pasted YouTube links are longer than the 120-character text limit.
+        self.assertIn('placeholder="Tìm tên bài hát, ca sĩ hoặc dán link YouTube…"', script)
+        self.assertIn('input.maxLength = this._source === "zing" ? 120 : 2048;', script)
+        http = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
+        self.assertIn("if not 1 <= len(query) <= 2048", http)
         self.assertNotIn("eval(", script)
 
     def test_hidden_players_view_is_registered_and_persisted(self):

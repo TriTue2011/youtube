@@ -59,7 +59,9 @@ class TriTueSearchView(HomeAssistantView):
             return self.json(
                 {"error": "invalid_search_source"}, HTTPStatus.BAD_REQUEST
             )
-        if not 1 <= len(query) <= 120 or not 1 <= limit <= 30:
+        # Pasted YouTube links run long; the player server checks the exact rule
+        # (120 characters of text, 2048 for a link).
+        if not 1 <= len(query) <= 2048 or not 1 <= limit <= 30:
             return self.json(
                 {"error": "invalid_search_query"}, HTTPStatus.BAD_REQUEST
             )

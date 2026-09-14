@@ -6,11 +6,21 @@ import gzip
 import json
 import re
 import subprocess
-from urllib.parse import quote_plus, urlsplit
+from urllib.parse import parse_qs, quote_plus, urlsplit
 from urllib.request import Request, urlopen
 
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+PLAYLIST_ID = re.compile(r"^[A-Za-z0-9_-]{10,80}$")
+YOUTUBE_URL_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+}
+MAX_QUERY_LENGTH = 120
+MAX_URL_LENGTH = 2048
 ZING_ID = re.compile(r"^[A-Z0-9]{8,12}$")
 ZING_SEARCH_URL = "https://ac.zingmp3.vn/v1/web/ac-suggestions"
 SEARCH_RESPONSE_LIMIT = 2_000_000
@@ -63,9 +73,43 @@ def parse_search_payload(payload, *, limit):
     return results
 
 
-def _validated_query_and_limit(query, limit):
+def youtube_url_query(query):
+    """Return ("video", id) or ("playlist", id) when the query is a YouTube link.
+
+    Accepts what people paste from the app or browser: watch links with extra
+    parameters (app=desktop, list=RD..., pp=..., si=...), youtu.be, Shorts,
+    embed and live links, playlist pages, with or without "https://". A watch
+    link inside a mix or playlist still means that one video.
+    """
+    text = str(query or "").strip()
+    if not text or len(text) > MAX_URL_LENGTH or any(char.isspace() for char in text):
+        return None
+    if "://" not in text:
+        text = f"https://{text}"
+    parsed = urlsplit(text)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or host not in YOUTUBE_URL_HOSTS:
+        return None
+    values = parse_qs(parsed.query)
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/").split("/", 1)[0]
+    elif parsed.path == "/watch":
+        video_id = values.get("v", [""])[0]
+    elif parsed.path.startswith(("/shorts/", "/embed/", "/live/")):
+        video_id = parsed.path.rstrip("/").rsplit("/", 1)[-1]
+    else:
+        video_id = ""
+    if VIDEO_ID.fullmatch(video_id):
+        return ("video", video_id)
+    playlist_id = values.get("list", [""])[0]
+    if parsed.path == "/playlist" and PLAYLIST_ID.fullmatch(playlist_id):
+        return ("playlist", playlist_id)
+    return None
+
+
+def _validated_query_and_limit(query, limit, *, max_length=MAX_QUERY_LENGTH):
     query = str(query or "").strip()
-    if not 1 <= len(query) <= 120:
+    if not 1 <= len(query) <= max_length:
         raise ValueError("invalid_search_query")
     try:
         limit = int(limit)
@@ -140,13 +184,26 @@ def parse_zing_payload(payload, *, limit):
 
 
 def search_youtube(query, *, limit=20, timeout=30):
-    """Search song metadata without downloading or resolving media streams."""
-    query, limit = _validated_query_and_limit(query, limit)
+    """Search song metadata without downloading or resolving media streams.
+
+    A pasted YouTube link looks up exactly that video (or that playlist's
+    videos) instead of searching for the link's text.
+    """
+    link = youtube_url_query(query)
+    if link is not None:
+        _, limit = _validated_query_and_limit(query, limit, max_length=MAX_URL_LENGTH)
+    else:
+        query, limit = _validated_query_and_limit(query, limit)
 
     # Search all of YouTube, not only the YouTube Music "Songs" tab: that tab only
     # lists tracks with an official music profile, so AI-made music and covers
     # uploaded as regular videos never showed up even though they play fine.
-    search_url = f"ytsearch{limit}:{query}"
+    if link is None:
+        search_url = f"ytsearch{limit}:{query}"
+    elif link[0] == "video":
+        search_url = f"https://www.youtube.com/watch?v={link[1]}"
+    else:
+        search_url = f"https://www.youtube.com/playlist?list={link[1]}"
     command = [
         "yt-dlp",
         "--flat-playlist",
@@ -174,6 +231,9 @@ def search_youtube(query, *, limit=20, timeout=30):
         payload = json.loads(completed.stdout)
     except (json.JSONDecodeError, TypeError) as error:
         raise SearchUnavailableError("invalid_search_response") from error
+    if link is not None and link[0] == "video":
+        # One video comes back as its own info object, not a list of entries.
+        return parse_search_payload({"entries": [payload]}, limit=1)
     return parse_search_payload(payload, limit=limit)
 
 
