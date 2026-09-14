@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1 - 2026-09-14
+
+### Added
+
+- **Biểu tượng YouTube** cho tích hợp (`brand/icon.png`, `logo.png`, bản tối và @2x — cùng
+  ảnh YouTube mà kho brands của Home Assistant dùng cho `custom-components/youtube`).
+  Home Assistant 2026.3 trở lên tự hiện ở trang Tích hợp và thiết bị. Trang HACS hiện
+  vẫn chỉ lấy icon từ máy chủ của HACS nên có thể chưa thấy (hacs/integration#5171).
+
 ## 0.10.0 - 2026-09-14
 
 Cần add-on **0.8.0** (hoặc c2a từ commit d0715bd) — máy phát giữ playlist.
