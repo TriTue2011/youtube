@@ -764,6 +764,10 @@ class YouTubePlayerHttpTests(unittest.TestCase):
 
         self.assertIn("TriTue YouTube Player", page)
         self.assertIn('aria-label="Trình phát YouTube"', page)
+        # Home Assistant Ingress pages carry "Referrer-Policy: no-referrer"; a
+        # YouTube embed without a Referer fails with Error 153, so the iframe sets
+        # its own policy.
+        self.assertIn('referrerpolicy="strict-origin-when-cross-origin"', page)
 
         with urllib.request.urlopen(f"{self.base_url}/app.js", timeout=2) as response:
             script = response.read().decode("utf-8")

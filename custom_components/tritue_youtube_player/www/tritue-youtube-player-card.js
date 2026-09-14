@@ -25,6 +25,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._hiddenLoading = false;
     this._hiddenLoaded = false;
     this._showHidden = false;
+    this._nowWatchItem = null;
   }
 
   setConfig(config) {
@@ -58,6 +59,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; }
+        [hidden] { display: none !important; }
         ha-card {
           overflow: hidden;
           color: var(--primary-text-color);
@@ -252,6 +254,62 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: var(--primary-color);
         }
         .empty { padding: 22px 8px; text-align: center; color: var(--secondary-text-color); }
+        .video-panel { margin: 16px 0 4px; }
+        .video-frame {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          overflow: hidden;
+          border-radius: 12px;
+          background: #000;
+        }
+        .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        .video-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+        .video-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .9rem; }
+        .video-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 6px 9px;
+          border: 1px solid var(--divider-color);
+          border-radius: 9px;
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color);
+          font-size: .8rem;
+          --mdc-icon-size: 16px;
+        }
+        .video-button:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .video-panel .hint { margin: 6px 1px 0; font-size: .78rem; }
+        /* Phóng to: phủ kín màn hình trên bảng điều khiển. */
+        .video-panel.expanded {
+          position: fixed;
+          inset: 0;
+          z-index: 10;
+          margin: 0;
+          padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          background: #000;
+          color: #fff;
+        }
+        .video-panel.expanded .video-frame,
+        .video-panel.expanded .video-bar { width: min(100%, calc((100vh - 96px) * 16 / 9)); margin-left: auto; margin-right: auto; }
+        .video-panel.expanded .video-title { color: #fff; }
+        .watch-result {
+          display: grid;
+          place-items: center;
+          width: 34px;
+          height: 34px;
+          border: 1px solid var(--divider-color);
+          border-radius: 50%;
+          color: var(--primary-text-color);
+          background: transparent;
+          --mdc-icon-size: 18px;
+        }
+        .watch-result:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .result { grid-template-columns: 54px minmax(0, 1fr) auto auto; }
+        .now-watch { margin-top: 8px; }
         @media (max-width: 520px) {
           .wrap { padding: 16px; }
           form { grid-template-columns: 1fr; }
@@ -268,6 +326,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             </div>
             <ha-icon icon="mdi:music-circle"></ha-icon>
           </header>
+
+          <section class="video-panel" hidden>
+            <div class="video-frame"></div>
+            <div class="video-bar">
+              <span class="video-title"></span>
+              <button class="video-button video-expand" type="button" aria-label="Phóng to video">
+                <ha-icon icon="mdi:arrow-expand"></ha-icon><span>Phóng to</span>
+              </button>
+              <button class="video-button video-fullscreen" type="button" aria-label="Xem toàn màn hình">
+                <ha-icon icon="mdi:fullscreen"></ha-icon>
+              </button>
+              <button class="video-button video-close" type="button" aria-label="Đóng video">
+                <ha-icon icon="mdi:close"></ha-icon>
+              </button>
+            </div>
+            <p class="hint">Chất lượng: bấm biểu tượng bánh răng trong khung video.</p>
+          </section>
 
           <div class="source-switch" role="group" aria-label="Nguồn nhạc">
             <button class="source-button" type="button" data-source="youtube">YouTube</button>
@@ -304,6 +379,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                 <div class="now-title">Chưa phát bài nào</div>
                 <div class="now-meta">Chọn một bài trong kết quả để bắt đầu.</div>
                 <div class="now-targets">Chưa chọn thiết bị phát</div>
+                <button class="video-button now-watch" type="button" hidden>
+                  <ha-icon icon="mdi:television-play"></ha-icon><span>Xem trên thẻ</span>
+                </button>
               </div>
             </div>
           </section>
@@ -366,6 +444,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".play-pause").addEventListener("click", () => this._transport("media_play_pause"));
     this.shadowRoot.querySelector(".next").addEventListener("click", () => this._skip(1));
     this.shadowRoot.querySelector(".stop").addEventListener("click", () => this._stop());
+    this.shadowRoot.querySelector(".video-expand").addEventListener("click", () => this._toggleVideoExpanded());
+    this.shadowRoot.querySelector(".video-fullscreen").addEventListener("click", () => this._videoFullscreen());
+    this.shadowRoot.querySelector(".video-close").addEventListener("click", () => this._closeVideo());
+    this.shadowRoot.querySelector(".now-watch").addEventListener("click", () => {
+      if (this._nowWatchItem) this._watchVideo(this._nowWatchItem);
+    });
   }
 
   _entryId() {
@@ -481,7 +565,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _renderHiddenPlayers(hiddenPlayers) {
     const container = this.shadowRoot.querySelector(".hidden-players");
     container.replaceChildren();
-    if (!hiddenPlayers.length) return;
+    if (!hiddenPlayers.length) {
+      // Always start collapsed: the next hide must not reopen an old expanded list.
+      this._showHidden = false;
+      return;
+    }
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "hidden-toggle";
@@ -850,6 +938,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           ? "Đã gửi"
           : "Chưa phát";
 
+    const watchId = String(fallback.id || "");
+    this._nowWatchItem = title && fallback.source === "youtube" && /^[A-Za-z0-9_-]{11}$/.test(watchId)
+      ? { id: watchId, title }
+      : null;
+    this.shadowRoot.querySelector(".now-watch").hidden = !this._nowWatchItem;
+
     const image = this.shadowRoot.querySelector(".now-cover img");
     const icon = this.shadowRoot.querySelector(".now-cover ha-icon");
     image.hidden = !/^https?:\/\//.test(imageUrl);
@@ -992,9 +1086,88 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       play.setAttribute("aria-label", play.title);
       play.textContent = "▶";
       play.addEventListener("click", () => this._playResult(item, play, index));
-      row.append(image, track, play);
+      const watch = document.createElement("button");
+      watch.className = "watch-result";
+      watch.type = "button";
+      watch.title = `Xem video ${title.textContent} trên thẻ`;
+      watch.setAttribute("aria-label", watch.title);
+      const watchIcon = document.createElement("ha-icon");
+      watchIcon.setAttribute("icon", "mdi:television-play");
+      watch.append(watchIcon);
+      watch.addEventListener("click", () => this._watchVideo(item));
+      watch.hidden = (item.source || this._source) !== "youtube" || !/^[A-Za-z0-9_-]{11}$/.test(String(item.id || ""));
+      row.append(image, track, watch, play);
       container.append(row);
     });
+  }
+
+  _watchVideo(item) {
+    const id = String(item?.id || "");
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) {
+      this._setStatus("Chỉ xem được video YouTube trên thẻ.", true);
+      return;
+    }
+    const panel = this.shadowRoot.querySelector(".video-panel");
+    const frame = panel.querySelector(".video-frame");
+    let iframe = frame.querySelector("iframe");
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      // Home Assistant sends "Referrer-Policy: no-referrer", and YouTube refuses
+      // embeds without a Referer ("Error 153 — Video player configuration error").
+      // The iframe's own policy overrides the page's; it must be set before src.
+      iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      iframe.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+      iframe.setAttribute("allowfullscreen", "");
+      iframe.title = "Video YouTube";
+      frame.append(iframe);
+    }
+    const src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1`;
+    if (iframe.getAttribute("src") !== src) iframe.setAttribute("src", src);
+    panel.querySelector(".video-title").textContent = item.title || id;
+    panel.hidden = false;
+    if (!panel.classList.contains("expanded")) panel.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
+
+  _toggleVideoExpanded() {
+    const panel = this.shadowRoot.querySelector(".video-panel");
+    const expand = !panel.classList.contains("expanded");
+    panel.classList.toggle("expanded", expand);
+    // Some dashboard layouts contain their cards, which traps a fixed overlay
+    // inside the card; fall back to the browser's fullscreen mode there.
+    if (expand && panel.getBoundingClientRect().width < window.innerWidth * 0.9) {
+      panel.classList.remove("expanded");
+      this._videoFullscreen();
+      return;
+    }
+    this._syncVideoExpandButton();
+  }
+
+  _syncVideoExpandButton() {
+    const panel = this.shadowRoot.querySelector(".video-panel");
+    const button = panel.querySelector(".video-expand");
+    const expanded = panel.classList.contains("expanded");
+    button.querySelector("ha-icon").setAttribute("icon", expanded ? "mdi:arrow-collapse" : "mdi:arrow-expand");
+    button.querySelector("span").textContent = expanded ? "Thu nhỏ" : "Phóng to";
+    button.setAttribute("aria-label", expanded ? "Thu nhỏ video" : "Phóng to video");
+  }
+
+  _videoFullscreen() {
+    const frame = this.shadowRoot.querySelector(".video-frame");
+    const request = frame.requestFullscreen || frame.webkitRequestFullscreen;
+    if (!request) {
+      this._setStatus("Trình duyệt này không hỗ trợ toàn màn hình — dùng nút toàn màn hình trong khung video.", true);
+      return;
+    }
+    Promise.resolve(request.call(frame)).catch(() =>
+      this._setStatus("Không mở được toàn màn hình — dùng nút toàn màn hình trong khung video.", true));
+  }
+
+  _closeVideo() {
+    const panel = this.shadowRoot.querySelector(".video-panel");
+    panel.querySelector(".video-frame").replaceChildren();
+    panel.classList.remove("expanded");
+    panel.hidden = true;
+    this._syncVideoExpandButton();
   }
 
   async _playResult(item, button, index = -1) {

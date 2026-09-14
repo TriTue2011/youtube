@@ -8,6 +8,11 @@
   tìm trong tab "Bài hát" của YouTube Music nên những video này không bao giờ
   hiện dù phát được; nay tìm trên YouTube thường (`ytsearch`), kết quả có thêm
   tên kênh và thời lượng.
+- **Video không chạy khi mở giao diện add-on trong Home Assistant** ("Error 153 —
+  Video player configuration error"). Trang của HA gửi `Referrer-Policy:
+  no-referrer`, mà YouTube từ chối khung nhúng không kèm Referer. Khung phát nay
+  tự đặt `referrerpolicy="strict-origin-when-cross-origin"`, đè chính sách của
+  trang.
 
 ## 0.6.2 - 2026-08-29
 

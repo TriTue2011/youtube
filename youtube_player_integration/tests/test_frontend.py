@@ -72,6 +72,20 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._renderHiddenPlayers(", script)
         self.assertIn("this._setHidden([entityId], true)", script)
         self.assertIn("this._setHidden(entityIds, false)", script)
+        self.assertIn("this._showHidden = false;", script)
+        # Watch the YouTube video on the card itself.
+        self.assertIn('class="video-panel" hidden', script)
+        self.assertIn("this._watchVideo(item)", script)
+        self.assertIn("https://www.youtube-nocookie.com/embed/${id}", script)
+        # HA pages send "Referrer-Policy: no-referrer" -> YouTube Error 153
+        # unless the iframe carries its own policy, set before src.
+        self.assertLess(
+            script.index('iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin")'),
+            script.index('iframe.setAttribute("src", src)'),
+        )
+        self.assertIn("this._toggleVideoExpanded()", script)
+        self.assertIn("this._videoFullscreen()", script)
+        self.assertIn("[hidden] { display: none !important; }", script)
         self.assertNotIn("eval(", script)
 
     def test_hidden_players_view_is_registered_and_persisted(self):

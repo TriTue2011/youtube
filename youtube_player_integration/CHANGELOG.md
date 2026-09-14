@@ -9,7 +9,19 @@
   thiết bị hoặc tất cả. Danh sách lưu trong `.storage` của Home Assistant
   (`tritue_youtube_player.hidden_players`) nên còn nguyên sau khi khởi động lại
   HA, tải lại card hay cập nhật integration, và mọi card dùng chung một danh
-  sách. Chỉ tài khoản quản trị ẩn/khôi phục được, giống sửa dashboard.
+  sách. Chỉ tài khoản quản trị ẩn/khôi phục được, giống sửa dashboard. Mục
+  "Đã ẩn" luôn gập sẵn, chỉ bung ra khi bấm.
+- **Xem video YouTube ngay trên card.** Nút xem trên từng kết quả YouTube và
+  "Xem trên thẻ" ở mục Đang phát; khung có Phóng to (phủ kín màn hình), Toàn
+  màn hình và Đóng; chất lượng chọn ở biểu tượng bánh răng trong khung.
+
+### Fixed
+
+- **Video YouTube báo "Error 153" trong Home Assistant.** HA gửi
+  `Referrer-Policy: no-referrer` cho mọi trang, và YouTube từ chối khung nhúng
+  không kèm Referer. Khung video của card tự đặt
+  `referrerpolicy="strict-origin-when-cross-origin"` trước khi nạp, nên video
+  chạy cả trên HAOS và app Companion.
 
 ## 0.8.5 - 2026-09-14
 
