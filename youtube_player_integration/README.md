@@ -100,9 +100,23 @@ entities:
 # http_content_type: audio/mpeg
 ```
 
-Card có ba nguồn YouTube/Zing/HTTP Audio, ô tìm kiếm hoặc nhập URL trực tiếp,
+Card có ba nguồn YouTube/Zing/Link audio, ô tìm kiếm hoặc nhập URL trực tiếp,
 danh sách kết quả, chọn nhiều loa,
-hiển thị bài đang phát và cụm điều khiển. Card tự đọc `supported_features` của
+hiển thị bài đang phát và cụm điều khiển.
+
+Những gì card làm được:
+
+- **Chưa chọn loa** → ▶ một bài YouTube là xem video ngay trên card, có hàng đợi
+  riêng. **Có loa** → loa phát tiếng; mở video (▣) thì video tắt tiếng chạy theo loa,
+  nút 🔊 bật tiếng trên máy đang mở card.
+- **Tích loa nào xem loa đó**: bài, tiến độ, video của nhóm loa đó; các nhóm khác là
+  nút nhỏ bên dưới; **«Cho … nghe cùng»** để loa đang tích vào bài đang xem.
+- **Phóng to / Toàn màn hình**: điện thoại tự xoay ngang (Chrome Android), video 16:9
+  không cắt, chỉ còn thanh nút bên dưới. Trình duyệt chặn tự phát có tiếng thì card
+  hiện «Chạm vào video để phát có tiếng».
+- **Danh sách loa**: thiết bị mất kết nối không hiện (tự hiện lại khi kết nối), nút ✕
+  ẩn thiết bị, mục **Đã ẩn** để khôi phục; trình phát ảo của chính tích hợp không
+  nằm trong danh sách. Trên điện thoại card thu gọn (nút tìm thành biểu tượng). Card tự đọc `supported_features` của
 từng `media_player`: URL audio trực tiếp được giao cho driver Cast/DLNA/ESPHome,
 Android TV mở YouTube bằng deep link, còn Chromecast có màn hình dùng ứng dụng
 YouTube Cast chính thức. Các nút chỉ gửi tới entity khai báo hỗ trợ lệnh tương

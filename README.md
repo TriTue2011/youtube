@@ -35,6 +35,24 @@ Hỗ trợ **`amd64` và `aarch64`** (đã kiểm chứng chạy thật trên c�
   vào; bỏ tick thì chỉ loa đó dừng, các loa còn lại tiếp tục.
 - **Phiên phát dùng chung:** metadata, hàng đợi và danh sách đầu ra được add-on
   giữ, nên card ở trình duyệt khác vẫn thấy đúng bài đang phát.
+- **Mỗi loa một bài hoặc nhiều loa chung một bài:** mỗi lần phát ra các loa đã
+  chọn là một nhóm; tích loa nào thì card hiện bài, tiến độ và video của loa đó;
+  nút **«Cho … nghe cùng»** đưa loa khác vào đúng bài, đúng chỗ đang phát.
+- **Tự chuyển bài không cần mở card:** Home Assistant thấy loa hết bài thì phát bài
+  kế của nhóm đó, kể cả khi đã đóng trình duyệt.
+- **Xem video trên thẻ:** chưa chọn loa thì bấm ▶ xem video YouTube ngay trên card;
+  có loa thì loa phát tiếng, video tắt tiếng chạy theo loa, nút 🔊 nghe cả trên máy
+  đang mở card. Phóng to, toàn màn hình **tự xoay ngang trên điện thoại** (Chrome
+  Android), video 16:9 không bị cắt. Trình duyệt chặn tự phát có tiếng thì card hiện
+  «Chạm vào video để phát có tiếng».
+- **Phát và chuyển bài nhanh:** add-on lấy luồng bằng yt-dlp chạy sẵn trong tiến
+  trình (~1,5 s/bài thay vì 5–7 s), dùng lại link tới gần lúc hết hạn và **lấy sẵn
+  bài kế** của mỗi nhóm loa.
+- **Assist (trợ lý LLM của HA):** bật **TriTue Music** trong trợ lý rồi nói "mở bài …"
+  — trợ lý đưa 10 bài, hỏi loa (một, nhiều, tất cả) rồi phát; "bài kế ở bếp", "dừng
+  loa phòng khách", "đang phát gì".
+- **Gọn trên điện thoại, ẩn thiết bị mất kết nối:** loa/tivi đang `unavailable` không
+  hiện trên card và tự hiện khi kết nối lại; nút ẩn thiết bị không muốn thấy.
 
 ## 1) Cài add-on
 
@@ -90,6 +108,9 @@ Nhập URL add-on và token (in trong log add-on khi khởi động):
 - Cài từ add-on store repo này: `http://b5248dd0-youtube-player:8099`
 - Add-on local: `http://local-youtube-player:8099`
 - Docker độc lập: `http://IP_MAY_DOCKER:8099`
+- Trình phát có sẵn trong **c2a (chatgpt2api)**: `http://IP_C2A:3030/yt` — URL và
+  token chép ở tab **YouTube** của c2a (cần tích hợp ≥ 0.9.4 để nhận URL có `/yt`).
+  Cài song song được: mỗi kết nối là một mục riêng.
 
 Chọn loa phát mặc định (tùy chọn) trong phần cấu hình của integration.
 
