@@ -1466,7 +1466,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._formatDuration(video.item.duration),
         speakers.length
           ? `Tiếng ra ${speakers.join(", ")}${soundOn ? " và máy này" : ""}`
-          : video.followsDevice ? "Tiếng từ máy này, cả khi tắt màn hình" : "Xem trên thẻ",
+          : video.followsDevice
+            ? listenScreenOff() ? "Tiếng từ máy này, cả khi tắt màn hình" : "Tiếng từ máy này"
+            : "Xem trên thẻ",
       ].filter(Boolean).join(" · ");
       this._nowWatchItem = null;
       this.shadowRoot.querySelector(".watch").hidden = true;
@@ -1481,8 +1483,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         deviceAudio.queue.length > 1 ? `${deviceAudio.index + 1}/${deviceAudio.queue.length}` : "",
         listenScreenOff() ? "Nghe trên máy này, cả khi tắt màn hình" : "Nghe trên máy này",
       ].filter(Boolean).join(" · ");
-      this._nowWatchItem = null;
-      this.shadowRoot.querySelector(".watch").hidden = true;
+      // Listening to a YouTube song: "watch" opens its video at the second being heard.
+      this._nowWatchItem = this._isVideoItem(item) ? item : null;
+      this.shadowRoot.querySelector(".watch").hidden = !this._nowWatchItem;
       this._showCover(item.thumbnail);
       return;
     }
@@ -1742,8 +1745,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _watchCurrent() {
     if (!this._nowWatchItem) return;
+    if (deviceAudio.item) {
+      // Listening here: the sound keeps playing and the muted picture opens at the
+      // second being heard, then follows it.
+      this._queue = deviceAudio.queue;
+      this._queueIndex = deviceAudio.index;
+      this._openVideo(deviceAudio.item, {
+        withSpeakers: false,
+        followsDevice: true,
+        startSeconds: deviceAudio.position()?.time || 0,
+      });
+      return;
+    }
     // Already playing on the speakers: keep their sound, show the picture here muted.
     this._openVideo(this._nowWatchItem, { withSpeakers: this._activeSpeakers().length > 0 });
+  }
+
+  /** Same song (by id or link). */
+  _sameSong(left, right) {
+    return !!left && !!right && ((left.url || left.id) === (right.url || right.id) || (!!left.id && left.id === right.id));
   }
 
   _openVideo(item, { withSpeakers, followsDevice = false, startSeconds = 0 }) {
@@ -2272,6 +2292,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         : queue.findIndex((entry) => (entry.url || entry.id) === (item.url || item.id)));
       deviceAudio.entryId = this._entryId();
       const name = item.title || item.id;
+      if (watch && isVideo && this._sameSong(deviceAudio.item, item)) {
+        // The song being heard: open its video where the sound is, don't start over.
+        this._watchCurrent();
+        return;
+      }
       if (watch && isVideo) {
         this._queue = queue;
         this._queueIndex = position;
@@ -2296,6 +2321,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     const entityIds = this._playTargets(source);
+    const session = this._focusedSession();
+    if (watch && isVideo && !this._video.open && session && this._sameSong(session, item)
+      && entityIds.length && entityIds.every((entityId) => session.output_entity_ids.includes(entityId))) {
+      // The ticked speakers already play this song: show the picture where they are,
+      // don't send the song again from the start.
+      this._openVideo(item, { withSpeakers: true });
+      return;
+    }
     if (!entityIds.length) {
       this._setStatus("Thiết bị đã chọn không hỗ trợ nguồn này.", true);
       return;
