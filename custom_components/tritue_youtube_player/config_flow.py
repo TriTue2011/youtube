@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from collections.abc import Mapping
 from typing import Any
 
@@ -59,8 +61,14 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
+BASE_PATH = re.compile(r"(/[A-Za-z0-9._~-]+)*/?")
+
+
 def normalize_base_url(value: str) -> str:
-    """Validate and normalize an HTTP(S) server root URL."""
+    """Validate and normalize the player's HTTP(S) base URL.
+
+    A path prefix is allowed: c2a serves the same player API under ``/yt``
+    (``http://host:3030/yt``), and its YouTube page hands out that URL."""
     try:
         parsed = URL(value.strip())
     except ValueError as error:
@@ -72,10 +80,10 @@ def normalize_base_url(value: str) -> str:
         or parsed.password is not None
         or parsed.query_string
         or parsed.fragment
-        or parsed.path not in {"", "/"}
+        or not BASE_PATH.fullmatch(parsed.path)
     ):
         raise InvalidUrlError
-    return str(parsed.with_path("")).rstrip("/")
+    return str(parsed.with_path(parsed.path.rstrip("/"))).rstrip("/")
 
 
 async def validate_input(

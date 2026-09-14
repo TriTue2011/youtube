@@ -31,7 +31,7 @@
     "error": {
       "cannot_connect": "Không thể kết nối tới máy chủ player.",
       "invalid_auth": "Token tích hợp không đúng.",
-      "invalid_url": "Hãy nhập URL gốc HTTP hoặc HTTPS, không kèm đường dẫn.",
+      "invalid_url": "Hãy nhập URL HTTP hoặc HTTPS của player (được kèm đường dẫn như /yt), không kèm dấu ?.",
       "unsupported_api": "Máy chủ player dùng phiên bản API chưa được hỗ trợ.",
       "unknown": "Player trả về phản hồi không mong đợi."
     },

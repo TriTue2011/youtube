@@ -31,7 +31,7 @@
     "error": {
       "cannot_connect": "Cannot connect to the player server.",
       "invalid_auth": "The integration token is invalid.",
-      "invalid_url": "Enter an HTTP or HTTPS root URL without a path.",
+      "invalid_url": "Enter the player's HTTP or HTTPS URL (a path such as /yt is allowed), without a query.",
       "unsupported_api": "The player server uses an unsupported API version.",
       "unknown": "The player returned an unexpected response."
     },

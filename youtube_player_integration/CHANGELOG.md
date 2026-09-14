@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.4 - 2026-09-14
+
+### Fixed
+
+- **Kết nối được với trình phát của c2a.** Ô URL chỉ nhận địa chỉ gốc, trong khi c2a
+  phục vụ player ở `/yt` và tab YouTube của c2a đưa ra `http://IP:3030/yt`: nhập
+  `/yt` bị báo "không kèm đường dẫn", bỏ `/yt` thì gọi nhầm trang web c2a và báo
+  "phản hồi không mong đợi". Nay URL được kèm đường dẫn (không kèm `?`/`#`).
+
 ## 0.9.3 - 2026-09-14
 
 ### Fixed
