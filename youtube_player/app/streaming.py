@@ -9,10 +9,9 @@ import hmac
 import io
 import json
 import re
-import subprocess
 import time
 from http.cookiejar import CookieJar
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import (
     HTTPCookieProcessor,
     HTTPRedirectHandler,
@@ -24,6 +23,9 @@ from urllib.request import (
 STREAM_SOURCES = ("zing", "youtube")
 YOUTUBE_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 YOUTUBE_AUDIO_FORMAT = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
+STREAM_CACHE_DEFAULT_SECONDS = 120
+STREAM_CACHE_MAX_SECONDS = 5 * 3600
+STREAM_EXPIRY_MARGIN_SECONDS = 600
 YOUTUBE_STREAM_HOSTS = ("googlevideo.com",)
 ZING_ID = re.compile(r"^[A-Za-z0-9]{8,16}$")
 ZING_API_BASE = "https://zingmp3.vn"
@@ -340,8 +342,44 @@ def _youtube_audio_format(info: dict) -> dict:
     raise StreamUnavailableError("stream_provider_failed")
 
 
+def extract_with_yt_dlp(watch_url: str, timeout: int) -> dict:
+    """Run yt-dlp inside this process and return what ``--dump-single-json`` prints.
+
+    Measured 14/09/2026: a fresh ``yt-dlp`` process took 4.8-7.1 s per song, 2.2 s
+    of it only importing yt_dlp; the same extraction in a long-lived process took
+    1.1-1.8 s. That wait is the delay before a speaker starts and on every "next".
+    """
+    import yt_dlp  # imported on first use, then cached by Python
+
+    options = {
+        "format": YOUTUBE_AUDIO_FORMAT,
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "socket_timeout": timeout,
+        "extractor_retries": 1,
+    }
+    with yt_dlp.YoutubeDL(options) as ydl:
+        return ydl.sanitize_info(ydl.extract_info(watch_url, download=False))
+
+
+def stream_cache_seconds(stream_url: str, *, now: float | None = None) -> int:
+    """How long a resolved stream URL may be reused.
+
+    googlevideo URLs carry their own ``expire`` (about six hours ahead); reusing
+    them until shortly before that keeps replays, seeks and range requests from
+    resolving the song again. URLs without an expiry keep the old two minutes."""
+    try:
+        expire = int(parse_qs(urlsplit(str(stream_url)).query).get("expire", [""])[0])
+    except ValueError:
+        return STREAM_CACHE_DEFAULT_SECONDS
+    remaining = expire - int(time.time() if now is None else now) - STREAM_EXPIRY_MARGIN_SECONDS
+    return max(0, min(remaining, STREAM_CACHE_MAX_SECONDS))
+
+
 def resolve_youtube_audio(
-    video_id: str, *, timeout: int = 45, runner=subprocess.run
+    video_id: str, *, timeout: int = 20, extractor=extract_with_yt_dlp
 ) -> dict:
     """Resolve one browser-free direct audio stream for a public YouTube video.
 
@@ -350,31 +388,10 @@ def resolve_youtube_audio(
     """
     video_id = validate_stream_target("youtube", video_id)
     watch_url = f"https://www.youtube.com/watch?v={video_id}"
-    command = [
-        "yt-dlp",
-        "--format",
-        YOUTUBE_AUDIO_FORMAT,
-        "--no-playlist",
-        "--no-warnings",
-        "--dump-single-json",
-        watch_url,
-    ]
     try:
-        completed = runner(
-            command,
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=timeout,
-        )
-    except (OSError, subprocess.TimeoutExpired) as error:
+        info = extractor(watch_url, timeout)
+    except Exception as error:  # yt-dlp raises many unrelated types for one failure
         raise StreamUnavailableError("stream_provider_failed") from error
-    if completed.returncode != 0:
-        raise StreamUnavailableError("stream_provider_failed")
-    try:
-        info = json.loads(completed.stdout)
-    except (json.JSONDecodeError, TypeError) as error:
-        raise StreamUnavailableError("invalid_stream_response") from error
     if not isinstance(info, dict):
         raise StreamUnavailableError("invalid_stream_response")
 

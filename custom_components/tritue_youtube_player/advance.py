@@ -113,7 +113,7 @@ class SessionAutoAdvance:
     @callback
     def _observe(self, session: dict[str, Any], entity_id: str, state: str, attributes: dict[str, Any]) -> None:
         tracker = self._trackers.setdefault(self._track_key(session, entity_id), {})
-        if not observe_track(tracker, state, attributes, dt_util.utcnow()):
+        if not observe_track(tracker, state, attributes, dt_util.utcnow(), session.get("item")):
             return
         session_id = str(session.get("session_id") or "")
         if session_id in self._advancing or queue_item(session, 1) is None:

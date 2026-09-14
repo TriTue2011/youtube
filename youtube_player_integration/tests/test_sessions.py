@@ -73,6 +73,33 @@ class SessionHelperTests(unittest.TestCase):
         observe(no_position, "playing", {}, NOW)
         self.assertTrue(observe(no_position, "off", {}, NOW))  # speaker without position: trust the state
 
+    def test_reports_of_the_previous_song_are_ignored(self):
+        import base64
+        import json
+
+        def stream_url(video_id):
+            payload = base64.urlsafe_b64encode(json.dumps({"exp": 1, "source": "youtube", "target": video_id}).encode()).decode().rstrip("=")
+            return f"http://172.16.10.28:8099/api/stream/{payload}.c2lnbmF0dXJl"
+
+        new_song = {"id": "M7lc1UVf-VE", "url": "https://www.youtube.com/watch?v=M7lc1UVf-VE"}
+        self.assertEqual("dQw4w9WgXcQ", self.sessions.stream_target(stream_url("dQw4w9WgXcQ")))
+        self.assertIsNone(self.sessions.stream_target("M7lc1UVf-VE"))  # a TV's own app: can't tell
+        self.assertTrue(self.sessions.plays_item({"media_content_id": "M7lc1UVf-VE"}, new_song))
+
+        observe = self.sessions.observe_track
+        tracker = {}
+        # "Next" pressed 5 s before the old song ended: the speaker still reports it...
+        old = {"media_content_id": stream_url("dQw4w9WgXcQ"), "media_position": 195,
+               "media_position_updated_at": NOW.isoformat(), "media_duration": 200}
+        self.assertFalse(self.sessions.plays_item(old, new_song))
+        self.assertFalse(observe(tracker, "playing", old, NOW, new_song))
+        # ...then goes idle while loading the new song: not the new song's end.
+        self.assertFalse(observe(tracker, "idle", {}, NOW + timedelta(seconds=6), new_song))
+        new = {"media_content_id": stream_url("M7lc1UVf-VE"), "media_position": 0,
+               "media_position_updated_at": (NOW + timedelta(seconds=8)).isoformat(), "media_duration": 200}
+        self.assertFalse(observe(tracker, "playing", new, NOW + timedelta(seconds=8), new_song))
+        self.assertTrue(observe(tracker, "idle", {}, NOW + timedelta(seconds=205), new_song))
+
 
 if __name__ == "__main__":
     unittest.main()

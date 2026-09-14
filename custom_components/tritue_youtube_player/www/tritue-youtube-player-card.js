@@ -1,5 +1,19 @@
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
+const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
+
+/** Song in a speaker's signed stream URL (the payload is plain base64 JSON); null = not the player's stream. */
+function streamTarget(mediaContentId) {
+  const match = STREAM_TOKEN.exec(String(mediaContentId || ""));
+  if (!match) return null;
+  try {
+    const base64 = match[1].replace(/-/g, "+").replace(/_/g, "/");
+    const target = JSON.parse(atob(base64 + "===".slice((base64.length + 3) % 4))).target;
+    return target ? String(target) : null;
+  } catch (_error) {
+    return null;
+  }
+}
 
 class TriTueYouTubePlayerCard extends HTMLElement {
   constructor() {
@@ -43,7 +57,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _idleVideo() {
-    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, soundHere: true };
+    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, soundHere: true, muted: null };
   }
 
   setConfig(config) {
@@ -224,6 +238,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: #000;
         }
         .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        .sound-hint {
+          position: absolute;
+          top: 8px;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(0, 0, 0, 0.72);
+          color: #fff;
+          font-size: 12px;
+          white-space: nowrap;
+          pointer-events: none;
+        }
         .now { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 11px; align-items: center; }
         .player.video-on .now { grid-template-columns: minmax(0, 1fr); }
         .player.video-on .now-cover { display: none; }
@@ -753,10 +780,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   /** Position of a speaker now, from HA's last report plus the time since. */
-  _speakerPosition(entityId) {
+  /** Whether a speaker already reports this session's song (see streamTarget). */
+  _speakerPlaysItem(state, session) {
+    const target = streamTarget(state?.attributes?.media_content_id);
+    if (target === null || !session) return true;
+    const id = String(session.id || "");
+    return target === id || target === String(session.url || "") || (!!id && target.includes(id));
+  }
+
+  _speakerPosition(entityId, session = this._focusedSession()) {
     const state = this._hass?.states?.[entityId];
     const position = Number(state?.attributes?.media_position);
     if (!state || !Number.isFinite(position)) return null;
+    // Right after a new song is sent the speaker still reports the previous
+    // song's second for a few seconds; showing it made the bar and the picture
+    // jump there before starting over from the beginning.
+    if (!this._speakerPlaysItem(state, session)) return null;
     if (state.state !== "playing") return position;
     const updatedAt = Date.parse(state.attributes.media_position_updated_at || "");
     return position + (Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 1000) : 0);
@@ -1209,7 +1248,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         iframe.setAttribute("allowfullscreen", "");
         iframe.title = "Video YouTube";
         iframe.addEventListener("load", () => this._videoHandshake());
-        frame.append(iframe);
+        const hint = document.createElement("div");
+        hint.className = "sound-hint";
+        hint.hidden = true;
+        frame.append(iframe, hint);
       }
       this._video.ready = false;
       // enablejsapi + origin let the card drive the player over postMessage.
@@ -1226,6 +1268,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
     this._video.open = true;
     this._video.state = -1;
+    this._soundHintShown = false;
+    clearTimeout(this._soundCheckTimer);
+    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 3500);
     window.addEventListener("message", this._onVideoMessage);
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
     this._syncNowPlaying();
@@ -1239,6 +1284,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // lets the device showing the card play the sound too.
     this._video.soundHere = !this._video.soundHere;
     this._videoCommand(this._video.soundHere ? "unMute" : "mute");
+    clearTimeout(this._soundCheckTimer);
+    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
+    this._syncSoundHint();
     this._syncNowPlaying();
   }
 
@@ -1287,10 +1335,41 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._video.time = info.currentTime;
         this._video.timeAt = Date.now();
       }
+      if (typeof info.muted === "boolean") this._video.muted = info.muted;
       if (Number.isFinite(info.playerState)) this._setVideoState(info.playerState);
     } else if (data.event === "onStateChange") {
       this._setVideoState(Number(data.info));
     }
+    this._syncSoundHint();
+  }
+
+  /**
+   * Some browsers (phones, the Home Assistant app) only allow sound after a tap
+   * inside the video itself: the embed then stays stopped or plays muted. Ask
+   * once more, then tell the viewer to tap the video.
+   */
+  _checkVideoSound() {
+    const video = this._video;
+    if (!video.open || !video.soundHere || !this._soundBlocked()) return;
+    this._videoCommand("unMute");
+    this._videoCommand("playVideo");
+    clearTimeout(this._soundCheckTimer);
+    this._soundCheckTimer = setTimeout(() => {
+      this._soundHintShown = this._video.open && this._video.soundHere && this._soundBlocked();
+      this._syncSoundHint();
+    }, 1500);
+  }
+
+  _soundBlocked() {
+    return this._video.muted === true || [-1, 5].includes(this._video.state);
+  }
+
+  _syncSoundHint() {
+    const hint = this.shadowRoot?.querySelector(".sound-hint");
+    if (!hint) return;
+    if (this._soundHintShown && (!this._video.soundHere || !this._soundBlocked())) this._soundHintShown = false;
+    hint.textContent = this._video.state === 1 ? "🔇 Chạm vào video để bật tiếng" : "▶ Chạm vào video để phát có tiếng";
+    hint.hidden = !this._soundHintShown;
   }
 
   _setVideoState(state) {
@@ -1328,13 +1407,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const primary = this._activeSpeakers()[0];
     if (!primary) return;
     const speaker = this._hass.states[primary];
-    if (Date.now() < this._mirrorHoldUntil) return;
+    if (Date.now() < this._mirrorHoldUntil || !this._speakerPlaysItem(speaker, this._focusedSession())) return;
     if (speaker.state === "paused" && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
     if (speaker.state === "playing" && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
-    const position = Number(speaker.attributes?.media_position);
-    if (speaker.state !== "playing" || !Number.isFinite(position) || Date.now() < this._lastVideoSeekAt + 5000) return;
-    const updatedAt = Date.parse(speaker.attributes?.media_position_updated_at || "");
-    const speakerTime = position + (Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 1000) : 0);
+    const speakerTime = this._speakerPosition(primary);
+    if (speaker.state !== "playing" || speakerTime === null || Date.now() < this._lastVideoSeekAt + 5000) return;
     // The speaker starts a few seconds after the picture (its stream is prepared
     // server-side), so the muted picture follows the speaker's reported position.
     if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
@@ -1382,6 +1459,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _closeVideo() {
+    clearTimeout(this._soundCheckTimer);
+    this._soundHintShown = false;
     clearInterval(this._videoTimer);
     clearInterval(this._videoHandshakeTimer);
     this._videoTimer = null;

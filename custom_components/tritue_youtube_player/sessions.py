@@ -7,6 +7,9 @@ shown on the entity, and how a speaker finishing a track is recognised.
 
 from __future__ import annotations
 
+import base64
+import json
+import re
 from datetime import datetime
 from typing import Any
 
@@ -16,6 +19,7 @@ PLAYING_STATES = {"playing", "buffering"}
 # the track ending — don't jump to the next song.
 END_TOLERANCE_SECONDS = 15
 MAX_ATTRIBUTE_SESSIONS = 16
+STREAM_TOKEN = re.compile(r"/api/stream/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+")
 
 
 def controller_id(entry_id: str) -> str:
@@ -102,18 +106,53 @@ def _number(value: Any) -> float | None:
     return float(value)
 
 
+def stream_target(media_content_id: Any) -> str | None:
+    """Song a speaker is playing, read from the player's signed stream URL.
+
+    The token's payload is plain base64 JSON ({exp, source, target}); only its
+    signature is secret. None = not a stream from the player (a TV's own
+    YouTube app, another source), so the song can't be told."""
+    match = STREAM_TOKEN.search(str(media_content_id or ""))
+    if not match:
+        return None
+    payload = match.group(1)
+    try:
+        data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (ValueError, TypeError):
+        return None
+    target = data.get("target") if isinstance(data, dict) else None
+    return str(target) if target else None
+
+
+def plays_item(attributes: dict[str, Any], item: dict[str, Any] | None) -> bool:
+    """Whether the speaker's reported media is this session's song.
+
+    Right after a new song is sent the speaker still reports the previous song's
+    position and duration for a few seconds; reading those as the new song's
+    made the picture jump to the old second and could count the old song
+    ending as the new one's."""
+    target = stream_target(attributes.get("media_content_id"))
+    if target is None or not item:
+        return True
+    item_id = str(item.get("id") or "")
+    return target in {item_id, str(item.get("url") or "")} or bool(item_id and item_id in target)
+
+
 def observe_track(
     tracker: dict[str, Any],
     state: str,
     attributes: dict[str, Any],
     now: datetime,
+    item: dict[str, Any] | None = None,
 ) -> bool:
     """Feed one speaker state; return True once when the track has finished.
 
     Finished = the speaker was seen playing, then went idle/off/standby near the
     end of the track. Pause never counts; a stop well before the end does not
-    count either."""
+    count either. Playing reports of another song than ``item`` are ignored."""
     if state in PLAYING_STATES:
+        if not plays_item(attributes, item):
+            return False
         tracker["seen_playing"] = True
         position = _number(attributes.get("media_position"))
         if position is not None:

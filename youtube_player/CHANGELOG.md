@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.1 - 2026-09-14
+
+### Changed
+
+- **Phát và chuyển bài nhanh hơn.** Luồng nhạc YouTube được lấy bằng yt-dlp chạy
+  ngay trong tiến trình thay vì mở một tiến trình mới cho mỗi bài. Đo ngày
+  14/09/2026: tiến trình mới mất 4,8–7,1 giây mỗi bài, riêng khâu nạp yt-dlp đã
+  mất 2,2 giây; chạy trong tiến trình chỉ còn 1,6–2,5 giây.
+- **Link luồng được dùng lại tới gần lúc hết hạn.** Link googlevideo tự mang hạn
+  dùng (khoảng 6 giờ), nên phát lại, tua hay loa hỏi lại từng đoạn không phải lấy
+  luồng lại sau 2 phút nữa. YouTube từ chối link cũ (403/404/410) thì lấy lại một lần.
+- **Lấy sẵn luồng của bài kế.** Mỗi khi một nhóm loa bắt đầu một bài, bài kế trong
+  hàng đợi được chuẩn bị ngầm, nên bấm bài kế và tự chuyển bài bắt đầu gần như ngay.
+
 ## 0.7.0 - 2026-09-14
 
 ### Added

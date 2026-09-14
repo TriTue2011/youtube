@@ -10,6 +10,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from search import SearchUnavailableError, search_youtube, search_zing
@@ -21,6 +22,7 @@ from streaming import (
     normalize_public_base_url,
     resolve_youtube_audio,
     resolve_zing_stream,
+    stream_cache_seconds,
     validate_stream_target,
     validate_zing_target,
     verify_stream_token,
@@ -43,7 +45,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.7.1"
 API_VERSION = "1"
 
 
@@ -124,6 +126,8 @@ class PlayerServer(ThreadingHTTPServer):
         self.stream_lock = threading.Lock()
         self.zing_result_cache = {}
         self.stream_cache = {}
+        self.prefetching = set()
+        self.prefetch_streams = True
         self.playback_session = PlaybackSession()
 
     @property
@@ -220,7 +224,38 @@ class PlayerServer(ThreadingHTTPServer):
                 auto_advance=auto_advance,
             )
         self.add_history(session["item"])
+        self.prefetch_next(session)
         return session
+
+    def prefetch_next(self, session):
+        """Resolve the session's next song in the background, so "next" and
+        auto-advance start at once instead of waiting for yt-dlp."""
+        queue = (session or {}).get("queue") or {}
+        items = queue.get("items") or []
+        index = int(queue.get("index", -1)) + 1
+        if not self.prefetch_streams or not session.get("output_entity_ids") or not 0 < index < len(items):
+            return
+        item = items[index]
+        source = item.get("source")
+        target = item.get("url") or item.get("id")
+        if source not in {"youtube", "zing"} or item.get("kind") not in {"video", "song"} or not target:
+            return
+        key = (source, target)
+        with self.stream_lock:
+            if key in self.prefetching:
+                return
+            self.prefetching.add(key)
+
+        def run():
+            try:
+                self.prepare_stream(source, target)
+            except (ValueError, StreamUnavailableError, OSError):
+                pass  # a failed prefetch only means "next" resolves on demand
+            finally:
+                with self.stream_lock:
+                    self.prefetching.discard(key)
+
+        threading.Thread(target=run, name="prefetch-next", daemon=True).start()
 
     def stop(self, expected_revision=None, session_id=None):
         with self.player_lock:
@@ -323,8 +358,12 @@ class PlayerServer(ThreadingHTTPServer):
                 for cached_key, value in self.stream_cache.items()
                 if value[0] >= now
             }
-            self.stream_cache[key] = (now + 120, dict(resolved))
+            self.stream_cache[key] = (now + stream_cache_seconds(resolved.get("url")), dict(resolved))
         return dict(resolved)
+
+    def forget_stream(self, source, target):
+        with self.stream_lock:
+            self.stream_cache.pop((source, target), None)
 
     def resolve_stream(self, source, target):
         """Return the prepared stream, resolving again after cache expiry."""
@@ -726,15 +765,12 @@ class PlayerHandler(BaseHTTPRequestHandler):
         response_started = False
         try:
             source, target = verify_stream_token(token, self.server.integration_token)
-            resolved = self.server.resolve_stream(source, target)
-            headers = {**resolved["headers"], "Accept-Encoding": "identity"}
-            if range_header := self.headers.get("Range"):
-                if not re.fullmatch(r"bytes=\d*-\d*", range_header):
-                    self.send_json(400, {"error": "invalid_range"})
-                    return
-                headers["Range"] = range_header
-            request = Request(resolved["url"], headers=headers)
-            with urlopen(request, timeout=30) as response:
+            range_header = self.headers.get("Range")
+            if range_header and not re.fullmatch(r"bytes=\d*-\d*", range_header):
+                self.send_json(400, {"error": "invalid_range"})
+                return
+            response, resolved = self.open_upstream(source, target, range_header)
+            with response:
                 self.send_response(response.getcode() or 200)
                 self.send_header(
                     "Content-Type",
@@ -757,6 +793,23 @@ class PlayerHandler(BaseHTTPRequestHandler):
         except (StreamUnavailableError, OSError):
             if not response_started:
                 self.send_json(502, {"error": "stream_unavailable"})
+
+    def open_upstream(self, source, target, range_header):
+        """Open the audio upstream; a cached URL YouTube already refused is
+        resolved once more (URLs are reused for hours, see stream_cache_seconds)."""
+        for attempt in (1, 2):
+            resolved = self.server.resolve_stream(source, target)
+            headers = {**resolved["headers"], "Accept-Encoding": "identity"}
+            if range_header:
+                headers["Range"] = range_header
+            try:
+                response = urlopen(Request(resolved["url"], headers=headers), timeout=30)
+            except HTTPError as error:
+                if attempt == 2 or error.code not in {403, 404, 410}:
+                    raise
+                self.server.forget_stream(source, target)
+                continue
+            return response, resolved
 
     def authorize_integration(self):
         token = self.server.integration_token

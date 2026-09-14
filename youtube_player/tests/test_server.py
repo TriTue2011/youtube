@@ -36,6 +36,8 @@ class YouTubePlayerHttpTests(unittest.TestCase):
             integration_token="test-integration-token",
             public_base_url="http://172.16.10.200:8099",
         )
+        # Background prefetch would run real yt-dlp; tests that need it turn it on.
+        self.server.prefetch_streams = False
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.base_url = f"http://127.0.0.1:{self.server.server_port}"
@@ -748,6 +750,59 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual(
             "bytes=0-0", open_upstream.call_args.args[0].get_header("Range")
         )
+
+    @patch("server.urlopen")
+    @patch("server.resolve_youtube_audio")
+    def test_stream_refused_by_youtube_is_resolved_again_once(self, resolve, open_upstream):
+        resolve.side_effect = [
+            {"url": "https://rr3---sn-old.googlevideo.com/videoplayback", "headers": {}, "content_type": "audio/mp4"},
+            {"url": "https://rr3---sn-new.googlevideo.com/videoplayback", "headers": {}, "content_type": "audio/mp4"},
+        ]
+        upstream = io.BytesIO(b"M4A!")
+        upstream.headers = {"Content-Type": "audio/mp4", "Content-Length": "4"}
+        upstream.getcode = lambda: 200
+
+        def open_url(request, timeout):
+            if "sn-old" in request.full_url:
+                raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, None)
+            return upstream
+
+        open_upstream.side_effect = open_url
+        _, created = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={"source": "youtube", "target": "dQw4w9WgXcQ"},
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        token = created["stream_url"].rsplit("/", 1)[-1]
+        with urllib.request.urlopen(f"{self.base_url}/api/stream/{token}", timeout=2) as response:
+            self.assertEqual(b"M4A!", response.read())
+        self.assertEqual(2, resolve.call_count)
+
+    @patch("server.search_youtube")
+    @patch("server.resolve_youtube_audio")
+    def test_speaker_session_prefetches_the_next_song(self, resolve, search):
+        search.return_value = [
+            {"source": "youtube", "kind": "video", "id": video_id, "url": f"https://www.youtube.com/watch?v={video_id}",
+             "title": video_id, "channel": "", "duration": 200}
+            for video_id in ("dQw4w9WgXcQ", "M7lc1UVf-VE", "llPioQNSBLY")
+        ]
+        resolve.return_value = {"url": "https://rr3---sn-abc.googlevideo.com/videoplayback", "headers": {}, "content_type": "audio/mp4"}
+        self.server.search("youtube", "x", 3)
+        self.server.prefetch_streams = True
+        self.server.record_session(
+            "youtube", "https://www.youtube.com/watch?v=dQw4w9WgXcQ", output_entity_ids=["media_player.bep"]
+        )
+        for _ in range(50):
+            if resolve.call_count:
+                break
+            time.sleep(0.02)
+        resolve.assert_called_once_with("M7lc1UVf-VE")
+        # A session without speakers (the web page) does not prefetch.
+        resolve.reset_mock()
+        self.server.record_session("youtube", "https://www.youtube.com/watch?v=M7lc1UVf-VE", output_entity_ids=[])
+        time.sleep(0.2)
+        resolve.assert_not_called()
 
     def test_video_url_is_normalized_and_persisted(self):
         status, target = self.request(

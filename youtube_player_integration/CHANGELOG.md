@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.3 - 2026-09-14
+
+### Fixed
+
+- **Không còn nhảy tới giây của bài trước.** Vừa gửi bài mới, loa còn báo vị trí
+  của bài cũ vài giây; thẻ lấy vị trí đó cho thanh tiến độ và video nên hình nhảy
+  tới giây cũ rồi mới chạy lại từ đầu. Nay thẻ đọc bài loa đang phát từ link luồng
+  đã ký và chỉ dùng vị trí khi đúng bài của nhóm loa. Tự chuyển bài cũng bỏ qua
+  báo cáo của bài cũ, nên bấm bài kế sát cuối bài không bị tính là bài mới đã hết.
+- **Trình duyệt chặn tiếng tự phát.** Trên điện thoại và app Home Assistant, video
+  xem trên thẻ có thể đứng yên hoặc chạy không tiếng cho tới khi chạm vào chính
+  khung video. Thẻ thử bật tiếng một lần, rồi hiện "Chạm vào video để phát có tiếng".
+
 ## 0.9.2 - 2026-09-14
 
 ### Fixed
