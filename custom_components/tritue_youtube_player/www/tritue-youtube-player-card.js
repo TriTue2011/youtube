@@ -131,6 +131,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           color: var(--secondary-text-color);
           background: transparent;
           font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .source-button[aria-pressed="true"] {
           color: var(--text-primary-color, #fff);
@@ -155,6 +158,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           font-weight: 650;
         }
         .primary { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+        .search-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; --mdc-icon-size: 19px; }
         button:disabled { cursor: not-allowed; opacity: .45; }
         .status { min-height: 18px; margin: 6px 1px 0; color: var(--secondary-text-color); font-size: .84rem; }
         .status.error { color: var(--error-color); }
@@ -377,8 +381,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .player.expanded .svol-name,
         .player:fullscreen .svol-name { color: rgba(255, 255, 255, .72); }
         @media (max-width: 520px) {
-          .wrap { padding: 14px; }
-          form { grid-template-columns: 1fr; }
+          /* Phones (and the app's larger font scale): keep the search on one row
+             and shrink text so the card isn't a column of oversized boxes. */
+          .wrap { padding: 12px; }
+          h2 { font-size: 1.02rem; }
+          .subtitle { font-size: .72rem; }
+          .source-switch { margin: 10px 0 8px; }
+          .source-button { padding: 6px 4px; font-size: .8rem; }
+          input[type="search"] { padding: 7px 10px; font-size: .9rem; }
+          .primary { padding: 7px 11px; }
+          .search-label { display: none; }
+          .player { padding: 8px; }
+          .now { grid-template-columns: 44px minmax(0, 1fr); gap: 9px; }
+          .now-meta, .status { font-size: .76rem; }
+          .section-title h3 { font-size: .82rem; }
+          .player-chip { gap: 5px; padding: 3px 8px; font-size: .84rem; }
+          .result { font-size: .88rem; }
         }
       </style>
       <ha-card>
@@ -430,12 +448,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           <div class="source-switch" role="group" aria-label="Nguồn nhạc">
             <button class="source-button" type="button" data-source="youtube">YouTube</button>
             <button class="source-button" type="button" data-source="zing">Zing MP3</button>
-            <button class="source-button" type="button" data-source="http">HTTP Audio</button>
+            <button class="source-button" type="button" data-source="http">Link audio</button>
           </div>
 
           <form>
             <input type="search" maxlength="2048" autocomplete="off" aria-label="Tìm tên bài hát hoặc ca sĩ" placeholder="Tìm tên bài hát, ca sĩ hoặc dán link YouTube…" required />
-            <button class="primary search-button" type="submit">Tìm kiếm</button>
+            <button class="primary search-button" type="submit" aria-label="Tìm kiếm" title="Tìm kiếm"><ha-icon icon="mdi:magnify"></ha-icon><span class="search-label">Tìm kiếm</span></button>
           </form>
           <p class="status" role="status" aria-live="polite"></p>
 
@@ -509,7 +527,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!this._hass) return;
     const virtualEntity = this._config.entity;
     const allPlayers = Object.entries(this._hass.states)
-      .filter(([entityId]) => entityId.startsWith("media_player.") && entityId !== virtualEntity)
+      // The integration's own virtual players (this entry and others, e.g. one
+      // connected to c2a) are not speakers.
+      .filter(([entityId]) => entityId.startsWith("media_player.") && entityId !== virtualEntity
+        && this._hass.entities?.[entityId]?.platform !== "tritue_youtube_player")
       .sort((left, right) => this._friendlyName(left).localeCompare(this._friendlyName(right), "vi"));
     // Devices that lost their connection stay off the card (and out of the
     // selection) until Home Assistant reports them again.
@@ -1094,7 +1115,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       isHttp ? "Địa chỉ HTTP audio trực tiếp" : "Tìm tên bài hát hoặc ca sĩ",
     );
     input.maxLength = this._source === "zing" ? 120 : 2048;
-    submit.textContent = isHttp ? "Thêm URL" : "Tìm kiếm";
+    const submitLabel = isHttp ? "Thêm URL" : "Tìm kiếm";
+    submit.querySelector(".search-label").textContent = submitLabel;
+    submit.setAttribute("aria-label", submitLabel);
+    submit.title = submitLabel;
+    submit.querySelector("ha-icon").setAttribute("icon", isHttp ? "mdi:link-plus" : "mdi:magnify");
     const hints = {
       youtube: "YouTube · tivi mở ứng dụng, loa nhận tiếng · không chọn loa thì xem trên thẻ",
       zing: "Zing MP3 · bài công khai, không VIP · phát ra loa",
@@ -1486,7 +1511,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const requestedCount = this._selectedPlayers.size;
     if (!requestedCount) {
       if (!this._isVideoItem(item, source)) {
-        this._setStatus("Hãy chọn loa để phát Zing MP3 hoặc HTTP Audio.", true);
+        this._setStatus("Hãy chọn loa để phát Zing MP3 hoặc link audio.", true);
         return;
       }
       // No speaker chosen: play the video right here on the card, with a local queue.

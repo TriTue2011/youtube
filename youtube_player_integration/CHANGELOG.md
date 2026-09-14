@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.6 - 2026-09-14
+
+### Changed
+
+- **Thẻ gọn trên điện thoại.** Mở bằng điện thoại (nhất là app Home Assistant phóng
+  chữ), ô tìm và nút tìm nằm cùng một hàng, nút tìm thành biểu tượng kính lúp, nút
+  nguồn không xuống dòng ("HTTP Audio" đổi thành "Link audio"), chữ và ô chọn loa
+  nhỏ lại.
+
+### Fixed
+
+- **Không liệt kê trình phát ảo của chính tích hợp như một loa.** Cài hai kết nối
+  (add-on và c2a) thì thẻ của kết nối này từng hiện "TriTue YouTube Player (…)" của
+  kết nối kia trong danh sách loa. Nay mọi media_player của tích hợp đều bị bỏ qua.
+
 ## 0.9.5 - 2026-09-14
 
 ### Changed
