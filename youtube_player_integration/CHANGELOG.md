@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.8.8 - 2026-09-14
+
+### Changed
+
+- **Card gọn lại, một khối phát.** "Đang phát", nút điều khiển và âm lượng từng
+  loa gộp thành một khối ở đầu card; video xem trên card thay chỗ ảnh bìa. Nút
+  điều khiển là hàng nút tròn nhỏ ⏮ ⏯ ⏭ ⏹. Mỗi kết quả chỉ còn một nút ▶.
+- **▶ tự chọn nơi phát.** Có chọn loa thì phát ra loa; chưa chọn loa thì bài
+  YouTube phát video ngay trên card.
+- **Nút điều khiển dùng được khi xem video.** Card điều khiển khung YouTube bằng
+  postMessage (không nạp script ngoài): phát/tạm dừng, bài trước/tiếp (đổi bài
+  không nạp lại khung), dừng, tự sang bài kế khi hết video. Phóng to và toàn
+  màn hình mang theo cả hàng nút.
+
+### Added
+
+- **Loa kèm video.** Loa phát tiếng, video trên card tắt tiếng và bám theo vị
+  trí loa báo về (`media_position`): loa tạm dừng thì hình dừng, lệch quá 2 giây
+  thì tua lại. Đang xem trên card mà tích loa thì loa phát bài đó; loa tua được
+  (bit SEEK) thì tua tới chỗ video đang chạy, loa không tua được thì hình tua
+  theo loa. Bỏ loa cuối thì card lấy lại tiếng.
+
 ## 0.8.7 - 2026-09-14
 
 ### Added

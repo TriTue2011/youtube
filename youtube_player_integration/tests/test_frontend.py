@@ -52,9 +52,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("const stopTargets = [...entityIds, this._config.entity]", script)
         self.assertIn('aria-label="Tìm tên bài hát hoặc ca sĩ"', script)
         self.assertIn('aria-label="Bài trước"', script)
-        self.assertIn('aria-label="Phát hoặc tạm dừng"', script)
+        self.assertIn('class="ctl main play-pause"', script)
         self.assertIn('aria-label="Bài tiếp theo"', script)
-        self.assertIn('class="now-playing"', script)
+        # One player block: now playing, the card's video, controls and volumes together.
+        self.assertIn('<section class="player" aria-label="Đang phát">', script)
+        self.assertNotIn('class="now-playing"', script)
+        self.assertNotIn("Điều khiển các thiết bị đã chọn", script)
         self.assertIn("attributes.media_title", script)
         self.assertIn("session_source", script)
         self.assertIn("session_revision", script)
@@ -74,8 +77,21 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._setHidden(entityIds, false)", script)
         self.assertIn("this._showHidden = false;", script)
         # Watch the YouTube video on the card itself.
-        self.assertIn('class="video-panel" hidden', script)
-        self.assertIn("this._watchVideo(item)", script)
+        self.assertIn('class="video-frame" hidden', script)
+        # One play button per result: speakers when chosen, otherwise the video on the card.
+        self.assertIn("this._openVideo(item, { withSpeakers: false })", script)
+        self.assertNotIn("watch-result", script)
+        # The card drives the embed over postMessage, so its buttons work for the video.
+        self.assertIn("enablejsapi", script)
+        self.assertIn("event.origin !== EMBED_ORIGIN", script)
+        self.assertIn('this._videoCommand([1, 3].includes(this._video.state) ? "pauseVideo" : "playVideo")', script)
+        self.assertIn("this._togglePlay()", script)
+        # Speakers + video: the picture is muted and follows the speaker's position;
+        # a speaker joining a video being watched seeks to it when it can.
+        self.assertIn("this._syncVideo()", script)
+        self.assertIn('this._videoCommand("seekTo", [speakerTime, true])', script)
+        self.assertIn("this._speakerJoinsVideo(entityId)", script)
+        self.assertIn('"media_player", "media_seek"', script)
         self.assertIn("https://www.youtube-nocookie.com/embed/${id}", script)
         # HA pages send "Referrer-Policy: no-referrer" -> YouTube Error 153
         # unless the iframe carries its own policy, set before src.
