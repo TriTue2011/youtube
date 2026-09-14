@@ -354,6 +354,97 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         )
         self.assertEqual(0.42, body["session"]["volume_level"])
 
+    @patch("server.search_youtube")
+    def test_sessions_per_speaker_group(self, search_youtube):
+        headers = {"Authorization": "Bearer test-integration-token"}
+
+        def results(*ids):
+            return [
+                {"source": "youtube", "kind": "video", "id": video_id,
+                 "url": f"https://www.youtube.com/watch?v={video_id}",
+                 "title": f"Bai {video_id}", "channel": "Kenh", "duration": 200,
+                 "thumbnail": "https://img.example/a.jpg"}
+                for video_id in ids
+            ]
+
+        def record(target, outputs, **extra):
+            status, body = self.request(
+                "/api/integration/session", method="POST",
+                payload={"source": "youtube", "target": target, "output_entity_ids": outputs, **extra},
+                headers=headers,
+            )
+            self.assertEqual(200, status, body)
+            return body["session"]
+
+        def sessions():
+            _, body = self.request("/api/integration/status", headers=headers)
+            return body
+
+        search_youtube.return_value = results("dQw4w9WgXcQ", "M7lc1UVf-VE", "llPioQNSBLY")
+        self.request("/api/integration/search?q=a", headers=headers)
+
+        # Every speaker its own song.
+        living = record("dQw4w9WgXcQ", ["media_player.phong_khach"], controller="ha:abc")
+        kitchen = record("M7lc1UVf-VE", ["media_player.bep"])
+        body = sessions()
+        self.assertEqual(2, len(body["sessions"]))
+        self.assertEqual(kitchen["session_id"], body["session"]["session_id"])  # v1: latest
+        self.assertNotEqual(living["session_id"], kitchen["session_id"])
+        self.assertEqual("ha:abc", living["controller"])
+        self.assertTrue(living["auto_advance"])
+
+        # Same speakers again reuse their session; next track keeps its own queue
+        # even after a different search.
+        search_youtube.return_value = results("fyzu_MvTZvg")
+        self.request("/api/integration/search?q=b", headers=headers)
+        again = record("llPioQNSBLY", ["media_player.phong_khach"], session_id=living["session_id"])
+        self.assertEqual(living["session_id"], again["session_id"])
+        self.assertEqual((2, 3), (again["queue"]["index"], len(again["queue"]["items"])))
+        self.assertEqual("Bai llPioQNSBLY", again["item"]["title"])
+
+        # Several speakers, one song: both leave their old sessions.
+        together = record("fyzu_MvTZvg", ["media_player.phong_khach", "media_player.bep"])
+        body = sessions()
+        self.assertEqual([together["session_id"]], [s["session_id"] for s in body["sessions"]])
+
+        # Taking one speaker out keeps the other on the shared song.
+        alone = record("fyzu_MvTZvg", ["media_player.bep"])
+        by_id = {s["session_id"]: s for s in sessions()["sessions"]}
+        self.assertEqual(["media_player.phong_khach"], by_id[together["session_id"]]["output_entity_ids"])
+        self.assertEqual(["media_player.bep"], by_id[alone["session_id"]]["output_entity_ids"])
+
+        # Untick a speaker: the song keeps playing on the rest, no restart.
+        _, moved = self.request(
+            "/api/integration/session/outputs", method="POST",
+            payload={"session_id": together["session_id"], "output_entity_ids": ["media_player.phong_khach", "media_player.bep"]},
+            headers=headers,
+        )
+        self.assertEqual(["media_player.phong_khach", "media_player.bep"], moved["session"]["output_entity_ids"])
+        self.assertEqual("Bai fyzu_MvTZvg", moved["session"]["item"]["title"])
+        self.assertEqual([together["session_id"]], [s["session_id"] for s in sessions()["sessions"]])
+        _, emptied = self.request(
+            "/api/integration/session/outputs", method="POST",
+            payload={"session_id": together["session_id"], "output_entity_ids": []},
+            headers=headers,
+        )
+        self.assertTrue(emptied["stopped"])
+        self.assertEqual([], sessions()["sessions"])
+        alone = record("fyzu_MvTZvg", ["media_player.bep"])
+
+        # Stop one session only.
+        record("dQw4w9WgXcQ", ["media_player.phong_khach"])
+        _, stopped = self.request(
+            "/api/integration/stop", method="POST",
+            payload={"session_id": alone["session_id"]}, headers=headers,
+        )
+        self.assertTrue(stopped["stopped"])
+        self.assertEqual([["media_player.phong_khach"]], [s["output_entity_ids"] for s in sessions()["sessions"]])
+
+        with self.assertRaises(urllib.error.HTTPError) as raised:
+            record("dQw4w9WgXcQ", ["media_player.bep"], session_id="Bad Id!")
+        self.assertEqual(400, raised.exception.code)
+        self.assertEqual({"error": "invalid_session_id"}, json.load(raised.exception))
+
     def test_integration_records_valid_direct_http_audio_session(self):
         headers = {"Authorization": "Bearer test-integration-token"}
 

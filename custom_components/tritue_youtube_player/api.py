@@ -82,29 +82,51 @@ class YouTubePlayerClient:
         *,
         media_content_type: str | None = None,
         volume_level: float | None = None,
+        session_id: str | None = None,
+        controller: str | None = None,
     ) -> dict[str, Any]:
-        """Share now-playing metadata and physical outputs with all HA clients."""
+        """Share now-playing metadata and physical outputs with all HA clients.
+
+        ``session_id`` keeps a group of speakers in its own session (and queue);
+        omitted, the server finds or creates the session for these speakers."""
+        payload: dict[str, Any] = {
+            "source": source,
+            "target": target,
+            "output_entity_ids": output_entity_ids,
+            "media_content_type": media_content_type,
+            "volume_level": volume_level,
+        }
+        if session_id:
+            payload["session_id"] = session_id
+        if controller:
+            payload["controller"] = controller
+        return await self._async_request(
+            "POST", "/api/integration/session", json=payload
+        )
+
+    async def async_set_session_outputs(
+        self, session_id: str, output_entity_ids: list[str]
+    ) -> dict[str, Any]:
+        """Change a session's speakers without restarting its song."""
         return await self._async_request(
             "POST",
-            "/api/integration/session",
-            json={
-                "source": source,
-                "target": target,
-                "output_entity_ids": output_entity_ids,
-                "media_content_type": media_content_type,
-                "volume_level": volume_level,
-            },
+            "/api/integration/session/outputs",
+            json={"session_id": session_id, "output_entity_ids": output_entity_ids},
         )
 
     async def async_stop(
-        self, *, expected_revision: int | None = None
+        self,
+        *,
+        expected_revision: int | None = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
-        """Stop the active web player."""
-        kwargs = (
-            {"json": {"expected_revision": expected_revision}}
-            if expected_revision is not None
-            else {}
-        )
+        """Stop one session (by id or revision), or everything."""
+        body: dict[str, Any] = {}
+        if expected_revision is not None:
+            body["expected_revision"] = expected_revision
+        if session_id:
+            body["session_id"] = session_id
+        kwargs = {"json": body} if body else {}
         return await self._async_request(
             "POST", "/api/integration/stop", **kwargs
         )

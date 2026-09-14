@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.9.0 - 2026-09-14
+
+Cần add-on 0.7.0 (hoặc c2a cùng đợt) để có nhiều phiên; với add-on cũ vẫn chạy
+như một phiên.
+
+### Added
+
+- **Mỗi loa một bài hoặc nhiều loa chung bài.** `play_on_players` biến các loa
+  đã chọn thành một phiên; loa rời phiên cũ.
+- **Tự chuyển bài phía Home Assistant — tắt trình duyệt vẫn chạy.** Tích hợp
+  theo dõi loa dẫn của mỗi phiên nó mở; loa hết bài (về idle/off gần cuối bài)
+  thì phát bài kế trong hàng đợi của phiên ra đúng các loa đó. Tạm dừng không
+  tính; dừng giữa bài không chuyển. Tivi mở ứng dụng YouTube gốc không báo hết
+  bài nên không tự chuyển.
+- Dịch vụ mới: `skip` (bài kế/trước của một phiên), `stop_session`,
+  `remove_players` (bỏ loa khỏi phiên, loa khác phát tiếp); `play_on_players`
+  thêm `session_id` và `join` (cho loa nghe cùng mà không phát lại loa khác).
+- Thuộc tính `sessions` trên media player ảo: mỗi phiên một mục (bài, loa, vị
+  trí hàng đợi).
+- Card: **tích loa nào thì xem loa đó** — "Đang phát", thanh tiến độ và video
+  trên card theo phiên của loa vừa tích (video đổi sang đúng bài và tua tới chỗ
+  loa đang phát). Nhóm loa khác hiện thành nút bấm để chuyển sang xem. Nút
+  "Cho … nghe cùng". ⏹ dừng các loa đang tích, loa khác phát tiếp. Nút "Nghe
+  cả trên máy này" khi xem video kèm loa.
+
+### Changed
+
+- Card không còn tự chuyển bài cho loa (tích hợp làm, tránh chuyển hai lần);
+  tích/bỏ tích loa không còn phát/tắt loa — trừ khi đang xem video một mình
+  thì tích loa để loa phát tiếng video đó.
+- Kiểm đầu-cuối trên Home Assistant thật (`tests_ha`, chạy trong CI): add-on
+  thật + tích hợp, mỗi loa một bài, tự chuyển bài, dừng giữa bài, bài kế theo
+  phiên, gộp/bỏ loa, dừng phiên.
+
 ## 0.8.8 - 2026-09-14
 
 ### Changed

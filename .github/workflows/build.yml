@@ -46,6 +46,13 @@ jobs:
       - name: Run add-on to integration contract tests
         run: python -m unittest discover -s youtube_player_integration/tests -p 'test_*.py' -v
 
+      - name: Run sessions end-to-end on Home Assistant
+        run: |
+          python -m pip install pytest-homeassistant-custom-component
+          # The integration depends on `frontend`; install the exact frontend build HA pins.
+          python -m pip install "$(python -c 'import json, os, homeassistant.components.frontend as f; print(json.load(open(os.path.join(os.path.dirname(f.__file__), "manifest.json")))["requirements"][0])')"
+          python -m pytest youtube_player_integration/tests_ha -q -c youtube_player_integration/tests_ha/pytest.ini
+
       - name: Check Python and JavaScript syntax
         run: |
           python -m py_compile youtube_player/app/server.py youtube_player/app/session.py

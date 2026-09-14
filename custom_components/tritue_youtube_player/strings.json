@@ -54,22 +54,138 @@
   },
   "entity": {
     "media_player": {
-      "player": {"name": "Player"}
+      "player": {
+        "name": "Player"
+      }
     },
     "sensor": {
-      "history_count": {"name": "History count"}
+      "history_count": {
+        "name": "History count"
+      }
     }
   },
   "exceptions": {
-    "invalid_target": {"message": "The YouTube URL or identifier is not supported."},
-    "communication_error": {"message": "The player server did not accept the command."},
-    "search_error": {"message": "YouTube Music search is temporarily unavailable."},
-    "entry_unavailable": {"message": "The selected TriTue player server is not loaded."},
-    "invalid_target_entities": {"message": "Select between 1 and 16 physical media players."},
-    "playback_error": {"message": "The source could not prepare this item for playback."},
-    "target_unavailable": {"message": "The selected playback entity is unavailable. Open Configure and choose another media_player."},
-    "invalid_target_entity": {"message": "The integration's virtual player cannot be selected as its own output."},
-    "cast_playlist_requires_video": {"message": "Google Cast needs a playlist URL containing both v=VIDEO_ID and list=PLAYLIST_ID."},
-    "target_source_unsupported": {"message": "This device cannot play a YouTube page as audio. Choose an Android TV/display Cast entity, or use a direct audio source for speakers."}
+    "invalid_target": {
+      "message": "The YouTube URL or identifier is not supported."
+    },
+    "communication_error": {
+      "message": "The player server did not accept the command."
+    },
+    "search_error": {
+      "message": "YouTube Music search is temporarily unavailable."
+    },
+    "entry_unavailable": {
+      "message": "The selected TriTue player server is not loaded."
+    },
+    "invalid_target_entities": {
+      "message": "Select between 1 and 16 physical media players."
+    },
+    "playback_error": {
+      "message": "The source could not prepare this item for playback."
+    },
+    "target_unavailable": {
+      "message": "The selected playback entity is unavailable. Open Configure and choose another media_player."
+    },
+    "invalid_target_entity": {
+      "message": "The integration's virtual player cannot be selected as its own output."
+    },
+    "cast_playlist_requires_video": {
+      "message": "Google Cast needs a playlist URL containing both v=VIDEO_ID and list=PLAYLIST_ID."
+    },
+    "target_source_unsupported": {
+      "message": "This device cannot play a YouTube page as audio. Choose an Android TV/display Cast entity, or use a direct audio source for speakers."
+    },
+    "session_not_found": {
+      "message": "That playback session has already ended."
+    },
+    "queue_end": {
+      "message": "There is no next or previous song in this session's queue."
+    }
+  },
+  "services": {
+    "play_on_players": {
+      "name": "Play on selected media players",
+      "description": "Resolve YouTube, public Zing or direct HTTP audio and play it on one or more media players as one session.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "source": {
+          "name": "Source",
+          "description": "youtube, zing or http."
+        },
+        "target": {
+          "name": "Media target",
+          "description": "YouTube video ID or URL, or a Zing song URL returned by search."
+        },
+        "entity_id": {
+          "name": "Speakers and displays",
+          "description": "Physical media players that receive the media."
+        },
+        "media_content_type": {
+          "name": "HTTP media type",
+          "description": "Optional MIME type for direct HTTP audio."
+        },
+        "volume_level": {
+          "name": "Volume",
+          "description": "Optional volume applied before playback."
+        },
+        "session_id": {
+          "name": "Session",
+          "description": "Keep playing in this session (and its queue)."
+        },
+        "join": {
+          "name": "Join session",
+          "description": "Add these players to the session without restarting its other players."
+        }
+      }
+    },
+    "skip": {
+      "name": "Next or previous song",
+      "description": "Play the next or previous song of a session's queue on its speakers.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "session_id": {
+          "name": "Session",
+          "description": "Session to skip; the latest one when empty."
+        },
+        "step": {
+          "name": "Step",
+          "description": "1 = next song, -1 = previous song."
+        }
+      }
+    },
+    "stop_session": {
+      "name": "Stop session",
+      "description": "Stop a session's speakers and end the session.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "session_id": {
+          "name": "Session",
+          "description": "Session to stop; everything when empty."
+        }
+      }
+    },
+    "remove_players": {
+      "name": "Remove players from sessions",
+      "description": "Stop these players and take them out of their sessions; other players keep playing.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "entity_id": {
+          "name": "Players",
+          "description": "Media players to remove."
+        }
+      }
+    }
   }
 }

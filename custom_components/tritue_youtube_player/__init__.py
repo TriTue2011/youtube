@@ -5,6 +5,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .advance import SessionAutoAdvance
 from .api import YouTubePlayerClient
 from .const import CONF_TOKEN, DOMAIN
 from .coordinator import YouTubePlayerConfigEntry, YouTubePlayerCoordinator
@@ -34,6 +35,7 @@ async def async_setup_entry(
     coordinator = YouTubePlayerCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    entry.async_on_unload(SessionAutoAdvance(hass, entry).async_start())
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

@@ -43,7 +43,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.6.4"
+APP_VERSION = "0.7.0"
 API_VERSION = "1"
 
 
@@ -174,6 +174,10 @@ class PlayerServer(ThreadingHTTPServer):
         with self.player_lock:
             return self.playback_session.snapshot()
 
+    def get_sessions(self):
+        with self.player_lock:
+            return self.playback_session.snapshot(), self.playback_session.snapshots()
+
     def play(self, target, *, raw_target=""):
         with self.player_lock:
             session = self.playback_session.start(
@@ -190,6 +194,9 @@ class PlayerServer(ThreadingHTTPServer):
         output_entity_ids,
         media_content_type="",
         volume_level=None,
+        session_id=None,
+        controller="",
+        auto_advance=True,
     ):
         if source == "youtube":
             fallback = normalize_target(target)
@@ -208,13 +215,20 @@ class PlayerServer(ThreadingHTTPServer):
                 output_entity_ids=output_entity_ids,
                 media_content_type=media_content_type,
                 volume_level=volume_level,
+                session_id=session_id,
+                controller=controller,
+                auto_advance=auto_advance,
             )
         self.add_history(session["item"])
         return session
 
-    def stop(self, expected_revision=None):
+    def stop(self, expected_revision=None, session_id=None):
         with self.player_lock:
-            return self.playback_session.stop(expected_revision)
+            return self.playback_session.stop(expected_revision, session_id)
+
+    def set_session_outputs(self, session_id, output_entity_ids):
+        with self.player_lock:
+            return self.playback_session.set_outputs(session_id, output_entity_ids)
 
     def search(self, source, query, limit):
         """Run one metadata search at a time to bound child processes."""
@@ -360,6 +374,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                         "play",
                         "search",
                         "session",
+                        "sessions",
                         "status",
                         "stop",
                         "youtube_stream",
@@ -401,7 +416,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/integration/status":
-            session = self.server.get_session()
+            session, sessions = self.server.get_sessions()
             self.send_json(
                 200,
                 {
@@ -411,6 +426,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     "state": session["state"],
                     "item": session["item"],
                     "session": session,
+                    "sessions": sessions,
                     "history_count": len(self.server.load_history()),
                 },
             )
@@ -489,16 +505,20 @@ class PlayerHandler(BaseHTTPRequestHandler):
         if path == "/api/integration/stop":
             try:
                 expected_revision = None
+                session_id = None
                 if int(self.headers.get("Content-Length", "0")):
                     payload = self.read_json_body(maximum=256)
                     expected_revision = payload.get("expected_revision")
-                    if (
+                    session_id = payload.get("session_id") or None
+                    if expected_revision is not None and (
                         isinstance(expected_revision, bool)
                         or not isinstance(expected_revision, int)
                         or expected_revision < 0
                     ):
                         raise ValueError("invalid_session_revision")
-                result = self.server.stop(expected_revision)
+                    if expected_revision is None and session_id is None:
+                        raise ValueError("invalid_session_revision")
+                result = self.server.stop(expected_revision, session_id)
             except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
                 self.send_json(400, {"error": "invalid_session_revision"})
                 return
@@ -513,6 +533,23 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if path == "/api/integration/session/outputs":
+            try:
+                payload = self.read_json_body(maximum=4096)
+                result = self.server.set_session_outputs(
+                    payload.get("session_id"), payload.get("output_entity_ids")
+                )
+            except ValueError as error:
+                error_code = str(error)
+                if error_code not in {"invalid_session_id", "invalid_output_entity_ids"}:
+                    error_code = "invalid_request"
+                self.send_json(400, {"error": error_code})
+                return
+            except (AttributeError, json.JSONDecodeError, UnicodeDecodeError):
+                self.send_json(400, {"error": "invalid_request"})
+                return
+            self.send_json(200, {"success": True, **result})
+            return
         if path == "/api/integration/session":
             try:
                 payload = self.read_json_body(maximum=8192)
@@ -523,6 +560,9 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     output_entity_ids=payload.get("output_entity_ids"),
                     media_content_type=payload.get("media_content_type") or "",
                     volume_level=payload.get("volume_level"),
+                    session_id=payload.get("session_id") or None,
+                    controller=payload.get("controller") or "",
+                    auto_advance=payload.get("auto_advance") is not False,
                 )
             except ValueError as error:
                 error_code = str(error)
@@ -532,6 +572,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 if error_code not in {
                     "invalid_http_audio_target",
                     "invalid_output_entity_ids",
+                    "invalid_session_id",
                     "invalid_volume_level",
                     "invalid_youtube_target",
                     "unsupported_session_source",

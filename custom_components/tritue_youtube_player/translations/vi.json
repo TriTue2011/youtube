@@ -54,22 +54,138 @@
   },
   "entity": {
     "media_player": {
-      "player": {"name": "Trình phát"}
+      "player": {
+        "name": "Trình phát"
+      }
     },
     "sensor": {
-      "history_count": {"name": "Số mục lịch sử"}
+      "history_count": {
+        "name": "Số mục lịch sử"
+      }
     }
   },
   "exceptions": {
-    "invalid_target": {"message": "URL hoặc mã YouTube không được hỗ trợ."},
-    "communication_error": {"message": "Máy chủ player không nhận lệnh."},
-    "search_error": {"message": "Tìm kiếm YouTube Music đang tạm thời không hoạt động."},
-    "entry_unavailable": {"message": "Máy chủ TriTue đã chọn chưa được tải."},
-    "invalid_target_entities": {"message": "Hãy chọn từ 1 đến 16 media player vật lý."},
-    "playback_error": {"message": "Nguồn nhạc không thể chuẩn bị mục này để phát."},
-    "target_unavailable": {"message": "Entity phát đã chọn không khả dụng. Hãy mở Cấu hình và chọn media_player khác."},
-    "invalid_target_entity": {"message": "Không thể chọn chính media player ảo của integration làm đầu ra."},
-    "cast_playlist_requires_video": {"message": "Google Cast cần URL playlist chứa cả v=VIDEO_ID và list=PLAYLIST_ID."},
-    "target_source_unsupported": {"message": "Thiết bị này không thể phát trang YouTube như luồng âm thanh. Hãy chọn Android TV/Cast có màn hình, hoặc dùng nguồn audio trực tiếp cho loa."}
+    "invalid_target": {
+      "message": "URL hoặc mã YouTube không được hỗ trợ."
+    },
+    "communication_error": {
+      "message": "Máy chủ player không nhận lệnh."
+    },
+    "search_error": {
+      "message": "Tìm kiếm YouTube Music đang tạm thời không hoạt động."
+    },
+    "entry_unavailable": {
+      "message": "Máy chủ TriTue đã chọn chưa được tải."
+    },
+    "invalid_target_entities": {
+      "message": "Hãy chọn từ 1 đến 16 media player vật lý."
+    },
+    "playback_error": {
+      "message": "Nguồn nhạc không thể chuẩn bị mục này để phát."
+    },
+    "target_unavailable": {
+      "message": "Entity phát đã chọn không khả dụng. Hãy mở Cấu hình và chọn media_player khác."
+    },
+    "invalid_target_entity": {
+      "message": "Không thể chọn chính media player ảo của integration làm đầu ra."
+    },
+    "cast_playlist_requires_video": {
+      "message": "Google Cast cần URL playlist chứa cả v=VIDEO_ID và list=PLAYLIST_ID."
+    },
+    "target_source_unsupported": {
+      "message": "Thiết bị này không thể phát trang YouTube như luồng âm thanh. Hãy chọn Android TV/Cast có màn hình, hoặc dùng nguồn audio trực tiếp cho loa."
+    },
+    "session_not_found": {
+      "message": "Phiên phát đó đã kết thúc."
+    },
+    "queue_end": {
+      "message": "Hàng đợi của phiên này không còn bài kế tiếp hoặc bài trước."
+    }
+  },
+  "services": {
+    "play_on_players": {
+      "name": "Phát ra loa đã chọn",
+      "description": "Phát YouTube, Zing công khai hoặc link audio ra một hay nhiều loa thành một phiên.",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "source": {
+          "name": "Nguồn",
+          "description": "youtube, zing hoặc http."
+        },
+        "target": {
+          "name": "Bài",
+          "description": "Mã/link YouTube hoặc link Zing lấy từ kết quả tìm."
+        },
+        "entity_id": {
+          "name": "Loa và màn hình",
+          "description": "Các media player nhận bài."
+        },
+        "media_content_type": {
+          "name": "Kiểu audio",
+          "description": "MIME của link audio trực tiếp (tuỳ chọn)."
+        },
+        "volume_level": {
+          "name": "Âm lượng",
+          "description": "Đặt âm lượng trước khi phát (tuỳ chọn)."
+        },
+        "session_id": {
+          "name": "Phiên",
+          "description": "Phát tiếp trong phiên này (giữ hàng đợi)."
+        },
+        "join": {
+          "name": "Nhập phiên",
+          "description": "Thêm loa vào phiên, không phát lại cho các loa đang nghe."
+        }
+      }
+    },
+    "skip": {
+      "name": "Bài kế / bài trước",
+      "description": "Phát bài kế hoặc bài trước trong hàng đợi của phiên ra đúng các loa của phiên.",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "session_id": {
+          "name": "Phiên",
+          "description": "Để trống = phiên mới nhất."
+        },
+        "step": {
+          "name": "Bước",
+          "description": "1 = bài kế, -1 = bài trước."
+        }
+      }
+    },
+    "stop_session": {
+      "name": "Dừng phiên",
+      "description": "Dừng các loa của phiên và kết thúc phiên.",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "session_id": {
+          "name": "Phiên",
+          "description": "Để trống = dừng tất cả."
+        }
+      }
+    },
+    "remove_players": {
+      "name": "Bỏ loa khỏi phiên",
+      "description": "Dừng các loa này và bỏ khỏi phiên; loa khác phát tiếp.",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "entity_id": {
+          "name": "Loa",
+          "description": "Media player cần bỏ."
+        }
+      }
+    }
   }
 }

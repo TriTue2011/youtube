@@ -27,6 +27,7 @@ from .api import InvalidTargetError, YouTubePlayerApiError
 from .const import CONF_TARGET_ENTITY_ID, DOMAIN
 from .coordinator import YouTubePlayerConfigEntry
 from .entity import YouTubePlayerEntity
+from .sessions import compact_sessions
 from .playback import (
     UnsupportedCastMediaError,
     UnsupportedTargetMediaError,
@@ -115,6 +116,8 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
             "queue_size": len(queue.get("items") or []),
             "session_updated_at": self.session.get("updated_at"),
             "session_supported_actions": self.session.get("supported_actions") or [],
+            # One entry per group of speakers playing (no queues, to stay small).
+            "sessions": compact_sessions(self.coordinator.data),
         }
 
     @property

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0 - 2026-09-14
+
+### Added
+
+- **Nhiều phiên phát — mỗi loa một bài, hoặc nhiều loa chung một bài.** Máy
+  phát giữ một phiên cho mỗi nhóm loa; một loa chỉ thuộc một phiên (phát bài
+  khác ra loa đó thì nó rời phiên cũ, phiên hết loa thì kết thúc). Mỗi phiên
+  có hàng đợi riêng: bài kế/trước giữ đúng danh sách của phiên dù đã tìm bài
+  khác. Giao diện web add-on vẫn dùng phiên riêng `web`.
+- Integration API (tương thích v1): `/status` trả thêm `sessions`;
+  `/session` nhận `session_id`, `controller`, `auto_advance`; `/stop` nhận
+  `session_id`; mới `/session/outputs` đổi loa của một phiên mà không phát
+  lại bài. Client cũ vẫn thấy `session` = phiên thay đổi gần nhất.
+
 ## 0.6.4 - 2026-09-14
 
 ### Added

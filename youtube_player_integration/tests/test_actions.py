@@ -45,6 +45,25 @@ class FakeServices:
 
 
 class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    async def _record(source, target, outputs, **kwargs):
+        """Echo the player server: the session reserved for these speakers."""
+        item = (
+            {"source": "youtube", "kind": "video", "id": "dQw4w9WgXcQ"}
+            if source == "youtube"
+            else {"source": source, "id": target}
+        )
+        return {
+            "success": True,
+            "session": {
+                "state": "playing",
+                "session_id": kwargs.get("session_id") or "s1",
+                "revision": 7,
+                "output_entity_ids": list(outputs),
+                "item": item,
+            },
+        }
+
     def setUp(self):
         self.actions = load_actions_module()
         self.hass = types.SimpleNamespace(services=FakeServices())
@@ -65,9 +84,7 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                     "media_content_type": "audio/mpeg",
                 }
             ),
-            async_update_session=AsyncMock(
-                return_value={"success": True, "session": {"state": "playing"}}
-            ),
+            async_update_session=AsyncMock(side_effect=self._record),
             async_stop=AsyncMock(return_value={"success": True, "state": "idle"}),
         )
 
@@ -121,13 +138,19 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         self.client.async_create_stream.assert_awaited_once_with(
             "youtube", "dQw4w9WgXcQ"
         )
-        self.client.async_update_session.assert_awaited_once_with(
-            "youtube",
-            "dQw4w9WgXcQ",
-            ["media_player.cast", "media_player.speaker"],
-            media_content_type="audio/mpeg",
-            volume_level=0.35,
+        # Reserve the session (moves these speakers out of other sessions), then
+        # record the stream type in the same session.
+        self.assertEqual(
+            [
+                (("youtube", "dQw4w9WgXcQ", ["media_player.cast", "media_player.speaker"]),
+                 {"media_content_type": None, "volume_level": 0.35, "session_id": None, "controller": None}),
+                (("youtube", "dQw4w9WgXcQ", ["media_player.cast", "media_player.speaker"]),
+                 {"media_content_type": "audio/mpeg", "volume_level": 0.35, "session_id": "s1", "controller": None}),
+            ],
+            [(c.args, c.kwargs) for c in self.client.async_update_session.await_args_list],
         )
+        self.assertEqual("s1", result["session_id"])
+        self.client.async_play.assert_not_awaited()
 
     async def test_youtube_launches_native_app_on_lg_webos_tv(self):
         result = await self.actions.async_play_on_players(
@@ -165,7 +188,7 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             target_supported_features={"media_player.esp32": 516},
         )
 
-        self.client.async_play.assert_awaited_once_with("dQw4w9WgXcQ")
+        self.client.async_play.assert_not_awaited()
         self.client.async_create_stream.assert_awaited_once_with(
             "youtube", "dQw4w9WgXcQ"
         )
@@ -198,12 +221,9 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             self.hass.services.calls[0]["target"],
         )
         self.assertEqual("zing", result["source"])
-        self.client.async_update_session.assert_awaited_once_with(
-            "zing",
-            target,
-            ["media_player.living_room", "media_player.kitchen"],
-            media_content_type="audio/mpeg",
-            volume_level=None,
+        self.assertEqual(
+            {"media_content_type": "audio/mpeg", "volume_level": None, "session_id": "s1", "controller": None},
+            self.client.async_update_session.await_args_list[-1].kwargs,
         )
 
     async def test_http_audio_dispatches_and_records_session(self):
@@ -234,6 +254,8 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             ["media_player.esp32"],
             media_content_type="audio/flac",
             volume_level=None,
+            session_id=None,
+            controller=None,
         )
         self.assertEqual("http", result["source"])
 
@@ -268,7 +290,7 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                 target_supported_features={"media_player.screenless": 0},
             )
 
-        self.client.async_play.assert_not_awaited()
+        self.client.async_update_session.assert_not_awaited()
         self.client.async_create_stream.assert_not_awaited()
         self.assertEqual([], self.hass.services.calls)
 
@@ -289,8 +311,9 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                 target_supported_features={"media_player.cast": 512},
             )
 
-        self.client.async_stop.assert_awaited_once_with(expected_revision=1)
-        self.client.async_update_session.assert_not_awaited()
+        # Nothing played: the reserved session is stopped again.
+        self.client.async_stop.assert_awaited_once_with(session_id="s1")
+        self.client.async_update_session.assert_awaited_once()
 
     async def test_partial_youtube_dispatch_keeps_successful_output_session(self):
         self.hass.services.async_call = AsyncMock(
@@ -320,13 +343,30 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, result["target_count"])
         self.assertEqual(["media_player.second"], result["skipped_targets"])
         self.client.async_stop.assert_not_awaited()
-        self.client.async_update_session.assert_awaited_once_with(
-            "youtube",
-            "dQw4w9WgXcQ",
-            ["media_player.first"],
-            media_content_type=None,
-            volume_level=None,
+        final = self.client.async_update_session.await_args_list[-1]
+        self.assertEqual(["media_player.first"], final.args[2])
+        self.assertEqual("s1", final.kwargs["session_id"])
+
+    async def test_joining_speaker_gets_the_song_others_keep_playing(self):
+        result = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="zing",
+            target="https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html",
+            entity_ids=["media_player.kitchen"],
+            target_platforms={},
+            session_id="s9",
+            controller="ha:abc",
+            join_entity_ids=["media_player.living_room"],
         )
+
+        self.assertEqual(
+            {"entity_id": ["media_player.kitchen"]}, self.hass.services.calls[0]["target"]
+        )
+        first = self.client.async_update_session.await_args_list[0]
+        self.assertEqual(["media_player.living_room", "media_player.kitchen"], first.args[2])
+        self.assertEqual(("s9", "ha:abc"), (first.kwargs["session_id"], first.kwargs["controller"]))
+        self.assertEqual("s9", result["session_id"])
 
 
 if __name__ == "__main__":

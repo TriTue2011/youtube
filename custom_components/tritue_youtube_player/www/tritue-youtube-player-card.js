@@ -8,20 +8,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._source = "youtube";
     this._selectedPlayers = new Set();
     this._results = [];
-    this._currentItem = null;
     this._rendered = false;
     this._defaultsApplied = false;
     this._capabilities = new Map();
     this._capabilityEntryId = "";
     this._capabilitiesLoading = false;
     this._sharedSessionMarker = "";
+    // Queue of the video playing alone on the card. Speakers use the server
+    // session's own queue, and the integration advances it (no browser needed).
     this._queue = [];
     this._queueIndex = -1;
     this._volumeRowsSig = "";
     this._activeVolumeEntity = null;
-    this._autoAdvance = false;
-    this._trackPlaying = false;
     this._manualSelection = false;
+    // Ticking a speaker focuses it: "Đang phát", progress and the card's video
+    // follow the session of the speaker ticked last.
+    this._lastTicked = "";
+    this._progressTimer = null;
     // Players hidden from this card. Stored by the integration in HA storage so
     // the list survives restarts and card reloads; restorable from the card.
     this._hiddenPlayers = new Set();
@@ -40,7 +43,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _idleVideo() {
-    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false };
+    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, soundHere: true };
   }
 
   setConfig(config) {
@@ -48,7 +51,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       throw new Error("TriTue card requires a media_player entity");
     }
     this._config = { title: "TriTue Music", ...config };
-    this._restoreNowPlaying();
   }
 
   set hass(hass) {
@@ -63,7 +65,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._updateSourceButtons();
     this._loadCapabilities();
     this._loadHiddenPlayers();
-    this._checkAutoAdvance();
     this._syncVideo();
   }
 
@@ -71,8 +72,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return 8;
   }
 
+  connectedCallback() {
+    if (!this._progressTimer) this._progressTimer = setInterval(() => this._updateProgress(), 1000);
+  }
+
   disconnectedCallback() {
     // Leaving the view unloads the iframe anyway; drop its listener and timers with it.
+    clearInterval(this._progressTimer);
+    this._progressTimer = null;
     this._closeVideo();
   }
 
@@ -261,6 +268,28 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .ctl.stop { color: var(--error-color); }
         .view-group .ctl { width: 32px; height: 32px; color: var(--secondary-text-color); --mdc-icon-size: 19px; }
         input[type="range"] { width: 100%; accent-color: var(--primary-color); }
+        .progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-top: 6px; font-size: .74rem; font-variant-numeric: tabular-nums; color: var(--secondary-text-color); }
+        .progress .bar { height: 4px; overflow: hidden; border-radius: 2px; background: var(--divider-color); }
+        .progress .fill { width: 0; height: 100%; background: var(--primary-color); transition: width .9s linear; }
+        .join-session { border-style: dashed; color: var(--primary-color); }
+        .others { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .others:empty { display: none; }
+        .other-session {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          max-width: 100%;
+          padding: 4px 10px 4px 4px;
+          border: 1px solid var(--divider-color);
+          border-radius: 999px;
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color);
+          font-size: .8rem;
+          --mdc-icon-size: 16px;
+        }
+        .other-session img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+        .other-session span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .other-session:hover { border-color: var(--primary-color); }
         .speaker-volumes { display: grid; gap: 2px; margin-top: 4px; }
         .speaker-volumes:empty { display: none; }
         .svol-row { display: grid; grid-template-columns: minmax(70px, 30%) 1fr 36px; align-items: center; gap: 8px; }
@@ -347,6 +376,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                 <div class="now-meta">Chọn một bài trong kết quả để bắt đầu.</div>
               </div>
             </div>
+            <div class="progress" hidden>
+              <span class="elapsed">0:00</span>
+              <div class="bar"><div class="fill"></div></div>
+              <span class="total">0:00</span>
+            </div>
             <div class="control-bar">
               <div class="transport-group" role="group" aria-label="Điều khiển phát">
                 <button class="ctl previous" type="button" aria-label="Bài trước" title="Bài trước"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
@@ -356,12 +390,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               </div>
               <div class="view-group">
                 <button class="ctl watch" type="button" aria-label="Xem video trên thẻ" title="Xem video trên thẻ" hidden><ha-icon icon="mdi:television-play"></ha-icon></button>
+                <button class="ctl video-sound" type="button" aria-label="Nghe cả trên máy này" title="Nghe cả trên máy này" hidden><ha-icon icon="mdi:volume-off"></ha-icon></button>
                 <button class="ctl video-expand" type="button" aria-label="Phóng to video" title="Phóng to" hidden><ha-icon icon="mdi:arrow-expand"></ha-icon></button>
                 <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
                 <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
               </div>
             </div>
             <div class="speaker-volumes"></div>
+            <div class="others" aria-label="Nhóm loa khác đang phát"></div>
           </section>
 
           <div class="source-switch" role="group" aria-label="Nguồn nhạc">
@@ -413,6 +449,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".next").addEventListener("click", () => this._skip(1));
     this.shadowRoot.querySelector(".stop").addEventListener("click", () => this._stop());
     this.shadowRoot.querySelector(".watch").addEventListener("click", () => this._watchCurrent());
+    this.shadowRoot.querySelector(".video-sound").addEventListener("click", () => this._toggleSoundHere());
     this.shadowRoot.querySelector(".video-expand").addEventListener("click", () => this._toggleVideoExpanded());
     this.shadowRoot.querySelector(".video-fullscreen").addEventListener("click", () => this._videoFullscreen());
     this.shadowRoot.querySelector(".video-close").addEventListener("click", () => this._closeVideo());
@@ -488,6 +525,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._manualSelection = true;
         if (checkbox.checked) {
           this._selectedPlayers.add(entityId);
+          this._lastTicked = entityId;
           this._onSpeakerAdded(entityId);
         } else {
           this._selectedPlayers.delete(entityId);
@@ -671,7 +709,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       media_stop: 4096,
       volume_set: 4,
     };
-    return [...this._selectedPlayers].filter((entityId) => {
+    // Nothing selected: the buttons act on the latest session's speakers.
+    const candidates = this._selectedPlayers.size
+      ? [...this._selectedPlayers]
+      : this._focusedSession()?.output_entity_ids || [];
+    return candidates.filter((entityId) => {
       const state = this._hass?.states?.[entityId];
       if (!state || state.state === "unavailable") return false;
       if (service === "media_play_pause") {
@@ -693,32 +735,88 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return source === "youtube" && VIDEO_ID.test(String(item?.id || ""));
   }
 
+  _sessions() {
+    const value = this._hass?.states?.[this._config.entity]?.attributes?.sessions;
+    return Array.isArray(value) ? value.filter((session) => session && session.output_entity_ids?.length) : [];
+  }
+
+  /** The session the card shows and controls: the one of the speaker ticked last,
+   * else any ticked speaker's session, else (nothing ticked) the latest. */
+  _focusedSession() {
+    const sessions = this._sessions();
+    if (this._lastTicked && this._selectedPlayers.has(this._lastTicked)) {
+      const own = sessions.find((session) => session.output_entity_ids.includes(this._lastTicked));
+      if (own) return own;
+    }
+    return sessions.find((session) => session.output_entity_ids.some((id) => this._selectedPlayers.has(id)))
+      || (this._selectedPlayers.size ? null : sessions[0] || null);
+  }
+
+  /** Position of a speaker now, from HA's last report plus the time since. */
+  _speakerPosition(entityId) {
+    const state = this._hass?.states?.[entityId];
+    const position = Number(state?.attributes?.media_position);
+    if (!state || !Number.isFinite(position)) return null;
+    if (state.state !== "playing") return position;
+    const updatedAt = Date.parse(state.attributes.media_position_updated_at || "");
+    return position + (Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 1000) : 0);
+  }
+
+  _updateProgress() {
+    if (!this.shadowRoot?.querySelector(".progress") || !this._hass) return;
+    const bar = this.shadowRoot.querySelector(".progress");
+    let position = null;
+    let duration = 0;
+    if (this._video.open && !this._video.withSpeakers) {
+      position = this._video.state === -1 ? null : this._videoTimeNow();
+      duration = Number(this._video.item?.duration || 0);
+    } else {
+      const session = this._focusedSession();
+      const lead = session?.output_entity_ids.find((id) => this._speakerPosition(id) !== null);
+      if (session && lead) {
+        position = this._speakerPosition(lead);
+        duration = Number(this._hass.states[lead].attributes.media_duration || session.duration || 0);
+      }
+    }
+    bar.hidden = position === null;
+    if (position === null) return;
+    const clamped = duration ? Math.min(position, duration) : position;
+    bar.querySelector(".elapsed").textContent = this._formatDuration(clamped) || "0:00";
+    bar.querySelector(".total").textContent = this._formatDuration(duration) || "–";
+    bar.querySelector(".fill").style.width = duration ? `${Math.round((clamped / duration) * 1000) / 10}%` : "0";
+  }
+
   _activeSpeakers() {
-    return [...this._selectedPlayers].filter((entityId) =>
+    const outputs = this._focusedSession()?.output_entity_ids || [...this._selectedPlayers];
+    return outputs.filter((entityId) =>
       ["playing", "paused", "buffering"].includes(this._hass?.states?.[entityId]?.state));
   }
 
   _updateTransportState() {
     if (!this.shadowRoot || !this._hass) return;
-    // The video drives the buttons when it plays alone on the card; otherwise the speakers do.
     const videoAlone = this._video.open && !this._video.withSpeakers;
+    const session = this._focusedSession();
+    const outputs = session?.output_entity_ids || [...this._selectedPlayers];
     const playing = videoAlone
       ? [1, 3].includes(this._video.state)
-      : [...this._selectedPlayers].some((entityId) => this._hass.states[entityId]?.state === "playing");
+      : outputs.some((entityId) => this._hass.states[entityId]?.state === "playing");
     const playPause = this.shadowRoot.querySelector(".play-pause");
     playPause.querySelector("ha-icon").setAttribute("icon", playing ? "mdi:pause" : "mdi:play");
     playPause.setAttribute("aria-label", playing ? "Tạm dừng" : "Phát");
     playPause.title = playing ? "Tạm dừng" : "Phát";
     playPause.disabled = !this._video.open && !this._targetsForService("media_play_pause").length;
-    const canPlay = (step) => {
-      const target = this._queueIndex + step;
-      if (this._queueIndex < 0 || target < 0 || target >= this._queue.length) return false;
-      return this._playTargets().length > 0 || this._isVideoItem(this._queue[target]);
+    const canSkip = (step) => {
+      if (videoAlone) {
+        const target = this._queueIndex + step;
+        return this._queueIndex >= 0 && target >= 0 && target < this._queue.length && this._isVideoItem(this._queue[target]);
+      }
+      if (!session) return false;
+      const target = Number(session.queue_index) + step;
+      return Number(session.queue_index) >= 0 && target >= 0 && target < Number(session.queue_size || 0);
     };
-    this.shadowRoot.querySelector(".previous").disabled = !canPlay(-1);
-    this.shadowRoot.querySelector(".next").disabled = !canPlay(1);
-    this.shadowRoot.querySelector(".stop").disabled =
-      !this._selectedPlayers.size && !this._currentItem && !this._video.open;
+    this.shadowRoot.querySelector(".previous").disabled = !canSkip(-1);
+    this.shadowRoot.querySelector(".next").disabled = !canSkip(1);
+    this.shadowRoot.querySelector(".stop").disabled = !session && !this._video.open && !this._selectedPlayers.size;
     this._renderSpeakerVolumes();
   }
 
@@ -798,48 +896,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
-  _storageKey() {
-    return `tritue-player:${this._config?.entity || "default"}:now-playing`;
-  }
-
-  _restoreNowPlaying() {
-    try {
-      const saved = globalThis.localStorage?.getItem(this._storageKey());
-      this._currentItem = saved ? JSON.parse(saved) : null;
-    } catch (_error) {
-      this._currentItem = null;
-    }
-  }
-
-  _rememberNowPlaying(item, entityIds, source = this._source) {
-    this._currentItem = {
-      source,
-      id: String(item.id || ""),
-      target: String(item.url || item.id || ""),
-      media_content_type: item.media_content_type,
-      title: String(item.title || item.id || "Không rõ tên"),
-      channel: String(item.channel || ""),
-      thumbnail: /^https?:\/\//.test(item.thumbnail || "") ? item.thumbnail : "",
-      duration: Number(item.duration || 0),
-      entity_ids: entityIds,
-      started_at: Date.now(),
-    };
-    try {
-      globalThis.localStorage?.setItem(this._storageKey(), JSON.stringify(this._currentItem));
-    } catch (_error) {
-      // The card still works when browser storage is disabled.
-    }
-  }
-
-  _clearRememberedNowPlaying() {
-    this._currentItem = null;
-    try {
-      globalThis.localStorage?.removeItem(this._storageKey());
-    } catch (_error) {
-      // Ignore unavailable browser storage.
-    }
-  }
-
   _syncNowPlaying() {
     if (!this.shadowRoot || !this._hass) return;
     const names = (entityIds) => entityIds
@@ -848,83 +904,132 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     const titleNode = this.shadowRoot.querySelector(".now-title");
     const metaNode = this.shadowRoot.querySelector(".now-meta");
+    const session = this._focusedSession();
     this.shadowRoot.querySelector(".player").classList.toggle("video-on", video.open);
     this.shadowRoot.querySelector(".video-frame").hidden = !video.open;
     for (const selector of [".video-expand", ".video-fullscreen", ".video-close"]) {
       this.shadowRoot.querySelector(selector).hidden = !video.open;
     }
+    const sound = this.shadowRoot.querySelector(".video-sound");
+    sound.hidden = !(video.open && video.withSpeakers);
+    sound.querySelector("ha-icon").setAttribute("icon", video.soundHere ? "mdi:volume-high" : "mdi:volume-off");
+    const soundLabel = video.soundHere ? "Tắt tiếng trên máy này (chỉ nghe loa)" : "Nghe cả trên máy này";
+    sound.setAttribute("aria-label", soundLabel);
+    sound.title = soundLabel;
+    this._renderOtherSessions(session);
+
+    if (video.open && video.withSpeakers && session && session.id !== video.item?.id) {
+      // Ticked another speaker: the picture switches to that speaker's song and
+      // seeks to where that speaker is.
+      if (session.source === "youtube" && VIDEO_ID.test(String(session.id || ""))) {
+        this._lastVideoSeekAt = 0;
+        this._openVideo(
+          { id: session.id, url: session.url, title: session.title, channel: session.artist, duration: session.duration },
+          { withSpeakers: true },
+        );
+        return;
+      }
+      this._closeVideo();
+      this._setStatus("Loa này đang phát Zing/link audio — không có video.");
+      return;
+    }
     if (video.open) {
       // The video replaces the cover; its caption is the now-playing line.
-      const speakers = video.withSpeakers
-        ? names(this._activeSpeakers().length ? this._activeSpeakers() : [...this._selectedPlayers])
-        : [];
+      const speakers = video.withSpeakers ? names(session?.output_entity_ids || this._activeSpeakers()) : [];
       titleNode.textContent = video.item.title;
       metaNode.textContent = [
         video.item.channel,
         this._formatDuration(video.item.duration),
-        speakers.length ? `Tiếng ra ${speakers.join(", ")}` : "Xem trên thẻ",
+        speakers.length ? `Tiếng ra ${speakers.join(", ")}${video.soundHere ? " và máy này" : ""}` : "Xem trên thẻ",
       ].filter(Boolean).join(" · ");
       this._nowWatchItem = null;
       this.shadowRoot.querySelector(".watch").hidden = true;
       return;
     }
 
-    const selected = [...this._selectedPlayers]
-      .map((entityId) => [entityId, this._hass.states[entityId]])
-      .filter(([, state]) => state);
-    const active = selected.find(([, state]) => state.state === "playing")
-      || selected.find(([, state]) => state.state === "paused")
-      || selected.find(([, state]) => state.state === "buffering");
-    const serverState = this._hass.states[this._config.entity];
-    const serverAttributes = serverState?.attributes || {};
-    const state = active?.[1] || serverState;
-    const attributes = active?.[1]?.attributes || serverAttributes;
-    const sharedSession = serverAttributes.media_title ? {
-      source: serverAttributes.session_source,
-      id: serverAttributes.media_content_id,
-      title: serverAttributes.media_title,
-      channel: serverAttributes.media_artist,
-      thumbnail: serverAttributes.entity_picture || serverAttributes.media_image_url,
-      duration: serverAttributes.media_duration,
-      entity_ids: serverAttributes.output_entity_ids,
-      queue_index: Number(serverAttributes.queue_index ?? -1),
-      queue_size: Number(serverAttributes.queue_size || 0),
-    } : null;
-    const fallback = sharedSession || this._currentItem || {};
-    const title = attributes.media_title || fallback.title || "";
-    const artist = attributes.media_artist || fallback.channel || "";
-    const duration = this._formatDuration(attributes.media_duration || fallback.duration);
-    const queuePosition = fallback.queue_size > 1 && fallback.queue_index >= 0
-      ? `${fallback.queue_index + 1}/${fallback.queue_size}`
+    const outputs = session?.output_entity_ids || [];
+    const lead = outputs.map((entityId) => this._hass.states[entityId]).find(Boolean);
+    const state = lead?.state;
+    const title = session?.title || "";
+    const queuePosition = Number(session?.queue_size) > 1 && Number(session?.queue_index) >= 0
+      ? `${Number(session.queue_index) + 1}/${session.queue_size}`
       : "";
-    const imageUrl = attributes.entity_picture || attributes.media_image_url || fallback.thumbnail || "";
-    const targetIds = this._manualSelection
-      ? [...this._selectedPlayers]
-      : (fallback.entity_ids?.length ? fallback.entity_ids : [...this._selectedPlayers]);
-    const stateText = state?.state === "playing"
-      ? "Đang phát"
-      : state?.state === "paused"
-        ? "Tạm dừng"
-        : title ? "Đã gửi" : "";
-
+    const stateText = state === "playing" ? "Đang phát" : state === "paused" ? "Tạm dừng" : title ? "Đã gửi" : "";
     titleNode.textContent = title || "Chưa phát bài nào";
     metaNode.textContent = title
-      ? [stateText, artist, duration, queuePosition, names(targetIds).join(", ")].filter(Boolean).join(" · ")
+      ? [stateText, session.artist, this._formatDuration(session.duration), queuePosition, names(outputs).join(", ")]
+        .filter(Boolean).join(" · ")
       : this._selectedPlayers.size
         ? "Chọn một bài trong kết quả để phát ra loa."
         : "Chọn loa để phát ra loa, hoặc bấm ▶ một bài YouTube để xem trên thẻ.";
 
-    const watchId = String(fallback.id || "");
-    this._nowWatchItem = title && fallback.source === "youtube" && VIDEO_ID.test(watchId)
-      ? { id: watchId, title, channel: artist, duration: attributes.media_duration || fallback.duration }
+    this._nowWatchItem = title && session.source === "youtube" && VIDEO_ID.test(String(session.id || ""))
+      ? { id: session.id, url: session.url, title, channel: session.artist, duration: session.duration }
       : null;
     this.shadowRoot.querySelector(".watch").hidden = !this._nowWatchItem;
 
+    const imageUrl = session?.thumbnail || "";
     const image = this.shadowRoot.querySelector(".now-cover img");
     const icon = this.shadowRoot.querySelector(".now-cover ha-icon");
     image.hidden = !/^https?:\/\//.test(imageUrl);
     icon.hidden = !image.hidden;
     if (!image.hidden && image.src !== imageUrl) image.src = imageUrl;
+  }
+
+  /** Other groups of speakers playing something else: tap one to control it. */
+  _renderOtherSessions(focused) {
+    const container = this.shadowRoot.querySelector(".others");
+    const others = this._sessions().filter((session) => session.session_id !== focused?.session_id);
+    // Ticked speakers outside the shown session can join it without restarting it.
+    const joiners = focused
+      ? [...this._selectedPlayers].filter((id) => !focused.output_entity_ids.includes(id)
+        && this._hass.states[id] && this._hass.states[id].state !== "unavailable")
+      : [];
+    const signature = `${focused?.session_id}:${joiners.join(",")}|` + others.map((s) => `${s.session_id}:${s.revision}`).join("|");
+    if (container.dataset.sig === signature) return;
+    container.dataset.sig = signature;
+    container.replaceChildren();
+    if (joiners.length) {
+      const join = document.createElement("button");
+      join.type = "button";
+      join.className = "other-session join-session";
+      const icon = document.createElement("ha-icon");
+      icon.setAttribute("icon", "mdi:speaker-multiple");
+      const text = document.createElement("span");
+      const joinerNames = joiners.map((id) => this._hass.states[id]?.attributes?.friendly_name || id);
+      text.textContent = `Cho ${joinerNames.join(", ")} nghe cùng`;
+      join.append(icon, text);
+      join.addEventListener("click", () => this._joinSession(focused, joiners));
+      container.append(join);
+    }
+    for (const session of others) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "other-session";
+      const speakers = session.output_entity_ids
+        .map((entityId) => this._hass.states[entityId]?.attributes?.friendly_name || entityId);
+      chip.title = `${speakers.join(", ")}: ${session.title || ""}`;
+      if (/^https?:\/\//.test(session.thumbnail || "")) {
+        const image = document.createElement("img");
+        image.alt = "";
+        image.src = session.thumbnail;
+        chip.append(image);
+      } else {
+        const icon = document.createElement("ha-icon");
+        icon.setAttribute("icon", "mdi:speaker");
+        chip.append(icon);
+      }
+      const text = document.createElement("span");
+      text.textContent = `${speakers.join(", ")} · ${session.title || ""}`;
+      chip.append(text);
+      chip.addEventListener("click", () => {
+        this._manualSelection = true;
+        this._selectedPlayers = new Set(session.output_entity_ids);
+        this._lastTicked = session.output_entity_ids[0];
+        this._syncPlayers();
+      });
+      container.append(chip);
+    }
   }
 
   _updateSourceButtons() {
@@ -1086,11 +1191,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       duration: Number(item.duration || 0),
       url: String(item.url || `https://www.youtube.com/watch?v=${id}`),
     };
+    if (withSpeakers && !this._video.withSpeakers) this._video.soundHere = false;
+    if (!withSpeakers) this._video.soundHere = true;
     this._video.withSpeakers = withSpeakers;
     if (iframe && this._video.ready) {
       // Same player: switch video without reloading, so fullscreen and mute stay put.
       this._videoCommand("loadVideoById", [{ videoId: id, startSeconds: 0 }]);
-      this._videoCommand(withSpeakers ? "mute" : "unMute");
+      this._videoCommand(this._video.soundHere ? "unMute" : "mute");
     } else {
       if (!iframe) {
         iframe = document.createElement("iframe");
@@ -1113,7 +1220,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         playsinline: "1",
         origin: location.origin,
       });
-      if (withSpeakers) params.set("mute", "1");
+      if (withSpeakers && !this._video.soundHere) params.set("mute", "1");
       const src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
       iframe.setAttribute("src", src);
     }
@@ -1125,6 +1232,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._updateTransportState();
     const player = this.shadowRoot.querySelector(".player");
     if (!player.classList.contains("expanded")) player.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
+
+  _toggleSoundHere() {
+    // With speakers the picture starts muted (the speakers carry the sound); this
+    // lets the device showing the card play the sound too.
+    this._video.soundHere = !this._video.soundHere;
+    this._videoCommand(this._video.soundHere ? "unMute" : "mute");
+    this._syncNowPlaying();
   }
 
   _videoHandshake() {
@@ -1284,31 +1399,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   async _playResult(item, button, index = -1) {
     const source = item.source || this._source;
-    // The results the user plays from become the queue for previous/next and auto-advance.
-    if (this._results.includes(item)) this._queue = this._results.slice();
-    this._queueIndex = index >= 0
-      ? index
-      : this._queue.findIndex((entry) => (entry.url || entry.id) === (item.url || item.id));
     const requestedCount = this._selectedPlayers.size;
     if (!requestedCount) {
       if (!this._isVideoItem(item, source)) {
         this._setStatus("Hãy chọn loa để phát Zing MP3 hoặc HTTP Audio.", true);
         return;
       }
-      // No speaker chosen: play the video right here on the card.
-      this._autoAdvance = false;
+      // No speaker chosen: play the video right here on the card, with a local queue.
+      if (this._results.includes(item)) this._queue = this._results.slice();
+      this._queueIndex = index >= 0
+        ? index
+        : this._queue.findIndex((entry) => (entry.url || entry.id) === (item.url || item.id));
       this._openVideo(item, { withSpeakers: false });
       this._setStatus(`Đang xem “${item.title || item.id}” trên thẻ. Chọn loa để phát tiếng ra loa.`);
       return;
     }
     const entityIds = this._playTargets();
     if (!entityIds.length) {
-      this._setStatus(
-        requestedCount
-          ? "Thiết bị đã chọn không hỗ trợ nguồn này. Với loa, hãy dùng Zing hoặc URL audio trực tiếp."
-          : "Hãy chọn ít nhất một loa hoặc màn hình.",
-        true,
-      );
+      this._setStatus("Thiết bị đã chọn không hỗ trợ nguồn này.", true);
       return;
     }
     const entryId = this._entryId();
@@ -1319,26 +1427,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     button.disabled = true;
     this._setStatus(`Đang phát “${item.title || item.id}”…`);
     try {
-      // No volume_level: each speaker keeps its own level (set per-speaker below).
+      // The selected speakers become one session (they leave any other session);
+      // the integration plays the session's next songs when each one ends.
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: entryId,
-        source: this._source,
+        source,
         target: item.url || item.id,
         entity_id: entityIds,
         media_content_type: item.media_content_type,
       });
-      this._rememberNowPlaying(item, entityIds, source);
-      // Arm auto-advance: play the next queue item when this track finishes.
-      this._autoAdvance = true;
-      this._trackPlaying = false;
       if (this._video.open) {
-        // The picture follows the speakers: the next video muted and synced,
-        // or closed when the speakers now play an audio-only source.
+        // The picture follows the speakers: the next video synced, or closed
+        // when the speakers now play an audio-only source.
         if (this._isVideoItem(item, source)) this._openVideo(item, { withSpeakers: true });
         else this._closeVideo();
       }
-      this._syncNowPlaying();
-      this._updateTransportState();
       const ignored = requestedCount - entityIds.length;
       this._setStatus(
         ignored
@@ -1353,73 +1456,48 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   async _skip(step) {
-    const target = this._queueIndex + step;
-    if (this._queueIndex < 0 || target < 0 || target >= this._queue.length) {
-      this._setStatus(step > 0 ? "Đã ở cuối hàng đợi." : "Đã ở đầu hàng đợi.");
+    if (this._video.open && !this._video.withSpeakers) {
+      const target = this._queueIndex + step;
+      if (this._queueIndex < 0 || target < 0 || target >= this._queue.length) {
+        this._setStatus(step > 0 ? "Đã ở cuối hàng đợi." : "Đã ở đầu hàng đợi.");
+        return;
+      }
+      this._queueIndex = target;
+      this._openVideo(this._queue[target], { withSpeakers: false });
       return;
     }
-    const button = this.shadowRoot.querySelector(step > 0 ? ".ctl.next" : ".ctl.previous");
-    await this._playResult(this._queue[target], button, target);
-  }
-
-  _checkAutoAdvance() {
-    if (!this._autoAdvance || this._queueIndex < 0) return;
-    const targets = this._currentItem?.entity_ids?.length
-      ? this._currentItem.entity_ids
-      : [...this._selectedPlayers];
-    const primary = targets.find((entityId) => this._hass?.states?.[entityId]);
-    if (!primary) return;
-    const state = this._hass.states[primary].state;
-    if (state === "playing" || state === "buffering") {
-      this._trackPlaying = true;
-      return;
+    const session = this._focusedSession();
+    if (!session) return;
+    try {
+      await this._hass.callService("tritue_youtube_player", "skip", {
+        entry_id: this._entryId(),
+        session_id: session.session_id,
+        step,
+      });
+    } catch (error) {
+      this._setStatus(error?.message || "Không chuyển được bài.", true);
     }
-    // The track reached a terminal state after actually playing -> it finished.
-    // "paused" is excluded so a manual pause never skips the song.
-    const finished =
-      this._trackPlaying && ["idle", "off", "standby", "stopped"].includes(state);
-    if (!finished) return;
-    this._trackPlaying = false;
-    if (this._queueIndex < this._queue.length - 1) {
-      this._skip(1);
-    } else {
-      this._autoAdvance = false;
-      this._setStatus("Đã phát hết hàng đợi.");
-    }
-  }
-
-  _isPlaying() {
-    return this._autoAdvance && !!this._currentItem?.target;
   }
 
   async _onSpeakerAdded(entityId) {
+    // Watching a video alone: the ticked speaker takes over its sound. Otherwise
+    // ticking only focuses the speaker (see "Cho … nghe cùng" to join a song).
     if (this._video.open && !this._video.withSpeakers) {
       await this._speakerJoinsVideo(entityId);
-      return;
     }
-    // Ticking a speaker while something is playing makes it join the song now.
-    if (!this._isPlaying()) return;
-    const source = this._currentItem.source || this._source;
-    const state = this._hass?.states?.[entityId];
-    if (!state || state.state === "unavailable") return;
-    if (!this._supportsFeature(entityId, 512) || !this._supportsSource(entityId, source)) {
-      this._setStatus(
-        `${state.attributes?.friendly_name || entityId} không nhận nguồn đang phát.`,
-        true,
-      );
-      return;
-    }
-    const entryId = this._entryId();
-    if (!entryId) return;
+  }
+
+  async _joinSession(session, entityIds) {
     try {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
-        entry_id: entryId,
-        source,
-        target: this._currentItem.target,
-        entity_id: [entityId],
-        media_content_type: this._currentItem.media_content_type,
+        entry_id: this._entryId(),
+        source: session.source,
+        target: session.url || session.id,
+        entity_id: entityIds,
+        session_id: session.session_id,
+        join: true,
       });
-      this._setStatus(`Đã thêm ${state.attributes?.friendly_name || entityId} vào bài đang phát.`);
+      this._setStatus("Đã cho nghe cùng bài đang phát.");
     } catch (error) {
       this._setStatus(error?.message || "Không thêm được loa vào bài đang phát.", true);
     }
@@ -1445,12 +1523,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         target: item.url,
         entity_id: [entityId],
       });
-      this._rememberNowPlaying(item, [entityId], "youtube");
       this._pendingSpeakerSeek = { entityId, from: videoTime, at: Date.now() };
       this._video.withSpeakers = true;
+      this._video.soundHere = false;
       this._videoCommand("mute");
-      this._autoAdvance = true;
-      this._trackPlaying = false;
       this._syncNowPlaying();
       this._updateTransportState();
       this._setStatus(`${name} phát tiếng; video trên thẻ tắt tiếng và chạy theo loa.`);
@@ -1459,22 +1535,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
-  async _onSpeakerRemoved(entityId) {
+  async _onSpeakerRemoved(_entityId) {
     if (this._video.open && this._video.withSpeakers && !this._selectedPlayers.size) {
-      // Last speaker gone: the card takes the sound back.
+      // No speaker ticked any more: the card's video plays on its own with sound.
       this._video.withSpeakers = false;
+      this._video.soundHere = true;
       this._pendingSpeakerSeek = null;
       this._videoCommand("unMute");
       this._syncNowPlaying();
-    }
-    // Un-ticking a playing speaker stops just that one; the rest keep going.
-    const state = this._hass?.states?.[entityId];
-    if (!state || !["playing", "paused", "buffering"].includes(state.state)) return;
-    try {
-      await this._hass.callService("media_player", "media_stop", { entity_id: entityId });
-      this._setStatus(`Đã tắt ${state.attributes?.friendly_name || entityId}.`);
-    } catch (error) {
-      this._setStatus(error?.message || "Không tắt được loa.", true);
     }
   }
 
@@ -1516,19 +1584,34 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   async _stop() {
-    this._autoAdvance = false;
     if (this._video.open) this._videoCommand("stopVideo");
-    const entityIds = this._targetsForService("media_stop");
-    if (!entityIds.length && !this._currentItem) {
-      this._setStatus(this._video.open ? "Đã dừng video." : "Hãy chọn ít nhất một thiết bị để dừng.", !this._video.open);
-      return;
-    }
+    const session = this._focusedSession();
     try {
-      const stopTargets = [...entityIds, this._config.entity];
-      await this._hass.callService("media_player", "media_stop", { entity_id: stopTargets });
-      this._clearRememberedNowPlaying();
-      this._syncNowPlaying();
-      this._setStatus(`Đã dừng ${entityIds.length} thiết bị${this._video.open ? " và video" : ""}.`);
+      if (session) {
+        // Stop the ticked speakers; the session ends only when all its speakers stop.
+        const ticked = session.output_entity_ids.filter((id) => this._selectedPlayers.has(id));
+        if (ticked.length && ticked.length < session.output_entity_ids.length) {
+          await this._hass.callService("tritue_youtube_player", "remove_players", {
+            entry_id: this._entryId(),
+            entity_id: ticked,
+          });
+          this._setStatus(`Đã dừng ${ticked.length} loa; loa còn lại phát tiếp.`);
+          return;
+        }
+        await this._hass.callService("tritue_youtube_player", "stop_session", {
+          entry_id: this._entryId(),
+          session_id: session.session_id,
+        });
+        this._setStatus(`Đã dừng ${session.output_entity_ids.length} thiết bị${this._video.open ? " và video" : ""}.`);
+        return;
+      }
+      const entityIds = this._targetsForService("media_stop");
+      if (!entityIds.length) {
+        this._setStatus(this._video.open ? "Đã dừng video." : "Không có gì đang phát.", !this._video.open);
+        return;
+      }
+      await this._hass.callService("media_player", "media_stop", { entity_id: entityIds });
+      this._setStatus(`Đã dừng ${entityIds.length} thiết bị.`);
     } catch (error) {
       this._setStatus(error?.message || "Không thể dừng thiết bị.", true);
     }
@@ -1537,8 +1620,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _formatDuration(seconds) {
     const value = Number(seconds);
     if (!Number.isFinite(value) || value <= 0) return "";
-    const minutes = Math.floor(value / 60);
-    return `${minutes}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const rest = String(Math.floor(value % 60)).padStart(2, "0");
+    return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
   }
 
   _setStatus(message, error = false) {

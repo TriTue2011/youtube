@@ -29,8 +29,15 @@ async def async_play_on_players(
     volume_level: float | None = None,
     media_content_type: str | None = None,
     excluded_entity_ids: set[str] | None = None,
+    session_id: str | None = None,
+    controller: str | None = None,
+    join_entity_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Resolve one source item and dispatch it to one or more HA players."""
+    """Resolve one source item and dispatch it to one or more HA players.
+
+    The speakers become one playback session on the server (a speaker leaves any
+    other session). ``join_entity_ids`` are speakers already playing this
+    session's song: they stay in the session but are not sent the song again."""
     targets = normalize_target_entity_ids(
         entity_ids, excluded=excluded_entity_ids or set()
     )
@@ -68,16 +75,29 @@ async def async_play_on_players(
 
     requests = {}
     youtube_audio_targets = []
-    youtube_session_started = False
-    youtube_session_revision = None
+    joined = [
+        entity_id for entity_id in (join_entity_ids or []) if entity_id not in playable_targets
+    ]
+    # Reserve the session first: it validates the target, returns normalized
+    # metadata for native YouTube apps, and moves these speakers out of other
+    # sessions before they receive the new song.
+    recorded = await client.async_update_session(
+        source,
+        target,
+        joined + playable_targets,
+        media_content_type=media_content_type,
+        volume_level=volume_level,
+        session_id=session_id,
+        controller=controller,
+    )
+    session = recorded.get("session") or {}
+    session_id = session.get("session_id") or session_id
+    session_revision = session.get("revision")
     physical_dispatch_completed = False
     try:
         first_error = None
         if source == "youtube":
-            played = await client.async_play(target)
-            youtube_session_started = True
-            youtube_session_revision = played.get("session_revision")
-            item = played.get("item") or {}
+            item = session.get("item") or {}
             for entity_id in playable_targets:
                 if not is_native_youtube_transport(
                     capabilities(entity_id)["transport"]
@@ -182,27 +202,34 @@ async def async_play_on_players(
             playable_targets = dispatched_targets
             if not playable_targets and first_dispatch_error is not None:
                 raise first_dispatch_error
-        await client.async_update_session(
-            source,
-            target,
-            playable_targets,
-            media_content_type=session_media_content_type,
-            volume_level=volume_level,
-        )
-    except Exception:
-        if (
-            youtube_session_started
-            and not physical_dispatch_completed
-            and isinstance(youtube_session_revision, int)
+        outputs = joined + playable_targets
+        if outputs != list(session.get("output_entity_ids") or outputs) or (
+            session_media_content_type and session_media_content_type != media_content_type
         ):
+            # Some speakers refused, or the stream type is now known: record the
+            # final outputs in the same session (its queue is kept).
+            recorded = await client.async_update_session(
+                source,
+                target,
+                outputs,
+                media_content_type=session_media_content_type,
+                volume_level=volume_level,
+                session_id=session_id,
+                controller=controller,
+            )
+            session = recorded.get("session") or session
+    except Exception:
+        if not physical_dispatch_completed:
             with suppress(Exception):
-                await client.async_stop(
-                    expected_revision=youtube_session_revision
-                )
+                if session_id:
+                    await client.async_stop(session_id=session_id)
+                elif isinstance(session_revision, int):
+                    await client.async_stop(expected_revision=session_revision)
         raise
     return {
         "source": source,
         "selected_count": len(targets),
         "target_count": len(playable_targets),
         "skipped_targets": skipped_targets,
+        "session_id": session.get("session_id") or session_id,
     }
