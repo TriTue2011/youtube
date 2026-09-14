@@ -77,7 +77,8 @@ class TriTueSearchView(HomeAssistantView):
 
 
 class TriTueStreamView(HomeAssistantView):
-    """Stream URL for the device showing the card (listening, or a refused video)."""
+    """Stream URLs for the device showing the card: a song's sound, or the picture of
+    a video YouTube refuses to embed (``youtube_video``)."""
 
     url = "/api/tritue_youtube_player/stream"
     name = "api:tritue_youtube_player:stream"
@@ -99,11 +100,15 @@ class TriTueStreamView(HomeAssistantView):
             )
         source = payload.get("source")
         target = str(payload.get("target") or "").strip()
-        if source not in {"youtube", "zing"} or not 1 <= len(target) <= 2048:
+        if source not in {"youtube", "zing", "youtube_video"} or not 1 <= len(target) <= 2048:
             return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
         try:
+            max_height = int(payload.get("max_height") or 0) if source == "youtube_video" else 0
+        except (TypeError, ValueError):
+            max_height = 0
+        try:
             stream = await entry.runtime_data.client.async_create_stream(
-                source, target
+                source, target, max_height=max_height or None
             )
         except YouTubePlayerApiError:
             return self.json(
@@ -111,8 +116,9 @@ class TriTueStreamView(HomeAssistantView):
             )
         return self.json(
             {
-                "stream_url": stream.get("stream_url"),
-                "media_content_type": stream.get("media_content_type"),
+                key: stream.get(key)
+                for key in ("stream_url", "media_content_type", "direct_url", "height", "bitrate_kbps")
+                if key in stream
             }
         )
 

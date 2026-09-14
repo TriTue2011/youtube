@@ -58,13 +58,18 @@ class YouTubePlayerClient:
         )
 
     async def async_create_stream(
-        self, source: str, target: str
+        self, source: str, target: str, *, max_height: int | None = None
     ) -> dict[str, Any]:
-        """Create a short-lived public URL for a supported audio source."""
+        """Create a short-lived public URL for a supported source.
+
+        ``youtube_video`` is the picture only, up to ``max_height``, for the card."""
+        payload: dict[str, Any] = {"source": source, "target": target}
+        if max_height:
+            payload["max_height"] = max_height
         return await self._async_request(
             "POST",
             "/api/integration/stream",
-            json={"source": source, "target": target},
+            json=payload,
             request_timeout=35,
         )
 

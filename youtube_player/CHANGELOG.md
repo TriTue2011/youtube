@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.1 - 2026-09-15
+
+### Added
+
+- **Luồng hình riêng** `youtube_video` ("ID:chiều cao", 360–1080): chỉ hình, cao nhất không
+  vượt màn hình, ưu tiên avc1/mp4 (trình duyệt nào cũng giải được), bỏ luồng m3u8.
+  `/api/integration/stream` trả thêm `direct_url` (link gắn IP mạng nhà, máy trong nhà tải
+  thẳng), `height`, `bitrate_kbps`. Đo 14/09/2026 trong Chrome: 1080p avc1/vp9/av1 phát
+  thẳng bằng thẻ video 1920×1080.
+- **deno cho yt-dlp** (`apk add deno`, `yt-dlp[default]`): không có trình chạy JS yt-dlp
+  2026.8 báo "some formats may be missing". Deno 2.3.1 của Alpine được yt-dlp nhận.
+
 ## 0.8.0 - 2026-09-14
 
 ### Added

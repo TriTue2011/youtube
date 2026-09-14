@@ -29,11 +29,13 @@ from streaming import (
     fetch_zing_playlist,
     normalize_public_base_url,
     resolve_youtube_audio,
+    resolve_youtube_video,
     resolve_zing_stream,
     stream_cache_seconds,
     validate_stream_target,
     validate_zing_target,
     verify_stream_token,
+    youtube_video_target,
     zing_playlist_id,
 )
 
@@ -54,7 +56,7 @@ STATIC_FILES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.8.1"
 API_VERSION = "1"
 
 
@@ -394,15 +396,17 @@ class PlayerServer(ThreadingHTTPServer):
             ttl=3600,
         )
 
-    def prepare_stream(self, source, target):
-        """Authorize, resolve and briefly cache one stream before a speaker uses it."""
+    def prepare_stream(self, source, target, max_height=720):
+        """Authorize, resolve and briefly cache one stream before a speaker uses it.
+
+        `youtube_video` = the picture only (no sound) for a browser, up to `max_height`."""
         if source == "zing":
             target = self.require_public_zing_result(target)
-        elif source == "youtube":
+        elif source in {"youtube", "youtube_video"}:
             normalized = normalize_target(target)
             if normalized.get("kind") != "video" or not normalized.get("id"):
                 raise ValueError("youtube_audio_requires_video")
-            target = normalized["id"]
+            target = normalized["id"] if source == "youtube" else youtube_video_target(normalized["id"], max_height)
         else:
             raise ValueError("unsupported_stream_source")
         return target, self._resolve_stream(source, target)
@@ -414,11 +418,12 @@ class PlayerServer(ThreadingHTTPServer):
             cached = self.stream_cache.get(key)
             if cached and cached[0] >= time.monotonic():
                 return dict(cached[1])
-        resolved = (
-            resolve_youtube_audio(target)
-            if source == "youtube"
-            else resolve_zing_stream(target)
-        )
+        if source == "youtube":
+            resolved = resolve_youtube_audio(target)
+        elif source == "youtube_video":
+            resolved = resolve_youtube_video(target)
+        else:
+            resolved = resolve_zing_stream(target)
         with self.stream_lock:
             now = time.monotonic()
             self.stream_cache = {
@@ -725,10 +730,12 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 if not isinstance(payload, dict):
                     raise ValueError("invalid_request")
                 source = payload.get("source")
-                if source not in {"zing", "youtube"}:
+                if source not in {"zing", "youtube", "youtube_video"}:
                     raise ValueError("unsupported_stream_source")
+                # youtube_video: the picture only, for the card when YouTube refuses the embed.
+                heights = [payload.get("max_height") or 720] if source == "youtube_video" else []
                 target, resolved = self.server.prepare_stream(
-                    source, payload.get("target")
+                    source, payload.get("target"), *heights
                 )
                 stream_url = self.server.create_stream_url(source, target)
             except StreamUnavailableError:
@@ -763,6 +770,18 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     "stream_url": stream_url,
                     "media_content_type": resolved.get("content_type", "audio/mpeg"),
                     "expires_in": 3600,
+                    # direct_url is bound to the home's Internet address: a browser at
+                    # home plays it without going through the add-on; failing that it is
+                    # away from home and the signed stream_url costs the home's upload.
+                    **(
+                        {
+                            "height": resolved.get("height"),
+                            "bitrate_kbps": resolved.get("bitrate_kbps"),
+                            "direct_url": resolved.get("url"),
+                        }
+                        if source == "youtube_video"
+                        else {}
+                    ),
                 },
             )
             return

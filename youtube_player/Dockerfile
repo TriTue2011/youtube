@@ -1,7 +1,7 @@
 ARG BUILD_FROM=python:3.13-alpine3.22
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=0.8.0
+ARG BUILD_VERSION=0.8.1
 ARG BUILD_ARCH
 
 LABEL \
@@ -20,7 +20,11 @@ ENV HOST="0.0.0.0" \
     PYTHONUNBUFFERED="1"
 
 WORKDIR /app
-RUN pip install --no-cache-dir "yt-dlp==2026.8.19"
+# deno + yt-dlp-ejs: yt-dlp solves YouTube's JavaScript challenges with them (without a
+# JS runtime it warns that formats may be missing). Alpine's deno 2.3.1 is detected
+# by yt-dlp 2026.8.19 ("JS runtimes: deno-2.3.1"), measured 14/09/2026.
+RUN apk add --no-cache deno \
+    && pip install --no-cache-dir "yt-dlp[default]==2026.8.19"
 COPY app/ /app/
 
 EXPOSE 8099

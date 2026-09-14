@@ -243,6 +243,19 @@ async def test_the_lay_luong_de_nghe_tren_may(hass, addon_server, hass_client, h
     token = body["stream_url"].rsplit("/", 1)[1].split(".", 1)[0]
     assert json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))["target"] == KET_QUA[1]["id"]
 
+    # Hình của video YouTube chặn nhúng: link đã ký + link lấy thẳng cho máy trong nhà.
+    with patch.object(addon, "resolve_youtube_video", return_value={
+            "url": "https://rr1.googlevideo.com/v?itag=136", "headers": {}, "content_type": "video/mp4",
+            "height": 720, "bitrate_kbps": 1002}) as hinh:
+        r = await client.post(url, json={"entry_id": entry.entry_id, "source": "youtube_video",
+                                         "target": KET_QUA[1]["url"], "max_height": 720})
+        body = await r.json()
+    assert r.status == 200, body
+    hinh.assert_called_once_with(f"{KET_QUA[1]['id']}:720")
+    assert (body["direct_url"], body["height"], body["bitrate_kbps"], body["media_content_type"]) == (
+        "https://rr1.googlevideo.com/v?itag=136", 720, 1002, "video/mp4")
+    assert "/api/stream/" in body["stream_url"]
+
     for sai, ma in (({"entry_id": entry.entry_id, "source": "spotify", "target": "x"}, 400),
                     ({"entry_id": entry.entry_id, "source": "youtube", "target": ""}, 400),
                     ({"entry_id": "khong-co", "source": "youtube", "target": KET_QUA[0]["url"]}, 404)):

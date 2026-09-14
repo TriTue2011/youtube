@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.2 - 2026-09-15
+
+Cần add-on **0.8.1** cho phần luồng hình (máy phát cũ vẫn chạy, chỉ chưa có luồng hình).
+
+### Fixed
+
+- **Đang nghe mà mở video thì mở đúng giây đang nghe.** Từ 0.9.8 (nghe trên máy) nút xem
+  video ở khung Đang phát bị ẩn khi nghe trên máy, và bấm nút xem video của chính bài đang
+  nghe trong danh sách thì phát lại từ đầu. Nay: nút hiện lại, bấm là video mở tại giây
+  đang nghe, tắt tiếng và chạy theo tiếng; bấm xem bài loa đang phát cũng không gửi lại
+  bài cho loa mà mở hình theo vị trí loa.
+
+### Added
+
+- View `stream` nhận `youtube_video` (chỉ hình, tối đa `max_height`) và trả thêm
+  `direct_url`, `height`, `bitrate_kbps` — nền cho xem video bị YouTube chặn nhúng.
+
 ## 0.10.1 - 2026-09-14
 
 ### Added
