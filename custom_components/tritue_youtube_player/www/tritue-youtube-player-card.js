@@ -381,6 +381,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           this._leavingFullscreen = false;
           player?.classList.remove("rotated", "idle");
           clearTimeout(this._idleTimer);
+          if (player) this._syncVideoExpandButton();
           try {
             screen.orientation?.unlock?.();
           } catch (_error) {
@@ -410,7 +411,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           return;
         }
         this._ownFullscreen = inside === player;
-        if (inside === player) this._wakeControls();
+        if (inside === player) this._syncVideoExpandButton();
       };
       document.addEventListener("fullscreenchange", this._onFullscreenChange);
     }
@@ -800,6 +801,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .pill[aria-pressed="true"] { border-color: var(--primary-color); color: var(--text-primary-color, #fff); background: var(--primary-color); }
         .empty { padding: 14px 8px; text-align: center; color: var(--secondary-text-color); font-size: .88rem; }
         /* Phóng to / toàn màn hình: cả khối phát (video + nút + âm lượng) phủ màn hình. */
+        /* Expanded or fullscreen: the picture fills the screen like YouTube's own player
+           (16:9, never cropped) with the title floating over its top and the progress and
+           buttons over its lower edge, all fading out when idle. Owner 15/09/2026: YouTube's
+           fullscreen filled the monitor while the card left black bands for its controls. */
         .player.expanded,
         .player:fullscreen {
           position: fixed;
@@ -811,29 +816,53 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           display: flex;
           flex-direction: column;
           justify-content: center;
-          padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+          padding: 0;
           color: #fff;
           background: #000;
         }
         /* The stage only groups the player's parts so they can be turned together. */
         .stage { display: contents; }
-        /* Fullscreen: the controls fade out after a few seconds without a touch while
-           the video plays; the shield catches the next touch (taps inside the YouTube
-           frame never reach the card) and only brings them back. */
+        /* Turning the picture only helps a phone held upright. */
+        @media (orientation: landscape) { .ctl.video-rotate { display: none; } }
+        .player:is(.expanded, :fullscreen) > .stage > .video-frame {
+          width: min(100%, calc(100dvh * 16 / 9));
+          margin: 0 auto;
+          border-radius: 0;
+        }
+        .player:is(.expanded, :fullscreen) > .stage > :is(.speaker-volumes, .device-row, .others) { display: none; }
+        /* The YouTube frame shows its own title; the card's only over its own picture. */
+        .player:is(.expanded, :fullscreen):not(.picture-on) > .stage > .now { display: none; }
+        .player:is(.expanded, :fullscreen) > .stage > :is(.now, .progress, .control-bar) {
+          position: absolute;
+          left: 0;
+          right: 0;
+          z-index: 2;
+          margin: 0;
+          transition: opacity .3s;
+        }
+        .player:is(.expanded, :fullscreen) > .stage > .now {
+          top: 0;
+          padding: max(12px, env(safe-area-inset-top)) 16px 32px;
+          background: linear-gradient(rgba(0, 0, 0, .7), transparent);
+        }
+        .player:is(.expanded, :fullscreen) > .stage > .progress { bottom: 52px; padding: 0 16px; }
+        .player:is(.expanded, :fullscreen) > .stage > .control-bar {
+          bottom: 0;
+          padding: 40px 10px max(6px, env(safe-area-inset-bottom));
+          background: linear-gradient(transparent, rgba(0, 0, 0, .8));
+        }
+        /* Idle: the overlays fade out after a few seconds without a touch while the video
+           plays; the shield catches the next touch (taps inside the YouTube frame never
+           reach the card) and only brings them back. */
         .idle-shield { display: none; }
-        .player:is(.expanded, :fullscreen) > .stage > :is(.progress, .control-bar) { transition: opacity .3s; }
         .player.idle:is(.expanded, :fullscreen) { cursor: none; }
         .player.idle:is(.expanded, :fullscreen) > .idle-shield { display: block; position: absolute; inset: 0; z-index: 3; }
-        .player.idle:is(.expanded, :fullscreen) > .stage > :is(.progress, .control-bar, .now, .speaker-volumes, .device-row, .others) { opacity: 0; pointer-events: none; }
-        .player.expanded > .stage > *,
-        .player:fullscreen > .stage > * { width: min(100%, calc((100vh - 150px) * 16 / 9)); margin-left: auto; margin-right: auto; }
+        .player.idle:is(.expanded, :fullscreen) > .stage > :is(.now, .progress, .control-bar) { opacity: 0; pointer-events: none; }
         /* Phone held upright in an app or browser that can't turn the screen (the Home
            Assistant app's WebView refuses screen.orientation.lock, and turning the phone
-           re-renders HA and leaves fullscreen): the card turns the picture itself, so the
-           phone is simply held sideways. A phone that does turn gets the landscape rules. */
+           re-renders HA and leaves fullscreen), or turned by the rotate button: the stage
+           is turned 90°, so the phone is simply held sideways. */
         @media (orientation: portrait) {
-          .player.rotated.expanded,
-          .player.rotated:fullscreen { padding: 0; }
           .player.rotated > .stage {
             position: absolute;
             top: 50%;
@@ -841,32 +870,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            box-sizing: border-box;
             width: 100vh;
             height: 100vw;
-            padding: 4px 10px;
             transform: translate(-50%, -50%) rotate(90deg);
           }
-          .player.rotated > .stage > .now,
-          .player.rotated > .stage > .speaker-volumes,
-          .player.rotated > .stage > .device-row,
-          .player.rotated > .stage > .others { display: none; }
-          .player.rotated > .stage > .video-frame,
-          .player.rotated > .stage > .progress,
-          .player.rotated > .stage > .control-bar { width: min(100%, calc((100vw - 64px) * 16 / 9)); }
-          .player.rotated > .stage > .video-frame { margin-bottom: 2px; border-radius: 0; }
-        }
-        /* Browser fullscreen on a phone turned sideways: the picture takes the whole
-           height (16:9, never cropped) and only the control bar stays under it. */
-        @media (orientation: landscape) {
-          .player:fullscreen { padding: 4px 8px; }
-          .player:fullscreen .now,
-          .player:fullscreen .speaker-volumes,
-          .player:fullscreen .device-row,
-          .player:fullscreen .others { display: none; }
-          .player:fullscreen .video-frame { width: min(100%, calc((100dvh - 64px) * 16 / 9)); margin-bottom: 2px; border-radius: 0; }
-          .player:fullscreen .progress,
-          .player:fullscreen .control-bar { width: min(100%, calc((100dvh - 64px) * 16 / 9)); }
+          .player.rotated > .stage > .video-frame { width: min(100%, calc(100vw * 16 / 9)); }
         }
         .player.expanded .ctl:not(.main),
         .player:fullscreen .ctl:not(.main) { color: #fff; }
@@ -934,6 +942,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <div class="view-group">
                 <button class="ctl watch" type="button" aria-label="Xem video trên thẻ" title="Xem video trên thẻ" hidden><ha-icon icon="mdi:television-play"></ha-icon></button>
                 <button class="ctl video-listen" type="button" aria-label="Chỉ nghe (tắt hình, tiếng chạy tiếp)" title="Chỉ nghe — tắt hình, tiếng chạy tiếp" hidden><ha-icon icon="mdi:headphones"></ha-icon></button>
+                <button class="ctl video-rotate" type="button" aria-label="Xoay ngang 90°" title="Xoay ngang 90° (máy đang khoá xoay)" hidden><ha-icon icon="mdi:phone-rotate-landscape"></ha-icon></button>
                 <button class="ctl video-expand" type="button" aria-label="Phóng to video" title="Phóng to" hidden><ha-icon icon="mdi:arrow-expand"></ha-icon></button>
                 <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
                 <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
@@ -1038,6 +1047,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".video-fullscreen").addEventListener("click", () => this._videoFullscreen());
     this.shadowRoot.querySelector(".video-close").addEventListener("click", () => this._closeVideo());
     this.shadowRoot.querySelector(".video-listen").addEventListener("click", () => this._listenOnly());
+    this.shadowRoot.querySelector(".video-rotate").addEventListener("click", () => this._toggleRotated());
     const player = this.shadowRoot.querySelector(".player");
     for (const name of ["pointerdown", "pointermove", "keydown"]) {
       player.addEventListener(name, () => this._wakeControls());
@@ -2468,6 +2478,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     video.pictureEl = element;
     video.ready = true;
+    this.shadowRoot.querySelector(".player").classList.add("picture-on");
     video.state = -1;
     pending.shown = true;
     element.style.visibility = "";
@@ -2500,6 +2511,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
     frame?.querySelector(".picture-note")?.remove();
     frame?.classList.remove("no-embed");
+    this.shadowRoot?.querySelector(".player")?.classList.remove("picture-on");
     video.picture = null;
     video.pictureEl = null;
     video.ready = false;
@@ -2580,12 +2592,29 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._syncVideoExpandButton();
   }
 
+  /** The rotate button: for phones whose rotation is locked (the card can't turn the screen). */
+  _toggleRotated() {
+    const player = this.shadowRoot.querySelector(".player");
+    if (!player.classList.contains("expanded") && this.shadowRoot.fullscreenElement !== player) return;
+    player.classList.toggle("rotated");
+    this._syncVideoExpandButton();
+  }
+
   _syncVideoExpandButton() {
     const button = this.shadowRoot.querySelector(".video-expand");
     const expanded = this.shadowRoot.querySelector(".player").classList.contains("expanded");
     button.querySelector("ha-icon").setAttribute("icon", expanded ? "mdi:arrow-collapse" : "mdi:arrow-expand");
     button.setAttribute("aria-label", expanded ? "Thu nhỏ video" : "Phóng to video");
     button.title = expanded ? "Thu nhỏ" : "Phóng to";
+    const player = this.shadowRoot.querySelector(".player");
+    const big = expanded || this.shadowRoot.fullscreenElement === player;
+    if (!big) player.classList.remove("rotated");
+    const rotate = this.shadowRoot.querySelector(".video-rotate");
+    const rotated = player.classList.contains("rotated");
+    rotate.hidden = !(big && this._video.open);
+    rotate.querySelector("ha-icon").setAttribute("icon", rotated ? "mdi:phone-rotate-portrait" : "mdi:phone-rotate-landscape");
+    rotate.setAttribute("aria-label", rotated ? "Xoay lại dọc" : "Xoay ngang 90°");
+    rotate.title = rotated ? "Xoay lại dọc" : "Xoay ngang 90° (máy đang khoá xoay)";
     // Expanded or not any more: controls on, and the hide timer (re)starts when expanded.
     this._wakeControls();
   }
@@ -2621,6 +2650,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         } catch (_error) {
           if (document.fullscreenElement) player.classList.add("rotated");
         }
+        this._syncVideoExpandButton();
       })
       .catch(() => {
         if (!document.fullscreenElement) {
