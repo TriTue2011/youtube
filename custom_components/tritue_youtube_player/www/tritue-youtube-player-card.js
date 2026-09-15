@@ -100,7 +100,10 @@ const deviceAudio = {
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
-        if (!listenScreenOff() && this.real() && !audio.paused) {
+        // The Home Assistant app reports the page hidden for a moment while it enters
+        // fullscreen (owner 15/09/2026: "phóng to dừng video"); fullscreen is watching,
+        // not a screen switched off.
+        if (!listenScreenOff() && !document.fullscreenElement && this.real() && !audio.paused) {
           audio.pause();
           this.pausedByHide = true;
         }
@@ -132,18 +135,36 @@ const deviceAudio = {
     return audio;
   },
 
+  urls: new Map(),
+
   async streamUrl(item) {
     if (item.source === "http") return String(item.url || item.id || "");
-    try {
-      const payload = await this.hass.callApi("POST", "tritue_youtube_player/stream", {
-        entry_id: this.entryId,
-        source: item.source,
-        target: item.url || item.id,
-      });
-      return String(payload?.stream_url || "");
-    } catch (_error) {
-      return "";
-    }
+    const key = `${item.source}:${item.url || item.id}`;
+    const cached = this.urls.get(key);
+    // Signed links last an hour on the player server; reuse one for ten minutes.
+    if (cached && Date.now() - cached.at < 600000) return cached.url;
+    const pending = (async () => {
+      try {
+        const payload = await this.hass.callApi("POST", "tritue_youtube_player/stream", {
+          entry_id: this.entryId,
+          source: item.source,
+          target: item.url || item.id,
+        });
+        return String(payload?.stream_url || "");
+      } catch (_error) {
+        return "";
+      }
+    })();
+    this.urls.set(key, { at: Date.now(), url: pending });
+    const url = await pending;
+    if (url) this.urls.set(key, { at: Date.now(), url });
+    else this.urls.delete(key);
+    return url;
+  },
+
+  /** Get a song's link ready before it is needed (the sound of a video just opened). */
+  prefetch(item) {
+    if (item && this.hass && item.source !== "http") this.streamUrl(item);
   },
 
   /** Listen alone; `startAt` = second to start from (the sound of a video watched until now). */
@@ -498,6 +519,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .section { margin-top: 8px; }
         .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
         .section-title h3 { margin: 0; font-size: .88rem; }
+        /* The speaker list stays folded until its title is tapped (owner 15/09/2026). */
+        .speakers-toggle {
+          width: 100%;
+          padding: 2px 0;
+          border: 0;
+          color: var(--primary-text-color);
+          background: transparent;
+          text-align: left;
+        }
+        .section-name { display: inline-flex; align-items: center; gap: 4px; font-weight: 650; font-size: .88rem; --mdc-icon-size: 18px; }
+        .section-name ha-icon { transition: transform .15s; color: var(--secondary-text-color); }
+        .speakers-toggle[aria-expanded="true"] .section-name ha-icon { transform: rotate(180deg); }
         .players { display: flex; flex-wrap: wrap; gap: 8px; max-height: 132px; overflow: auto; }
         .player-chip {
           display: flex;
@@ -898,7 +931,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .player { padding: 8px; }
           .now { grid-template-columns: 44px minmax(0, 1fr); gap: 9px; }
           .now-meta, .status { font-size: .76rem; }
-          .section-title h3 { font-size: .82rem; }
+          .section-title h3, .section-name { font-size: .82rem; }
           .player-chip { gap: 5px; padding: 3px 8px; font-size: .84rem; }
           .result { font-size: .88rem; }
         }
@@ -983,12 +1016,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           <p class="status" role="status" aria-live="polite"></p>
 
           <section class="section">
-            <div class="section-title">
-              <h3>Loa / màn hình</h3>
+            <button class="section-title speakers-toggle" type="button" aria-expanded="false" title="Bấm để hiện danh sách loa / màn hình">
+              <span class="section-name"><ha-icon icon="mdi:chevron-down"></ha-icon>Loa / màn hình</span>
               <span class="hint selected-count">0 đã chọn</span>
+            </button>
+            <div class="speakers-body" hidden>
+              <div class="players"></div>
+              <div class="hidden-players"></div>
             </div>
-            <div class="players"></div>
-            <div class="hidden-players"></div>
           </section>
 
           <div class="results"></div>
@@ -1035,6 +1070,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._openPlaylist = payload.playlist.id;
         return `Đã tạo “${payload.playlist.name}”. Bấm + ở kết quả tìm để thêm bài.`;
       });
+    });
+    this.shadowRoot.querySelector(".speakers-toggle").addEventListener("click", () => {
+      const toggle = this.shadowRoot.querySelector(".speakers-toggle");
+      const open = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.title = open ? "Bấm để thu gọn danh sách loa / màn hình" : "Bấm để hiện danh sách loa / màn hình";
+      this.shadowRoot.querySelector(".speakers-body").hidden = !open;
     });
     this.shadowRoot.querySelector(".previous").addEventListener("click", () => this._skip(-1));
     this.shadowRoot.querySelector(".play-pause").addEventListener("click", () => this._togglePlay());
@@ -1271,7 +1313,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _updateSelectedCount() {
-    this.shadowRoot.querySelector(".selected-count").textContent = `${this._selectedPlayers.size} đã chọn`;
+    // Folded list: the title still says what is ticked.
+    const names = [...this._selectedPlayers].map((entityId) => this._hass?.states?.[entityId]?.attributes?.friendly_name || entityId);
+    this.shadowRoot.querySelector(".selected-count").textContent = names.length && names.length <= 2
+      ? names.join(", ")
+      : `${names.length} đã chọn`;
   }
 
   _supportsFeature(entityId, feature) {
@@ -1826,6 +1872,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _renderResults() {
     const container = this.shadowRoot.querySelector(".results");
     container.replaceChildren();
+    if (this._results.some((item) => this._isVideoItem(item, item.source || this._source))) this._warmFrame();
     this._results.forEach((item, index) => {
       const row = document.createElement("article");
       row.className = "result";
@@ -1948,8 +1995,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.followsDevice = followsDevice;
     if (followsDevice) this._video.soundHere = false;
     const start = Math.max(0, Math.floor(Number(startSeconds) || 0));
-    if (iframe && this._video.ready) {
-      // Same player: switch video without reloading, so fullscreen and mute stay put.
+    if (iframe && (this._video.ready || this._frameReady)) {
+      // Same player (or the one loaded ahead): switch video without reloading, so it
+      // starts at once and fullscreen and mute stay put.
+      this._video.ready = true;
+      this._videoPost({ event: "command", func: "addEventListener", args: ["onError"] });
       this._videoCommand("loadVideoById", [{ videoId: id, startSeconds: start }]);
       this._videoCommand(this._video.soundHere ? "unMute" : "mute");
     } else {
@@ -1986,7 +2036,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.state = -1;
     this._soundHintShown = false;
     clearTimeout(this._soundCheckTimer);
-    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
+    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
     window.addEventListener("message", this._onVideoMessage);
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
     this._syncNowPlaying();
@@ -2126,7 +2176,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     const previous = cardMemory.get(this._config.entity);
     if (previous?.handoff) clearTimeout(previous.handoff);
+    const player = this.shadowRoot?.querySelector(".player");
     const memory = {
+      // Big (expanded or fullscreen) and turned: HA re-renders the view when the phone
+      // turns, which drops fullscreen; the new card comes back expanded instead.
+      big: !!player && (player.classList.contains("expanded") || this.shadowRoot.fullscreenElement === player || !!this._ownFullscreen),
+      rotated: !!player?.classList.contains("rotated"),
       source: this._source,
       query: this.shadowRoot?.querySelector('input[type="search"]')?.value || "",
       results: this._results,
@@ -2194,17 +2249,53 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         if (session && String(session.id) === String(saved.item.id)) this._openVideo(saved.item, { withSpeakers: true });
       } else if (saved.followsDevice || deviceAudio.item) {
         if (deviceAudio.item && this._isVideoItem(deviceAudio.item)) {
-          this._openVideo(deviceAudio.item, { withSpeakers: false, followsDevice: true });
+          this._openVideo(deviceAudio.item, {
+            withSpeakers: false,
+            followsDevice: true,
+            startSeconds: deviceAudio.position()?.time || 0,
+          });
         }
       } else {
         // Back at once: the video goes on where it was.
         const startSeconds = saved.playing ? saved.time + (Date.now() - saved.at) / 1000 : saved.time;
         this._openVideo(saved.item, { withSpeakers: false, startSeconds });
       }
+      const player = this.shadowRoot.querySelector(".player");
+      if (memory.big && this._video.open && !player.classList.contains("expanded")) {
+        // Fullscreen can't come back without a tap; the page-covering view can.
+        player.classList.add("expanded");
+        player.classList.toggle("rotated", !!memory.rotated);
+        if (player.getBoundingClientRect().width < window.innerWidth * 0.9) player.classList.remove("expanded", "rotated");
+        this._syncVideoExpandButton();
+      }
     }
+    if (!this._video.open && this._results.some((item) => this._isVideoItem(item, item.source || this._source))) this._warmFrame();
     this._syncNowPlaying();
     this._updateTransportState();
     this._updateProgress();
+  }
+
+  /**
+   * Load the YouTube player ahead (hidden, no video) once results are on the card: a
+   * first "watch" then only switches the video in it instead of loading the player
+   * (owner 15/09/2026: "Khi chọn xem video thì mất 1 2 s video mới chạy").
+   */
+  _warmFrame() {
+    const frame = this.shadowRoot?.querySelector(".video-frame");
+    if (!frame || frame.querySelector("iframe")) return;
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    iframe.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+    iframe.setAttribute("allowfullscreen", "");
+    iframe.title = "Video YouTube";
+    iframe.addEventListener("load", () => this._videoHandshake());
+    const hint = document.createElement("div");
+    hint.className = "sound-hint";
+    hint.hidden = true;
+    frame.append(iframe, hint);
+    window.addEventListener("message", this._onVideoMessage);
+    const params = new URLSearchParams({ enablejsapi: "1", rel: "0", playsinline: "1", origin: location.origin });
+    iframe.setAttribute("src", `https://www.youtube-nocookie.com/embed/?${params}`);
   }
 
   _videoHandshake() {
@@ -2212,7 +2303,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     clearInterval(this._videoHandshakeTimer);
     let tries = 0;
     this._videoHandshakeTimer = setInterval(() => {
-      if (this._video.ready || !this._video.open || ++tries > 40) {
+      if (this._video.ready || (!this._video.open && this._frameReady) || ++tries > 40) {
         clearInterval(this._videoHandshakeTimer);
         return;
       }
@@ -2258,6 +2349,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     if (!data || typeof data !== "object" || this._video.picture) return;
+    if (!this._frameReady) {
+      // First word from the player: commands sent before it could take them were
+      // dropped, so ask for its events now (a refused video reports onError only then).
+      this._frameReady = true;
+      this._videoPost({ event: "command", func: "addEventListener", args: ["onStateChange"] });
+      this._videoPost({ event: "command", func: "addEventListener", args: ["onError"] });
+    }
+    // A player loaded ahead talks before any video is open: nothing else to follow yet.
+    if (!this._video.open) return;
     this._video.ready = true;
     if (data.event === "onError") {
       this._embedRefused();
@@ -2515,12 +2615,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     video.picture = null;
     video.pictureEl = null;
     video.ready = false;
+    // That player refused a video: load a fresh one for the next.
+    this._frameReady = false;
   }
 
   _setVideoState(state) {
     if (!Number.isFinite(state) || state === this._video.state) return;
     const previous = this._video.state;
     this._video.state = state;
+    if (state === 1 && previous === 3 && this._pictureSeekStarted) {
+      // How long that seek took to show: the lead for the next one (smoothed, ≤ 1.5 s).
+      const took = (Date.now() - this._pictureSeekStarted) / 1000;
+      if (took < 4) this._pictureSeekLag = Math.min(1.5, ((this._pictureSeekLag ?? 0.3) + took) / 2);
+      this._pictureSeekStarted = 0;
+    }
     this._updateTransportState();
     // 0 = ended. With speakers the speakers drive auto-advance; alone, the video does.
     if (state !== 0 || previous === 0 || this._video.withSpeakers || this._video.followsDevice) return;
@@ -2534,11 +2642,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       // The muted picture follows this device's sound.
       const audio = deviceAudio.real();
       if (!audio) return;
+      // Sound still loading (no data yet, position 0): leave the picture alone. Following
+      // it sent the picture back to 0 s every few seconds (owner 15/09/2026: "cứ quay về
+      // 0s liên tục không chạy tiếp").
+      const soundReady = audio.readyState >= 3 && !audio.seeking;
       if (audio.paused && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
       if (!audio.paused && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
-      if (!audio.paused && Date.now() >= this._lastVideoSeekAt + 4000 && Math.abs(audio.currentTime - this._videoTimeNow()) > 2) {
-        this._videoCommand("seekTo", [audio.currentTime, true]);
-        this._lastVideoSeekAt = Date.now();
+      // This device's sound has an exact clock: keep the picture within 0.35 s of it.
+      if (soundReady && !audio.paused && video.state === 1 && Date.now() >= this._lastVideoSeekAt + 3000 && Math.abs(audio.currentTime - this._videoTimeNow()) > 0.35) {
+        this._seekPicture(audio.currentTime);
       }
       return;
     }
@@ -2569,12 +2681,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (speaker.state === "playing" && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
     const speakerTime = this._speakerPosition(primary);
     if (speaker.state !== "playing" || speakerTime === null || Date.now() < this._lastVideoSeekAt + 5000) return;
-    // The speaker starts a few seconds after the picture (its stream is prepared
-    // server-side), so the muted picture follows the speaker's reported position.
-    if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
-      this._videoCommand("seekTo", [speakerTime, true]);
-      this._lastVideoSeekAt = Date.now();
+    // The speaker plays its own audio stream, a few seconds after the picture starts
+    // (the stream is prepared server-side), so the muted picture follows the speaker's
+    // reported position. Past 0.8 s the lag shows on lips and beats (owner 15/09/2026:
+    // "khi xem hình ko đc khớp với audio"); the 5 s pause after a seek stops it hunting.
+    // Home Assistant reports the speaker's position a few hundred ms late, so 0.5 s is
+    // as tight as it holds without the picture seeking over and over.
+    if (video.state === 1 && Math.abs(speakerTime - this._videoTimeNow()) > 0.5) {
+      this._seekPicture(speakerTime);
     }
+  }
+
+  /**
+   * Seek the picture to where the sound is. A seek takes a moment to show (YouTube
+   * buffers), so the picture landed late; aim ahead by the time the last seeks took.
+   */
+  _seekPicture(soundTime) {
+    const lead = this._pictureSeekLag ?? 0.3;
+    this._videoCommand("seekTo", [soundTime + lead, true]);
+    this._lastVideoSeekAt = Date.now();
+    this._pictureSeekStarted = Date.now();
   }
 
   _toggleVideoExpanded() {
@@ -2665,14 +2791,29 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     clearTimeout(this._soundCheckTimer);
     this._soundHintShown = false;
     clearInterval(this._videoTimer);
-    clearInterval(this._videoHandshakeTimer);
     this._videoTimer = null;
-    window.removeEventListener("message", this._onVideoMessage);
     this._pendingSpeakerSeek = null;
+    const keepFrame = !!this._frameReady && this.isConnected;
+    if (keepFrame) {
+      // Keep the loaded player (stopped, hidden) so the next video starts at once.
+      this._videoPost({ event: "command", func: "stopVideo", args: [] });
+    } else {
+      clearInterval(this._videoHandshakeTimer);
+      window.removeEventListener("message", this._onVideoMessage);
+      this._frameReady = false;
+    }
     this._video = this._idleVideo();
     const player = this.shadowRoot?.querySelector(".player");
     if (!player) return;
-    this.shadowRoot.querySelector(".video-frame").replaceChildren();
+    const frame = this.shadowRoot.querySelector(".video-frame");
+    if (keepFrame) {
+      for (const child of [...frame.children]) {
+        if (child.tagName !== "IFRAME" && !child.classList.contains("sound-hint")) child.remove();
+      }
+      frame.querySelector(".sound-hint")?.setAttribute("hidden", "");
+    } else {
+      frame.replaceChildren();
+    }
     player.classList.remove("expanded", "rotated");
     this._syncVideoExpandButton();
     this._syncNowPlaying();
@@ -2710,8 +2851,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           return;
         }
         if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
-        // Unlocked inside this tap: if YouTube refuses the video here, its sound plays instead.
+        // Unlocked inside this tap, with the song's link fetched meanwhile: if the frame
+        // can't play its sound (the HA app), the card's sound starts without waiting.
         deviceAudio.unlock();
+        deviceAudio.prefetch(queue[position]);
         this._openVideo(item, { withSpeakers: false });
         this._setStatus(`Đang xem “${name}” trên thẻ. Chọn loa để phát tiếng ra loa.`);
         return;

@@ -101,7 +101,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Speakers + video: the picture is muted and follows the speaker's position;
         # a speaker joining a video being watched seeks to it when it can.
         self.assertIn("this._syncVideo()", script)
-        self.assertIn('this._videoCommand("seekTo", [speakerTime, true])', script)
+        self.assertIn("this._seekPicture(speakerTime)", script)
         self.assertIn("this._speakerJoinsVideo(entityId)", script)
         self.assertIn('"media_player", "media_seek"', script)
         self.assertIn("https://www.youtube-nocookie.com/embed/${id}", script)
