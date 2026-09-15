@@ -136,6 +136,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         # A video YouTube refuses to embed plays as sound instead of a dead frame.
         self.assertIn('this._videoCommand("addEventListener", ["onError"]);', script)
         self.assertIn("this._embedRefused();", script)
+        # Each page the frame loads is handshaken again: words from the page it replaced
+        # must not mark the new player ready (it then ignores every command).
+        self.assertEqual(script.count('iframe.addEventListener("load", () => this._frameLoaded());'), 2)
+        # A refused play() releases the video to its own sound; a superseded one is no error.
+        self.assertIn('if (error?.name === "AbortError") return;', script)
+        self.assertIn("if (video.open && video.followsDevice && isError && !video.picture) {", script)
         # Screen-off listening, off by default: hiding the page pauses the sound.
         self.assertIn('document.addEventListener("visibilitychange"', script)
         self.assertIn('localStorage.getItem(LISTEN_SCREEN_OFF_KEY) === "1"', script)

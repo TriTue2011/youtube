@@ -96,17 +96,22 @@ const deviceAudio = {
       if (this.real() && this.item && !this.next(1)) this.notify("Đã nghe hết hàng đợi.");
     });
     audio.addEventListener("error", () => {
-      if (this.real()) this.notify("Không phát được tiếng bài này trên máy này.", true);
+      if (this.real()) this.notify(`Không phát được tiếng bài này trên máy này (mã lỗi ${audio.error?.code ?? "?"}).`, true);
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
         // The Home Assistant app reports the page hidden for a moment while it enters
         // fullscreen (owner 15/09/2026: "phóng to dừng video"); fullscreen is watching,
-        // not a screen switched off.
-        if (!listenScreenOff() && !document.fullscreenElement && this.real() && !audio.paused) {
-          audio.pause();
-          this.pausedByHide = true;
-        }
+        // not a screen switched off. It may say hidden before fullscreen has begun, so
+        // look again half a second later: a screen switched off is still hidden then.
+        clearTimeout(this.hideTimer);
+        this.hideTimer = setTimeout(() => {
+          if (document.visibilityState !== "hidden" || document.fullscreenElement) return;
+          if (!listenScreenOff() && this.real() && !audio.paused) {
+            audio.pause();
+            this.pausedByHide = true;
+          }
+        }, 500);
       } else if (this.pausedByHide) {
         this.pausedByHide = false;
         audio.play().catch(() => {});
@@ -186,8 +191,16 @@ const deviceAudio = {
     }
     audio.src = url;
     if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
-    audio.play().catch(() => this.notify("Trình duyệt chặn tự phát có tiếng — bấm ▶ để nghe.", true));
+    audio.play().catch((error) => this.playRefused(error));
     this.notify();
+  },
+
+  /** play() refused. AbortError only means a newer song or a pause took over. */
+  playRefused(error) {
+    if (error?.name === "AbortError") return;
+    this.notify(error?.name === "NotAllowedError"
+      ? "Trình duyệt chặn tự phát có tiếng — bấm ▶ để nghe."
+      : `Máy này không phát được tiếng bài này (${error?.name || "lỗi không rõ"}).`, true);
   },
 
   /** Next (+1) / previous (-1) song of the queue; false at either end. */
@@ -202,7 +215,7 @@ const deviceAudio = {
   toggle() {
     const audio = this.real();
     if (!audio) return;
-    if (audio.paused) audio.play().catch(() => {});
+    if (audio.paused) audio.play().catch((error) => this.playRefused(error));
     else audio.pause();
   },
 
@@ -2012,7 +2025,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         iframe.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
         iframe.setAttribute("allowfullscreen", "");
         iframe.title = "Video YouTube";
-        iframe.addEventListener("load", () => this._videoHandshake());
+        iframe.addEventListener("load", () => this._frameLoaded());
         const hint = document.createElement("div");
         hint.className = "sound-hint";
         hint.hidden = true;
@@ -2136,11 +2149,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     // The picture follows the device's sound: a new song there (the next one when a
     // song ends) changes the picture too.
-    if (video.open && video.followsDevice && !deviceAudio.item && isError && !video.picture) {
-      // The device's sound couldn't start (no stream from the player server): the
-      // picture keeps its own sound, and a tap inside the video starts it.
+    if (video.open && video.followsDevice && isError && !video.picture) {
+      // The device's sound couldn't start (no stream from the player server, or the
+      // browser refused to play it): the picture keeps its own sound, and a tap inside
+      // the video starts it. Following a silent sound paused the video each time it was
+      // tapped (owner 15/09/2026: "Kích vào play trên khung video thì giật rồi dừng").
       video.followsDevice = false;
       video.soundHere = true;
+      if (deviceAudio.item) deviceAudio.stop();
       // Stopped and unmuted, so the tap inside the video starts it with its sound.
       this._videoCommand("pauseVideo");
       this._videoCommand("unMute");
@@ -2288,7 +2304,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     iframe.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
     iframe.setAttribute("allowfullscreen", "");
     iframe.title = "Video YouTube";
-    iframe.addEventListener("load", () => this._videoHandshake());
+    iframe.addEventListener("load", () => this._frameLoaded());
     const hint = document.createElement("div");
     hint.className = "sound-hint";
     hint.hidden = true;
@@ -2296,6 +2312,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     window.addEventListener("message", this._onVideoMessage);
     const params = new URLSearchParams({ enablejsapi: "1", rel: "0", playsinline: "1", origin: location.origin });
     iframe.setAttribute("src", `https://www.youtube-nocookie.com/embed/?${params}`);
+  }
+
+  /**
+   * The frame loaded a new page (a video opened before the player loaded ahead was
+   * ready, or Home Assistant moved the card and the frame reloaded). That page hasn't
+   * heard from the card yet. Words from the page it replaced had already marked the
+   * frame ready and stopped the handshake, so the new player ignored every command —
+   * play, pause, mute (reproduced on the owner's Home Assistant 15/09/2026: the video
+   * stayed cued while this device's sound played).
+   */
+  _frameLoaded() {
+    this._frameReady = false;
+    this._video.ready = false;
+    this._videoHandshake();
   }
 
   _videoHandshake() {
@@ -2426,7 +2456,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _syncSoundHint() {
     const hint = this.shadowRoot?.querySelector(".sound-hint");
     if (!hint) return;
-    if (this._soundHintShown && (!this._video.soundHere || !this._soundBlocked())) this._soundHintShown = false;
+    // Shown until the frame plays with its sound: stopped for a tap (state 2 after the
+    // device's sound failed) still needs the tap.
+    if (this._soundHintShown && (!this._video.soundHere || (this._video.state === 1 && this._video.muted !== true))) this._soundHintShown = false;
     hint.textContent = this._video.state === 1 ? "🔇 Chạm vào video để bật tiếng" : "▶ Chạm vào video để phát có tiếng";
     hint.hidden = !this._soundHintShown;
   }
@@ -3019,7 +3051,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     if (this._video.open && !this._video.withSpeakers) {
-      if (!this._video.followsDevice && !this._video.picture && [-1, 5].includes(this._video.state)) {
+      if (!this._video.followsDevice && !this._video.picture && (this._soundHintShown || [-1, 5].includes(this._video.state))) {
         // Not started: the frame won't start without a tap inside it — this tap starts
         // the card's own sound and the muted picture follows.
         this._soundFromDevice();
