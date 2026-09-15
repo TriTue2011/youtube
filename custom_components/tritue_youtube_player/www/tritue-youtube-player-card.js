@@ -156,7 +156,10 @@ const deviceAudio = {
     const url = await this.streamUrl(item);
     if (generation !== this.generation) return;
     if (!url) {
-      this.stop();
+      // One notification, carrying the error (the card keeps a video it was following).
+      this.silence();
+      Object.assign(this, { item: null, queue: [], index: -1, along: false });
+      this.mediaSession(null);
       this.notify("Không lấy được tiếng bài này.", true);
       return;
     }
@@ -317,7 +320,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _idleVideo() {
-    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, followsDevice: false, soundHere: true, muted: null };
+    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, followsDevice: false, soundHere: true, muted: null, picture: null, pictureEl: null };
   }
 
   setConfig(config) {
@@ -372,12 +375,42 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
     if (!this._onFullscreenChange) {
       this._onFullscreenChange = () => {
-        if (document.fullscreenElement) return;
-        try {
-          screen.orientation?.unlock?.();
-        } catch (_error) {
-          // Nothing was locked.
+        const player = this.shadowRoot?.querySelector(".player");
+        if (!document.fullscreenElement) {
+          this._ownFullscreen = false;
+          this._leavingFullscreen = false;
+          player?.classList.remove("rotated", "idle");
+          clearTimeout(this._idleTimer);
+          try {
+            screen.orientation?.unlock?.();
+          } catch (_error) {
+            // Nothing was locked.
+          }
+          return;
         }
+        // Inside the shadow root the real fullscreen element (document's is the card).
+        const inside = this.shadowRoot?.fullscreenElement;
+        if (!player || !inside) return;
+        if (inside !== player && player.contains(inside)) {
+          // YouTube's own fullscreen button in the video. While the card is fullscreen it
+          // reads as "make smaller" (owner 15/09/2026: it went back to portrait without
+          // leaving fullscreen), so leave fullscreen altogether; otherwise turn sideways.
+          if (this._ownFullscreen) {
+            this._leavingFullscreen = true;
+            document.exitFullscreen?.();
+          } else {
+            screen.orientation?.lock?.("landscape")?.catch?.(() => {});
+          }
+          return;
+        }
+        if (inside === player && this._leavingFullscreen) {
+          // YouTube's layer is gone, the card's is still there: leave it too.
+          this._leavingFullscreen = false;
+          document.exitFullscreen?.();
+          return;
+        }
+        this._ownFullscreen = inside === player;
+        if (inside === player) this._wakeControls();
       };
       document.addEventListener("fullscreenchange", this._onFullscreenChange);
     }
@@ -541,6 +574,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: #000;
         }
         .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        /* YouTube refused the embed: our own picture (or the thumbnail) replaces it. */
+        .video-frame.no-embed { background: #000 var(--poster, none) center / contain no-repeat; }
+        .video-frame.no-embed iframe { visibility: hidden; }
+        .video-frame video.picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+        .picture-note {
+          position: absolute;
+          left: 8px;
+          right: 8px;
+          bottom: 8px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px 10px;
+          padding: 6px 10px;
+          border-radius: 9px;
+          color: #fff;
+          background: rgba(0, 0, 0, .75);
+          font-size: 12px;
+        }
+        .picture-note button { border: 0; border-radius: 999px; padding: 5px 12px; color: #000; background: #fff; font-weight: 650; }
         .sound-hint {
           position: absolute;
           top: 8px;
@@ -761,8 +815,47 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           color: #fff;
           background: #000;
         }
-        .player.expanded > *,
-        .player:fullscreen > * { width: min(100%, calc((100vh - 150px) * 16 / 9)); margin-left: auto; margin-right: auto; }
+        /* The stage only groups the player's parts so they can be turned together. */
+        .stage { display: contents; }
+        /* Fullscreen: the controls fade out after a few seconds without a touch while
+           the video plays; the shield catches the next touch (taps inside the YouTube
+           frame never reach the card) and only brings them back. */
+        .idle-shield { display: none; }
+        .player:is(.expanded, :fullscreen) > .stage > :is(.progress, .control-bar) { transition: opacity .3s; }
+        .player.idle:is(.expanded, :fullscreen) { cursor: none; }
+        .player.idle:is(.expanded, :fullscreen) > .idle-shield { display: block; position: absolute; inset: 0; z-index: 3; }
+        .player.idle:is(.expanded, :fullscreen) > .stage > :is(.progress, .control-bar, .now, .speaker-volumes, .device-row, .others) { opacity: 0; pointer-events: none; }
+        .player.expanded > .stage > *,
+        .player:fullscreen > .stage > * { width: min(100%, calc((100vh - 150px) * 16 / 9)); margin-left: auto; margin-right: auto; }
+        /* Phone held upright in an app or browser that can't turn the screen (the Home
+           Assistant app's WebView refuses screen.orientation.lock, and turning the phone
+           re-renders HA and leaves fullscreen): the card turns the picture itself, so the
+           phone is simply held sideways. A phone that does turn gets the landscape rules. */
+        @media (orientation: portrait) {
+          .player.rotated.expanded,
+          .player.rotated:fullscreen { padding: 0; }
+          .player.rotated > .stage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-sizing: border-box;
+            width: 100vh;
+            height: 100vw;
+            padding: 4px 10px;
+            transform: translate(-50%, -50%) rotate(90deg);
+          }
+          .player.rotated > .stage > .now,
+          .player.rotated > .stage > .speaker-volumes,
+          .player.rotated > .stage > .device-row,
+          .player.rotated > .stage > .others { display: none; }
+          .player.rotated > .stage > .video-frame,
+          .player.rotated > .stage > .progress,
+          .player.rotated > .stage > .control-bar { width: min(100%, calc((100vw - 64px) * 16 / 9)); }
+          .player.rotated > .stage > .video-frame { margin-bottom: 2px; border-radius: 0; }
+        }
         /* Browser fullscreen on a phone turned sideways: the picture takes the whole
            height (16:9, never cropped) and only the control bar stays under it. */
         @media (orientation: landscape) {
@@ -813,6 +906,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           </header>
 
           <section class="player" aria-label="Đang phát">
+            <div class="idle-shield" aria-hidden="true"></div>
+            <div class="stage">
             <div class="video-frame" hidden></div>
             <div class="now">
               <div class="now-cover">
@@ -838,6 +933,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               </div>
               <div class="view-group">
                 <button class="ctl watch" type="button" aria-label="Xem video trên thẻ" title="Xem video trên thẻ" hidden><ha-icon icon="mdi:television-play"></ha-icon></button>
+                <button class="ctl video-listen" type="button" aria-label="Chỉ nghe (tắt hình, tiếng chạy tiếp)" title="Chỉ nghe — tắt hình, tiếng chạy tiếp" hidden><ha-icon icon="mdi:headphones"></ha-icon></button>
                 <button class="ctl video-expand" type="button" aria-label="Phóng to video" title="Phóng to" hidden><ha-icon icon="mdi:arrow-expand"></ha-icon></button>
                 <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
                 <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
@@ -849,6 +945,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             </div>
             <div class="speaker-volumes"></div>
             <div class="others" aria-label="Nhóm loa khác đang phát"></div>
+            </div>
           </section>
 
           <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
@@ -940,6 +1037,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".video-expand").addEventListener("click", () => this._toggleVideoExpanded());
     this.shadowRoot.querySelector(".video-fullscreen").addEventListener("click", () => this._videoFullscreen());
     this.shadowRoot.querySelector(".video-close").addEventListener("click", () => this._closeVideo());
+    this.shadowRoot.querySelector(".video-listen").addEventListener("click", () => this._listenOnly());
+    const player = this.shadowRoot.querySelector(".player");
+    for (const name of ["pointerdown", "pointermove", "keydown"]) {
+      player.addEventListener(name, () => this._wakeControls());
+    }
+    this.shadowRoot.querySelector(".idle-shield").addEventListener("pointerdown", (event) => {
+      // This touch only brings the controls back.
+      event.preventDefault();
+      event.stopPropagation();
+      this._wakeControls();
+    });
   }
 
   _entryId() {
@@ -1305,17 +1413,36 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ["playing", "paused", "buffering"].includes(this._hass?.states?.[entityId]?.state));
   }
 
+  /** Whether what the card shows is playing (this device, the video alone, or the speakers). */
+  _playingNow() {
+    if (deviceAudio.item) return deviceAudio.playing();
+    if (this._video.open && !this._video.withSpeakers) return [1, 3].includes(this._video.state);
+    const outputs = this._focusedSession()?.output_entity_ids || [...this._selectedPlayers];
+    return outputs.some((entityId) => this._hass?.states?.[entityId]?.state === "playing");
+  }
+
+  /** Controls back on; fullscreen hides them again after 3 s without a touch while playing. */
+  _wakeControls() {
+    const player = this.shadowRoot?.querySelector(".player");
+    if (!player) return;
+    player.classList.remove("idle");
+    clearTimeout(this._idleTimer);
+    const big = () => player.classList.contains("expanded") || this.shadowRoot.fullscreenElement === player;
+    if (!big()) return;
+    this._idleTimer = setTimeout(() => {
+      if (!big()) return;
+      if (this._video.open && this._playingNow()) player.classList.add("idle");
+      else this._wakeControls(); // paused: keep them, look again later
+    }, 3000);
+  }
+
   _updateTransportState() {
     if (!this.shadowRoot || !this._hass) return;
     const listening = !!deviceAudio.item;
     const videoAlone = this._video.open && !this._video.withSpeakers;
     const session = this._focusedSession();
     const outputs = session?.output_entity_ids || [...this._selectedPlayers];
-    const playing = listening
-      ? deviceAudio.playing()
-      : videoAlone
-      ? [1, 3].includes(this._video.state)
-      : outputs.some((entityId) => this._hass.states[entityId]?.state === "playing");
+    const playing = this._playingNow();
     const playPause = this.shadowRoot.querySelector(".play-pause");
     playPause.querySelector("ha-icon").setAttribute("icon", playing ? "mdi:pause" : "mdi:play");
     playPause.setAttribute("aria-label", playing ? "Tạm dừng" : "Phát");
@@ -1424,7 +1551,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const session = this._focusedSession();
     this.shadowRoot.querySelector(".player").classList.toggle("video-on", video.open);
     this.shadowRoot.querySelector(".video-frame").hidden = !video.open;
-    for (const selector of [".video-expand", ".video-fullscreen", ".video-close"]) {
+    for (const selector of [".video-listen", ".video-expand", ".video-fullscreen", ".video-close"]) {
       this.shadowRoot.querySelector(selector).hidden = !video.open;
     }
     // "Nghe trên máy này": speakers play, and this device plays the sound too (the
@@ -1761,6 +1888,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._openVideo(this._nowWatchItem, { withSpeakers: this._activeSpeakers().length > 0 });
   }
 
+  /** Watching → listening only: the picture closes, the sound goes on from the same second. */
+  _listenOnly() {
+    const video = this._video;
+    if (!video.open || !video.item) return;
+    if (video.withSpeakers || video.followsDevice) {
+      // The speakers or this device already carry the sound: only the picture goes.
+      const speakers = video.withSpeakers;
+      this._closeVideo();
+      this._setStatus(speakers ? "Đã tắt hình, loa vẫn phát." : "Đã tắt hình, đang nghe trên máy này.");
+      return;
+    }
+    const item = { source: "youtube", ...video.item };
+    const at = this._videoTimeNow();
+    deviceAudio.entryId = this._entryId();
+    // Inside the tap, before the picture goes: the audio element is unlocked here.
+    deviceAudio.listen(item, this._queue.length ? this._queue : [item], Math.max(0, this._queueIndex), at);
+    this._closeVideo();
+    this._setStatus(`Đang nghe “${item.title}” trên máy này từ ${this._formatDuration(at) || "0:00"}.`);
+  }
+
   /** Same song (by id or link). */
   _sameSong(left, right) {
     return !!left && !!right && ((left.url || left.id) === (right.url || right.id) || (!!left.id && left.id === right.id));
@@ -1773,6 +1920,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     const frame = this.shadowRoot.querySelector(".video-frame");
+    // A picture shown for a refused video: try the embed again for this one.
+    if (this._video.picture) this._leavePicture();
     let iframe = frame.querySelector("iframe");
     this._video.item = {
       id,
@@ -1827,7 +1976,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.state = -1;
     this._soundHintShown = false;
     clearTimeout(this._soundCheckTimer);
-    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 3500);
+    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
     window.addEventListener("message", this._onVideoMessage);
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
     this._syncNowPlaying();
@@ -1845,7 +1994,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         video.soundHere = false;
         this._videoCommand("mute");
       }
-    } else if (video.open && video.withSpeakers && !listenScreenOff()) {
+    } else if (video.open && video.withSpeakers && !video.picture && !listenScreenOff()) {
       // With speakers the picture starts muted (the speakers carry the sound); this
       // lets the device showing the card play the sound too.
       video.soundHere = true;
@@ -1927,7 +2076,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     // The picture follows the device's sound: a new song there (the next one when a
     // song ends) changes the picture too.
-    if (video.open && video.followsDevice && deviceAudio.item?.id !== video.item?.id) {
+    if (video.open && video.followsDevice && !deviceAudio.item && isError && !video.picture) {
+      // The device's sound couldn't start (no stream from the player server): the
+      // picture keeps its own sound, and a tap inside the video starts it.
+      video.followsDevice = false;
+      video.soundHere = true;
+      // Stopped and unmuted, so the tap inside the video starts it with its sound.
+      this._videoCommand("pauseVideo");
+      this._videoCommand("unMute");
+      this._soundHintShown = true;
+      this._syncSoundHint();
+    } else if (video.open && video.followsDevice && deviceAudio.item?.id !== video.item?.id) {
       if (deviceAudio.item && this._isVideoItem(deviceAudio.item)) {
         this._openVideo(deviceAudio.item, { withSpeakers: false, followsDevice: true });
       } else {
@@ -2059,11 +2218,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _videoCommand(func, args = []) {
-    this._videoPost({ event: "command", func, args });
+    const picture = this._video.pictureEl;
+    if (!picture) {
+      this._videoPost({ event: "command", func, args });
+      return;
+    }
+    // Our own picture (no sound: the speakers or this device carry it).
+    if (func === "playVideo") picture.play().catch(() => {});
+    else if (func === "pauseVideo") picture.pause();
+    else if (func === "stopVideo") {
+      picture.pause();
+      picture.currentTime = 0;
+    } else if (func === "seekTo" && Number.isFinite(args[0])) picture.currentTime = args[0];
   }
 
   _videoTimeNow() {
     const video = this._video;
+    if (video.pictureEl) return video.pictureEl.currentTime;
     return video.time + (video.state === 1 && video.timeAt ? (Date.now() - video.timeAt) / 1000 : 0);
   }
 
@@ -2076,7 +2247,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     } catch (_error) {
       return;
     }
-    if (!data || typeof data !== "object") return;
+    if (!data || typeof data !== "object" || this._video.picture) return;
     this._video.ready = true;
     if (data.event === "onError") {
       this._embedRefused();
@@ -2098,12 +2269,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   /**
    * Some browsers (phones, the Home Assistant app) only allow sound after a tap
-   * inside the video itself: the embed then stays stopped or plays muted. Ask
-   * once more, then tell the viewer to tap the video.
+   * inside the video itself: the embed then stays stopped or plays muted, and the
+   * card's play button can't start it (owner 15/09/2026: "không phát luôn mà tôi phải
+   * kích vào màn hình youtube, kích vào nút play của mình không hoạt động").
+   * Watching alone, the sound then comes from the card's audio element (unlocked in
+   * the tap that opened the video) and the picture follows muted — muted pictures
+   * may play on their own. With speakers, ask once more, then hint to tap the video.
    */
   _checkVideoSound() {
     const video = this._video;
-    if (!video.open || !video.soundHere || !this._soundBlocked()) return;
+    if (!video.open || video.picture || !video.soundHere || !this._soundBlocked()) return;
+    if (!video.withSpeakers) {
+      this._soundFromDevice();
+      return;
+    }
     this._videoCommand("unMute");
     this._videoCommand("playVideo");
     clearTimeout(this._soundCheckTimer);
@@ -2111,6 +2290,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._soundHintShown = this._video.open && this._video.soundHere && this._soundBlocked();
       this._syncSoundHint();
     }, 1500);
+  }
+
+  /** The frame can't play its sound: this device plays it, the muted picture follows. */
+  _soundFromDevice() {
+    const video = this._video;
+    if (!video.open || !video.item || video.withSpeakers || video.followsDevice) return;
+    const item = { source: "youtube", ...video.item };
+    deviceAudio.entryId = this._entryId();
+    deviceAudio.listen(item, this._queue.length ? this._queue : [item], Math.max(0, this._queueIndex), this._videoTimeNow());
+    video.followsDevice = true;
+    video.soundHere = false;
+    clearTimeout(this._soundCheckTimer);
+    this._soundHintShown = false;
+    this._syncSoundHint();
+    this._videoCommand("mute");
+    this._videoCommand("playVideo");
+    this._syncNowPlaying();
   }
 
   _soundBlocked() {
@@ -2127,31 +2323,186 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   /**
    * YouTube refuses some videos inside the card: record-label (VEVO) videos when
-   * Home Assistant is opened by IP address, while the same video plays when it is
-   * opened by name. Rather than leave a dead frame, the sound goes on without it.
+   * Home Assistant is opened by IP address. The sound goes on (the speakers, or this
+   * device), and the card shows the video's picture from the player server instead:
+   * - at home the browser fetches it straight from YouTube (the link is bound to the
+   *   home's Internet address), costing nothing more than YouTube itself;
+   * - that failing means the viewer is away from home: the picture would leave the
+   *   home's connection, so it stays off until the viewer turns it on and agrees.
    */
-  _embedRefused() {
+  async _embedRefused() {
     const video = this._video;
-    if (!video.open || !video.item) return;
+    if (!video.open || !video.item || video.picture) return;
     const item = { source: "youtube", ...video.item };
     const host = location.hostname;
     const why = /^[\d.]+$/.test(host) || host.includes(":")
-      ? `YouTube không cho xem hình “${item.title}” khi mở Home Assistant bằng địa chỉ IP (mở bằng tên, ví dụ homeassistant.local, thì xem được).`
-      : `YouTube không cho xem hình “${item.title}” trên thẻ.`;
-    if (video.withSpeakers) {
-      this._closeVideo();
-      this._setStatus(`${why} Loa vẫn phát tiếng.`);
+      ? `YouTube không cho nhúng “${item.title}” khi mở Home Assistant bằng địa chỉ IP.`
+      : `YouTube không cho nhúng “${item.title}” vào thẻ.`;
+    if (!video.withSpeakers && !video.followsDevice) {
+      deviceAudio.entryId = this._entryId();
+      const queue = this._queue.length ? this._queue : [item];
+      deviceAudio.listen(item, queue, Math.max(0, this._queueIndex));
+    }
+    video.followsDevice = !video.withSpeakers;
+    video.soundHere = false;
+    clearTimeout(this._soundCheckTimer);
+    this._soundHintShown = false;
+    this._syncSoundHint();
+    const pending = { item: video.item };
+    video.picture = pending;
+    const frame = this.shadowRoot.querySelector(".video-frame");
+    frame.classList.add("no-embed");
+    frame.style.setProperty("--poster", `url("https://i.ytimg.com/vi/${item.id}/hqdefault.jpg")`);
+    this._pictureNote("Đang nghe tiếng · đang lấy hình…");
+    this._syncNowPlaying();
+    let info = null;
+    try {
+      info = await this._hass.callApi("POST", "tritue_youtube_player/stream", {
+        entry_id: this._entryId(),
+        source: "youtube_video",
+        target: item.url || item.id,
+        max_height: this._pictureHeight(),
+      });
+    } catch (_error) {
+      info = null;
+    }
+    if (this._video.picture !== pending) return;
+    if (!info?.stream_url) {
+      this._pictureNote("Đang nghe tiếng · không lấy được hình của video này");
+      this._setStatus(`${why} Không lấy được hình, đang nghe tiếng.`);
       return;
     }
-    const followsDevice = video.followsDevice;
-    const queue = this._queue.length ? this._queue : [item];
-    const index = Math.max(0, this._queueIndex);
-    this._closeVideo();
-    if (!followsDevice) {
-      deviceAudio.entryId = this._entryId();
-      deviceAudio.listen(item, queue, index);
+    if (info.direct_url && await this._tryPicture(info.direct_url, pending, 8000)) {
+      this._setStatus(`${why} Đang xem hình lấy thẳng từ YouTube.`);
+      return;
     }
-    this._setStatus(`${why} Đang nghe tiếng trên máy này.`);
+    if (this._video.picture !== pending) return;
+    const perMinute = Math.max(1, Math.round((Number(info.bitrate_kbps) || 1000) * 60 / 8 / 1000));
+    const openAway = async () => {
+      if (!(await this._tryPicture(info.stream_url, pending, 20000)) && this._video.picture === pending) {
+        this._pictureNote("Đang nghe tiếng · không mở được hình");
+      }
+    };
+    if (this._awayPictureOk) {
+      await openAway();
+      return;
+    }
+    this._pictureNote(`Đang nghe tiếng · ở ngoài mạng nhà, hình ~${perMinute} MB/phút`, "Xem hình", () => {
+      const agreed = window.confirm(
+        `Xem hình khi ở ngoài mạng nhà: hình ${info.height || ""}p đi từ mạng nhà qua Internet tới máy này, `
+        + `khoảng ${perMinute} MB mỗi phút — tốn dữ liệu di động của máy và băng thông tải lên của nhà. Xem hình?`,
+      );
+      if (!agreed || this._video.picture !== pending) return;
+      // Agreed once: the next refused videos of this viewing open their picture too.
+      this._awayPictureOk = true;
+      this._pictureNote("Đang nghe tiếng · đang mở hình…");
+      openAway();
+    });
+    this._setStatus(`${why} Đang nghe tiếng; ở ngoài mạng nhà nên chưa mở hình.`);
+  }
+
+  _pictureHeight() {
+    // Phones get 720p, larger screens (and fullscreen on them) 1080p.
+    const phone = window.matchMedia?.("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 600;
+    return phone ? 720 : 1080;
+  }
+
+  _pictureNote(text, action = "", onAction = null) {
+    const frame = this.shadowRoot.querySelector(".video-frame");
+    frame.querySelector(".picture-note")?.remove();
+    if (!text) return;
+    const note = document.createElement("div");
+    note.className = "picture-note";
+    const label = document.createElement("span");
+    label.textContent = text;
+    note.append(label);
+    if (action && onAction) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = action;
+      button.addEventListener("click", onAction);
+      note.append(button);
+    }
+    frame.append(note);
+  }
+
+  /** Load a picture stream; resolves true once its first frame is there. */
+  _tryPicture(url, pending, timeout) {
+    return new Promise((resolve) => {
+      const frame = this.shadowRoot.querySelector(".video-frame");
+      const element = document.createElement("video");
+      element.className = "picture";
+      element.muted = true;
+      element.playsInline = true;
+      element.setAttribute("playsinline", "");
+      element.preload = "auto";
+      element.style.visibility = "hidden";
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (!ok) {
+          element.removeAttribute("src");
+          element.load();
+          element.remove();
+        }
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(false), timeout);
+      element.addEventListener("error", () => finish(false), { once: true });
+      element.addEventListener("loadeddata", () => {
+        if (this._video.picture !== pending) {
+          finish(false);
+          return;
+        }
+        this._attachPicture(element, pending);
+        finish(true);
+      }, { once: true });
+      frame.append(element);
+      element.src = url;
+    });
+  }
+
+  _attachPicture(element, pending) {
+    const video = this._video;
+    video.pictureEl = element;
+    video.ready = true;
+    video.state = -1;
+    pending.shown = true;
+    element.style.visibility = "";
+    const current = () => this._video.pictureEl === element;
+    for (const [name, state] of [["playing", 1], ["pause", 2], ["waiting", 3], ["ended", 0]]) {
+      element.addEventListener(name, () => {
+        if (current()) this._setVideoState(element.ended ? 0 : state);
+      });
+    }
+    element.addEventListener("error", () => {
+      if (!current()) return;
+      // The link expired or the connection dropped: keep the sound, drop the picture.
+      element.remove();
+      video.pictureEl = null;
+      this._pictureNote("Đang nghe tiếng · hình bị ngắt");
+    });
+    this._pictureNote("");
+    this._syncVideo();
+    this._updateTransportState();
+  }
+
+  _leavePicture() {
+    const video = this._video;
+    const frame = this.shadowRoot?.querySelector(".video-frame");
+    if (video.pictureEl) {
+      video.pictureEl.pause();
+      video.pictureEl.removeAttribute("src");
+      video.pictureEl.load();
+      video.pictureEl.remove();
+    }
+    frame?.querySelector(".picture-note")?.remove();
+    frame?.classList.remove("no-embed");
+    video.picture = null;
+    video.pictureEl = null;
+    video.ready = false;
   }
 
   _setVideoState(state) {
@@ -2218,6 +2569,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const player = this.shadowRoot.querySelector(".player");
     const expand = !player.classList.contains("expanded");
     player.classList.toggle("expanded", expand);
+    if (!expand) player.classList.remove("rotated");
     // Some dashboard layouts contain their cards, which traps a fixed overlay
     // inside the card; fall back to the browser's fullscreen mode there.
     if (expand && player.getBoundingClientRect().width < window.innerWidth * 0.9) {
@@ -2234,25 +2586,42 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     button.querySelector("ha-icon").setAttribute("icon", expanded ? "mdi:arrow-collapse" : "mdi:arrow-expand");
     button.setAttribute("aria-label", expanded ? "Thu nhỏ video" : "Phóng to video");
     button.title = expanded ? "Thu nhỏ" : "Phóng to";
+    // Expanded or not any more: controls on, and the hide timer (re)starts when expanded.
+    this._wakeControls();
   }
 
   _videoFullscreen() {
+    const player = this.shadowRoot.querySelector(".player");
     if (document.fullscreenElement) {
       document.exitFullscreen?.();
       return;
     }
+    if (player.classList.contains("rotated")) {
+      // Leaving the turned page-cover used where the browser has no fullscreen.
+      player.classList.remove("rotated", "expanded");
+      this._syncVideoExpandButton();
+      return;
+    }
     // The whole player goes fullscreen so the card's buttons stay usable there.
-    const player = this.shadowRoot.querySelector(".player");
     const request = player.requestFullscreen || player.webkitRequestFullscreen;
     if (!request) {
-      this._setStatus("Trình duyệt này không hỗ trợ toàn màn hình — dùng nút toàn màn hình trong khung video.", true);
+      // iPhone browsers and apps: no element fullscreen. Cover the page and turn the
+      // picture while the phone is upright.
+      player.classList.add("expanded", "rotated");
+      this._syncVideoExpandButton();
       return;
     }
     Promise.resolve(request.call(player, { navigationUI: "hide" }))
-      .then(() => screen.orientation?.lock?.("landscape"))
-      // Phones: turn sideways for the 16:9 picture. Only browsers that can lock the
-      // orientation while fullscreen (Chrome on Android) rotate; elsewhere the video
-      // still fits the screen without cropping.
+      .then(async () => {
+        // Phones: landscape for the 16:9 picture. Chrome on Android turns the screen;
+        // where the lock is refused or missing (the Home Assistant app), turn the picture.
+        try {
+          if (!screen.orientation?.lock) throw new Error("orientation_lock_unsupported");
+          await screen.orientation.lock("landscape");
+        } catch (_error) {
+          if (document.fullscreenElement) player.classList.add("rotated");
+        }
+      })
       .catch(() => {
         if (!document.fullscreenElement) {
           this._setStatus("Không mở được toàn màn hình — dùng nút toàn màn hình trong khung video.", true);
@@ -2261,6 +2630,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _closeVideo() {
+    if (this._video.picture) this._leavePicture();
+    this._awayPictureOk = false;
     clearTimeout(this._soundCheckTimer);
     this._soundHintShown = false;
     clearInterval(this._videoTimer);
@@ -2272,7 +2643,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const player = this.shadowRoot?.querySelector(".player");
     if (!player) return;
     this.shadowRoot.querySelector(".video-frame").replaceChildren();
-    player.classList.remove("expanded");
+    player.classList.remove("expanded", "rotated");
     this._syncVideoExpandButton();
     this._syncNowPlaying();
     this._updateTransportState();
@@ -2475,6 +2846,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     if (this._video.open && !this._video.withSpeakers) {
+      if (!this._video.followsDevice && !this._video.picture && [-1, 5].includes(this._video.state)) {
+        // Not started: the frame won't start without a tap inside it — this tap starts
+        // the card's own sound and the muted picture follows.
+        this._soundFromDevice();
+        return;
+      }
       this._videoCommand([1, 3].includes(this._video.state) ? "pauseVideo" : "playVideo");
       return;
     }

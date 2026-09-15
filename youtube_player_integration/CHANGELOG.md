@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.10.3 - 2026-09-15
+
+Cần add-on **0.8.1** (hoặc c2a từ a9fb9c2) cho luồng hình.
+
+### Added
+
+- **Xem được video YouTube không cho nhúng.** Card lấy hình riêng của video từ máy phát
+  (tối đa 720p trên điện thoại, 1080p màn hình lớn), tiếng đi riêng (loa hoặc máy này),
+  hình chạy theo. Máy trong nhà tải hình thẳng từ YouTube (không qua máy phát). Tải thẳng
+  không được nghĩa là đang ở ngoài nhà: mặc định chỉ nghe, có nút **«Xem hình»** ghi ước
+  lượng MB/phút; bấm thì hỏi lại, đồng ý mới mở (các video bị chặn tiếp theo trong lần xem
+  đó tự mở hình), Huỷ thì thôi.
+- **Nút «Chỉ nghe» khi đang xem video**: tắt hình, tiếng chạy tiếp từ giây đang xem (có loa
+  thì loa vẫn phát).
+- **Toàn màn hình tự ẩn nút** sau 3 giây không chạm khi video đang chạy; chạm là hiện lại
+  (lần chạm đó chỉ để hiện nút). Đang tạm dừng thì nút không ẩn.
+- **Phát hành trên GitHub theo phiên bản** (`vX.Y.Z`, ghi chú lấy từ changelog) để HACS
+  hiện số phiên bản và báo cập nhật — trước đây repo không có release nên HACS không báo.
+  Muốn thấy ngay: HACS → ⋮ → Cập nhật thông tin.
+
+### Fixed
+
+- **Bấm «Xem video» mà không phát, nút ▶ của card không tác dụng** (app Home Assistant và
+  trình duyệt chặn tiếng tự phát: khung YouTube chỉ chịu phát khi chạm thẳng vào nó). Nay
+  card phát tiếng bằng trình phát của nó (mở khoá ngay trong cú bấm), hình YouTube chạy
+  tắt tiếng theo; bấm ▶ của card khi khung chưa chạy cũng phát ngay. Máy phát không trả
+  được tiếng thì giữ video và nhắc chạm vào video.
+- **Toàn màn hình không xoay ngang trong app Home Assistant.** App (WebView) từ chối lệnh
+  khoá xoay, và xoay máy làm HA vẽ lại cả trang nên thoát toàn màn hình. Khi không khoá được,
+  card tự xoay khung hình 90° — chỉ việc cầm ngang máy; máy nào tự xoay thì dùng bố cục ngang.
+- **Bấm nút toàn màn hình của chính YouTube khi đang toàn màn hình** không còn kẹt ở màn dọc:
+  nút đó nay thoát hẳn toàn màn hình (chưa toàn màn hình thì nó xoay ngang như nút của card).
+
 ## 0.10.2 - 2026-09-15
 
 Cần add-on **0.8.1** cho phần luồng hình (máy phát cũ vẫn chạy, chỉ chưa có luồng hình).
