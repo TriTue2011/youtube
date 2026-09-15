@@ -221,27 +221,72 @@ async def test_assist_tim_10_bai_chon_loa_phat_va_dieu_khien(hass, addon_server)
 
 
 async def test_the_lay_luong_de_nghe_tren_may(hass, addon_server, hass_client, hass_client_no_auth):
-    """Nút nghe trên thẻ / video YouTube chặn nhúng: thẻ xin luồng tiếng của bài qua HA."""
-    import base64
-    import json
+    """Nút nghe trên thẻ / video YouTube chặn nhúng: thẻ xin luồng tiếng của bài qua HA.
+
+    Luồng đi qua chính HA (đường dẫn đã ký): trình duyệt mở HA bằng địa chỉ nào (trong nhà,
+    tên miền HTTPS, Nabu Casa) cũng tải được — chủ máy 15/09/2026 dùng 5G bị NotSupportedError
+    vì thẻ đưa link http://172.16.10.38:3030/… của mạng nhà."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     from homeassistant.setup import async_setup_component
 
-    from custom_components.tritue_youtube_player.http import TriTueStreamView
+    from custom_components.tritue_youtube_player.http import TriTueProxyView, TriTueStreamView
+
+    DU_LIEU = bytes(range(256)) * 40
+    da_hoi = []
+
+    class Goc(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            da_hoi.append((self.path, self.headers.get("Range")))
+            rg = self.headers.get("Range")
+            if rg:
+                dau, _, cuoi = rg[6:].partition("-")
+                dau, cuoi = int(dau), int(cuoi or len(DU_LIEU) - 1)
+                khuc = DU_LIEU[dau:cuoi + 1]
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {dau}-{dau + len(khuc) - 1}/{len(DU_LIEU)}")
+            else:
+                khuc = DU_LIEU
+                self.send_response(200)
+            self.send_header("Content-Type", "audio/mp4")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(len(khuc)))
+            self.end_headers()
+            self.wfile.write(khuc)
+
+    goc = ThreadingHTTPServer(("127.0.0.1", 0), Goc)
+    threading.Thread(target=goc.serve_forever, daemon=True).start()
+    cong_goc = goc.server_address[1]
 
     entry, _ = await _setup(hass, addon_server)
     assert await async_setup_component(hass, "http", {})
     hass.http.register_view(TriTueStreamView)
+    hass.http.register_view(TriTueProxyView)
     await entry.runtime_data.client.async_search("trót tin", limit=3)
     client = await hass_client()
     url = "/api/tritue_youtube_player/stream"
 
-    r = await client.post(url, json={"entry_id": entry.entry_id, "source": "youtube", "target": KET_QUA[1]["url"]})
-    body = await r.json()
-    assert r.status == 200, body
-    assert body["stream_url"].startswith(f"http://127.0.0.1:{addon_server.server_address[1]}/api/stream/")
-    token = body["stream_url"].rsplit("/", 1)[1].split(".", 1)[0]
-    assert json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))["target"] == KET_QUA[1]["id"]
+    with patch.object(addon, "resolve_youtube_audio",
+                      side_effect=lambda vid: {"url": f"http://127.0.0.1:{cong_goc}/am/{vid}", "headers": {}, "content_type": "audio/mp4"}):
+        r = await client.post(url, json={"entry_id": entry.entry_id, "source": "youtube", "target": KET_QUA[1]["url"]})
+        body = await r.json()
+        assert r.status == 200, body
+        assert body["stream_url"].startswith("/api/tritue_youtube_player/proxy/") and "authSig=" in body["stream_url"]
+        # Trình duyệt không gửi được token: đường dẫn đã ký tự đủ quyền, có Range để tua.
+        tho = await hass_client_no_auth()
+        r = await tho.get(body["stream_url"])
+        assert r.status == 200 and await r.read() == DU_LIEU and r.headers["Content-Type"] == "audio/mp4"
+        r = await tho.get(body["stream_url"], headers={"Range": "bytes=100-199"})
+        assert r.status == 206 and await r.read() == DU_LIEU[100:200]
+        assert r.headers["Content-Range"] == f"bytes 100-199/{len(DU_LIEU)}"
+        assert da_hoi[-1] == (f"/am/{KET_QUA[1]['id']}", "bytes=100-199")
+        # Không có chữ ký, hoặc mã không do thẻ xin: không chuyển tiếp.
+        assert (await tho.get(body["stream_url"].split("?", 1)[0])).status == 401
+        assert (await client.get("/api/tritue_youtube_player/proxy/khong-co")).status == 404
+    goc.shutdown()
 
     # Hình của video YouTube chặn nhúng: link đã ký + link lấy thẳng cho máy trong nhà.
     with patch.object(addon, "resolve_youtube_video", return_value={
@@ -254,7 +299,7 @@ async def test_the_lay_luong_de_nghe_tren_may(hass, addon_server, hass_client, h
     hinh.assert_called_once_with(f"{KET_QUA[1]['id']}:720")
     assert (body["direct_url"], body["height"], body["bitrate_kbps"], body["media_content_type"]) == (
         "https://rr1.googlevideo.com/v?itag=136", 720, 1002, "video/mp4")
-    assert "/api/stream/" in body["stream_url"]
+    assert body["stream_url"].startswith("/api/tritue_youtube_player/proxy/")
 
     for sai, ma in (({"entry_id": entry.entry_id, "source": "spotify", "target": "x"}, 400),
                     ({"entry_id": entry.entry_id, "source": "youtube", "target": ""}, 400),

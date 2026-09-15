@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import re
+import secrets
+import time
+from datetime import timedelta
 from http import HTTPStatus
+from urllib.parse import urlsplit
 
-from aiohttp import web
+from aiohttp import ClientError, ClientTimeout, web
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
 from .api import YouTubePlayerApiError
@@ -20,6 +27,32 @@ from .hidden_players import (
     normalize_hidden,
 )
 from .playback import build_target_capabilities
+
+
+PROXY_URL = "/api/tritue_youtube_player/proxy/{token}"
+PROXY_DATA = f"{DOMAIN}_proxy_links"
+PROXY_SECONDS = 3600
+PROXY_MAX_LINKS = 200
+RELAY_HEADERS = ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges")
+
+
+def _through_home_assistant(hass, upstream):
+    """A signed path on this Home Assistant that relays a player-server stream.
+
+    The browser showing the card reaches Home Assistant at whatever address it opened
+    (home network, a public HTTPS name, Nabu Casa), but not necessarily the player
+    server: owner 15/09/2026 on 5G got "NotSupportedError" because the card handed the
+    phone http://172.16.10.38:3030/… — a home address, and plain HTTP inside an HTTPS
+    page. Only links this integration received from its own server are relayed."""
+    links = hass.data.setdefault(PROXY_DATA, {})
+    now = time.monotonic()
+    for token in [token for token, (_, until) in links.items() if until < now]:
+        del links[token]
+    while len(links) >= PROXY_MAX_LINKS:
+        del links[next(iter(links))]
+    token = secrets.token_urlsafe(18)
+    links[token] = (upstream, now + PROXY_SECONDS)
+    return async_sign_path(hass, PROXY_URL.format(token=token), timedelta(seconds=PROXY_SECONDS))
 
 
 def _loaded_entry(hass, entry_id):
@@ -114,13 +147,55 @@ class TriTueStreamView(HomeAssistantView):
             return self.json(
                 {"error": "stream_unavailable"}, HTTPStatus.BAD_GATEWAY
             )
-        return self.json(
-            {
-                key: stream.get(key)
-                for key in ("stream_url", "media_content_type", "direct_url", "height", "bitrate_kbps")
-                if key in stream
-            }
-        )
+        body = {
+            key: stream.get(key)
+            for key in ("stream_url", "media_content_type", "direct_url", "height", "bitrate_kbps")
+            if key in stream
+        }
+        upstream = str(body.get("stream_url") or "")
+        if urlsplit(upstream).scheme not in {"http", "https"}:
+            return self.json({"error": "stream_unavailable"}, HTTPStatus.BAD_GATEWAY)
+        body["stream_url"] = _through_home_assistant(hass, upstream)
+        return self.json(body)
+
+
+class TriTueProxyView(HomeAssistantView):
+    """Relay one stream from the player server to the browser showing the card."""
+
+    url = PROXY_URL
+    name = "api:tritue_youtube_player:proxy"
+    requires_auth = True
+
+    async def get(self, request: web.Request, token: str) -> web.StreamResponse:
+        hass = request.app["hass"]
+        link = hass.data.get(PROXY_DATA, {}).get(token)
+        if link is None or link[1] < time.monotonic():
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        headers = {"Accept-Encoding": "identity"}
+        range_header = request.headers.get("Range", "")
+        if re.fullmatch(r"bytes=\d*-\d*", range_header):
+            headers["Range"] = range_header
+        session = async_get_clientsession(hass)
+        try:
+            upstream = await session.get(
+                link[0], headers=headers, timeout=ClientTimeout(total=None, sock_connect=15, sock_read=60)
+            )
+        except (ClientError, TimeoutError):
+            return web.Response(status=HTTPStatus.BAD_GATEWAY)
+        async with upstream:
+            response = web.StreamResponse(status=upstream.status)
+            for header in RELAY_HEADERS:
+                if value := upstream.headers.get(header):
+                    response.headers[header] = value
+            response.headers["Cache-Control"] = "private, no-store"
+            await response.prepare(request)
+            try:
+                async for chunk in upstream.content.iter_chunked(64 * 1024):
+                    await response.write(chunk)
+            except (ClientError, ConnectionResetError, TimeoutError):
+                # The browser moved on (seek, next song) or the server went away.
+                pass
+            return response
 
 
 class TriTuePlaylistsView(HomeAssistantView):
