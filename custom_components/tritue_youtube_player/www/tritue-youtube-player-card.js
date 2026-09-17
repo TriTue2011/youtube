@@ -32,7 +32,7 @@ const PLAYLIST_ERRORS = {
 };
 // Half a second of silence, played inside the tap so Safari/iOS unlocks the audio
 // element before the player server answers with the song's stream.
-const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
 let screenOffChoice = null;
 
@@ -361,7 +361,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!config || typeof config.entity !== "string") {
       throw new Error("TriTue card requires a media_player entity");
     }
-    this._config = { title: "TriTue Music", ...config };
+    this._config = {
+      title: "TriTue Music",
+      layout: "vertical",
+      player_width: 40,
+      ...config,
+    };
   }
 
   set hass(hass) {
@@ -477,6 +482,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             var(--ha-card-background, var(--card-background-color));
         }
         .wrap { padding: 16px; }
+        .wrap.horizontal {
+          display: flex;
+          align-items: flex-start;
+          gap: 16px;
+        }
+        .wrap.horizontal > .player {
+          flex: 0 0 var(--player-width, 40%);
+          min-width: 0;
+          margin-top: 0;
+        }
+        .wrap.horizontal > .browse {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+        .wrap.horizontal .results { max-height: 60vh; }
+        @media (max-width: 800px) {
+          .wrap.horizontal { display: block; }
+          .wrap.horizontal > .player { flex: initial; margin-top: 0; }
+          .wrap.horizontal > .browse { flex: initial; }
+        }
         header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
         h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
         .subtitle, .hint { color: var(--secondary-text-color); font-size: .86rem; }
@@ -1003,6 +1028,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             </div>
           </section>
 
+          <div class="browse">
           <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
             <button class="view-tab" type="button" data-view="search" aria-pressed="true"><ha-icon icon="mdi:magnify"></ha-icon><span>Tìm nhạc</span></button>
             <button class="view-tab" type="button" data-view="playlists" aria-pressed="false"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
@@ -1040,9 +1066,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           </section>
 
           <div class="results"></div>
+          </div>
         </div>
       </ha-card>`;
     this.shadowRoot.querySelector("h2").textContent = this._config.title;
+    const wrap = this.shadowRoot.querySelector(".wrap");
+    wrap.classList.toggle("horizontal", this._config.layout === "horizontal");
+    if (this._config.layout === "horizontal") {
+      const width = Number(this._config.player_width);
+      wrap.style.setProperty("--player-width", `${Number.isFinite(width) ? width : 40}%`);
+    }
   }
 
   _bindEvents() {
