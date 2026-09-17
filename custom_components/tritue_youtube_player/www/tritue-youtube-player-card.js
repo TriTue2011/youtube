@@ -24,17 +24,6 @@
  *   title: 🎵 Xem YouTube                                    # tuỳ chọn
  *   waveStyle: bars                                          # tuỳ chọn: bars | simple | dots
  *
- * Cài đặt:
- *   1. Tải file này lên /config/www/ (hoặc thư mục community/HACS tuỳ ý).
- *   2. Cài đặt → Bảng điều khiển → Tài nguyên → thêm URL trỏ tới file
- *      (vd /local/tritue-youtube-player-card.js), loại "JavaScript Module".
- *   3. Thêm card bằng YAML ở trên (chưa có trình chỉnh sửa giao diện — cấu
- *      hình qua YAML là đủ dùng, chỉ có 3 trường).
- *
- * Thiết kế bởi: @doanlong1412 🇻🇳
- * Ủng hộ tách trà: https://www.paypal.com/paypalme/doanlong1412
- * ─────────────────────────────────────────────────────────────
- */
 (() => {
   'use strict';
 
