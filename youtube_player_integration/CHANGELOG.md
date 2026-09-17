@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.5 - 2026-09-18
+
+### Fixed
+
+- **Thẻ không hiện, dashboard báo "Custom element doesn't exist".** Hai lệnh đăng ký
+  thẻ nằm chung một cổng kiểm tra tên `youtube-player-card`, nên chỉ cần tên đó đã bị
+  chiếm — tệp card nạp hai lần, hoặc một card khác đăng ký trùng tên — là
+  `tritue-youtube-player-card`, đúng thẻ khai trong YAML, không bao giờ được định nghĩa.
+  Nay mỗi thẻ tự canh tên của chính nó.
+- **Card hiện trong danh sách "Thêm thẻ" của Home Assistant**, kèm ảnh xem trước:
+  trước đây `window.customCards` chỉ khai tên phụ `youtube-player-card`, không khai tên
+  thật đang dùng.
+- **Bố cục vỡ trên điện thoại.** Luật đặt bề rộng cột video viết sau khối
+  `@media (max-width: 900px)` và cùng độ ưu tiên, nên nó đè mất `grid-template-columns: 1fr`
+  của màn hình hẹp: máy nhận lưới hai cột trong khi các vùng đã xếp dọc một cột. Nay luật
+  đó nằm trong `@media (min-width: 901px)`.
+
 ## 0.11.4 - 2026-09-18
 
 ### Fixed
