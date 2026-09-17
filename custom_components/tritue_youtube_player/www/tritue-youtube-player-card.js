@@ -46,6 +46,24 @@ function streamTarget(mediaContentId) {
 
 const LISTEN_SCREEN_OFF_KEY = "tritue-youtube-player:listen-screen-off";
 const SEARCH_KEY = "tritue-youtube-player:search:";
+/* Bố cục dọc/ngang bấm ngay trên card. Nhớ theo TỪNG MÁY và từng thẻ, nên máy tính
+   để ngang còn điện thoại để dọc mà không ai phải sửa YAML. Trình duyệt chặn lưu
+   trữ thì vẫn đổi được, chỉ là không nhớ sang lần sau. */
+const LAYOUT_KEY = "tritue-youtube-player:layout:";
+function layoutChoice(entityId) {
+  try {
+    return localStorage.getItem(LAYOUT_KEY + entityId) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+function setLayoutChoice(entityId, layout) {
+  try {
+    localStorage.setItem(LAYOUT_KEY + entityId, layout);
+  } catch (_error) {
+    /* không lưu được thì thôi */
+  }
+}
 // Links the player server can save as a whole playlist (it checks them properly).
 const PLAYLIST_LINK = /^(TTPL1\.|https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be)\/\S*[?&]list=[A-Za-z0-9_-]+|https?:\/\/([a-z0-9-]+\.)*zingmp3\.vn\/(album|playlist)\/)/i;
 const PLAYLIST_ERRORS = {
@@ -499,6 +517,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._source = "youtube";
     this._selectedPlayers = new Set();
+    // Loa đang được CHỈNH ÂM LƯỢNG. Độc lập với ô tích (loa nào PHÁT): bấm tên
+    // một loa chỉ đổi đích của thanh âm lượng, không bật/tắt việc phát của nó.
+    this._volumeTarget = "";
+    this._speakerListOpen = false;
     this._results = [];
     this._rendered = false;
     this._defaultsApplied = false;
@@ -783,6 +805,53 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .players::-webkit-scrollbar-thumb { background: rgba(var(--ad-c1,0,204,204),0.5); border-radius: 999px; }
         .players::-webkit-scrollbar-thumb:hover { background: rgba(var(--ad-c1,0,204,204),0.75); }
         .players-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        /* ===== Thanh loa gọn: loa đang chỉnh âm lượng + nút Đổi loa bung/thu danh sách ===== */
+        .spk-bar {
+          display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          padding: 8px 10px; border-radius: 14px;
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.2);
+          background: rgba(var(--ad-c1,0,204,204),0.08);
+        }
+        .spk-bar-main { display: flex; align-items: center; gap: 9px; min-width: 0; }
+        .spk-bar-icon { --mdc-icon-size: 20px; color: var(--ad-accent,#00ffcc); }
+        .spk-bar-copy { min-width: 0; }
+        .spk-bar-label {
+          font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+          text-transform: uppercase; color: var(--secondary-text-color);
+        }
+        .spk-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; font-weight: 600; }
+        .spk-toggle {
+          display: inline-flex; align-items: center; gap: 4px; flex: none;
+          padding: 5px 10px; border-radius: 999px; cursor: pointer;
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.25);
+          background: transparent; color: inherit; font: inherit; font-size: .82rem;
+        }
+        .spk-toggle ha-icon { --mdc-icon-size: 17px; transition: transform .18s ease; }
+        /* ===== Nút chọn bố cục dọc/ngang ngay trên card ===== */
+        .header-tools { display: flex; align-items: center; gap: 8px; }
+        .layout-switch {
+          display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px;
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.2);
+        }
+        .layout-pick {
+          display: grid; place-items: center; width: 28px; height: 28px;
+          border: 0; border-radius: 999px; cursor: pointer;
+          background: transparent; color: var(--secondary-text-color);
+        }
+        .layout-pick ha-icon { --mdc-icon-size: 18px; }
+        .layout-pick.on { background: rgba(var(--ad-c1,0,204,204),0.18); color: var(--ad-accent,#00ffcc); }
+        /* Màn hình hẹp luôn xếp một cột, nên nút chọn bố cục không còn ý nghĩa. */
+        @media (max-width: 900px) { .layout-switch { display: none; } }
+        .spk-toggle.open ha-icon { transform: rotate(180deg); }
+        .spk-volume { margin-top: 8px; }
+        .spk-volume:empty { display: none; }
+        .spk-list { margin-top: 10px; }
+        /* Loa đang được chỉnh âm lượng: viền ngoài, KHÁC với viền sáng của loa đã tích phát. */
+        .player-chip.is-volume-target { outline: 2px solid var(--ad-accent,#00ffcc); outline-offset: 1px; }
+        .player-name {
+          border: 0; background: transparent; color: inherit; font: inherit;
+          padding: 0; cursor: pointer; text-align: left;
+        }
         .players-col-title {
           display: flex; align-items: center; gap: 5px; margin-bottom: 5px;
           font-size: .76rem; font-weight: 650; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .02em;
@@ -1699,7 +1768,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <h2 class="visually-hidden"></h2>
               <p class="subtitle"></p>
             </div>
-            <ha-icon class="brand-logo" icon="mdi:youtube"></ha-icon>
+            <div class="header-tools">
+              <div class="layout-switch" role="group" aria-label="Kiểu bố cục">
+                <button class="layout-pick" type="button" data-layout="horizontal" aria-pressed="false" title="Xếp ngang" aria-label="Xếp ngang"><ha-icon icon="mdi:view-split-vertical"></ha-icon></button>
+                <button class="layout-pick" type="button" data-layout="vertical" aria-pressed="false" title="Xếp dọc" aria-label="Xếp dọc"><ha-icon icon="mdi:view-agenda"></ha-icon></button>
+              </div>
+              <ha-icon class="brand-logo" icon="mdi:youtube"></ha-icon>
+            </div>
           </header>
 
           <div class="yt-layout">
@@ -1789,6 +1864,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             </div>
 
             <section class="section speaker-section">
+              <div class="spk-bar">
+                <div class="spk-bar-main">
+                  <ha-icon class="spk-bar-icon" icon="mdi:speaker-multiple"></ha-icon>
+                  <div class="spk-bar-copy">
+                    <div class="spk-bar-label">Loa phát nhạc</div>
+                    <div class="spk-bar-name">Chưa chọn loa</div>
+                  </div>
+                </div>
+                <button class="spk-toggle" type="button" aria-expanded="false">
+                  <span>Đổi loa</span><ha-icon icon="mdi:chevron-down"></ha-icon>
+                </button>
+              </div>
+              <div class="spk-volume"></div>
+              <div class="spk-list" hidden>
               <div class="section-title">
                 <h3><ha-icon icon="mdi:speaker-multiple"></ha-icon> Loa / màn hình</h3>
                 <span class="hint selected-count">0 đã chọn</span>
@@ -1804,6 +1893,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                 </div>
               </div>
               <div class="hidden-players"></div>
+              </div>
             </section>
           </div>
         </div>
@@ -1862,6 +1952,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".video-close").addEventListener("click", () => this._closeVideo());
     this.shadowRoot.querySelector(".video-listen").addEventListener("click", () => this._listenOnly());
     this.shadowRoot.querySelector(".video-rotate").addEventListener("click", () => this._toggleRotated());
+    this.shadowRoot.querySelector(".spk-toggle").addEventListener("click", () => {
+      this._speakerListOpen = !this._speakerListOpen;
+      this._syncSpeakerBar();
+    });
+    this.shadowRoot.querySelectorAll(".layout-pick").forEach((button) => {
+      button.addEventListener("click", () => {
+        setLayoutChoice(this._config.entity, button.dataset.layout);
+        this._applyLayout();
+      });
+    });
     const player = this.shadowRoot.querySelector(".player");
     for (const name of ["pointerdown", "pointermove", "keydown"]) {
       player.addEventListener(name, () => this._wakeControls());
@@ -1959,8 +2059,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     let audioCount = 0;
     let videoCount = 0;
     for (const [entityId, state] of players) {
-      const label = document.createElement("label");
+      // KHÔNG dùng <label>: bấm bất cứ đâu bên trong một <label> đều bật/tắt ô tích,
+      // nên không thể tách "chọn loa để chỉnh âm lượng" khỏi "cho loa này phát".
+      const label = document.createElement("div");
       label.className = "player-chip";
+      label.dataset.entity = entityId;
       const isAudioOnly = this._isAudioOnly(entityId, state);
       if (isAudioOnly) audioCount++; else videoCount++;
       const capability = this._capabilities.get(entityId);
@@ -1988,9 +2091,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         // Playlist buttons read "play on the speakers" or "listen here".
         if (this._view === "playlists") this._renderPlaylists();
       });
-      const name = document.createElement("span");
+      const name = document.createElement("button");
+      name.type = "button";
       name.className = "player-name";
       name.textContent = state.attributes.friendly_name || entityId;
+      name.title = `Chỉnh âm lượng ${name.textContent}`;
+      name.addEventListener("click", () => {
+        this._volumeTarget = entityId;
+        this._syncSpeakerBar();
+      });
       const deviceIcon = document.createElement("ha-icon");
       deviceIcon.className = "device-icon";
       deviceIcon.setAttribute("icon", capability?.transport === "dlna"
@@ -2136,6 +2245,33 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _updateSelectedCount() {
     this.shadowRoot.querySelector(".selected-count").textContent = `${this._selectedPlayers.size} đã chọn`;
+    this._syncSpeakerBar();
+  }
+
+  /* Thanh gọn phía trên danh sách loa: tên loa đang được chỉnh âm lượng, và nút
+     «Đổi loa» bung/thu danh sách. Loa nào PHÁT do ô tích quyết định; loa nào đang
+     được CHỈNH ÂM LƯỢNG do bấm vào tên — hai việc độc lập, nên loa chưa tích vẫn
+     chỉnh được âm lượng. Đích chỉ đổi khi thiết bị biến mất khỏi Home Assistant. */
+  _syncSpeakerBar() {
+    if (!this.shadowRoot) return;
+    const list = this.shadowRoot.querySelector(".spk-list");
+    const toggle = this.shadowRoot.querySelector(".spk-toggle");
+    const nameBox = this.shadowRoot.querySelector(".spk-bar-name");
+    if (!list || !toggle || !nameBox) return;
+    if (!this._volumeTarget || !this._hass?.states?.[this._volumeTarget]) {
+      this._volumeTarget = [...this._selectedPlayers][0] || "";
+    }
+    list.hidden = !this._speakerListOpen;
+    toggle.setAttribute("aria-expanded", this._speakerListOpen ? "true" : "false");
+    toggle.classList.toggle("open", this._speakerListOpen);
+    const state = this._volumeTarget ? this._hass?.states?.[this._volumeTarget] : null;
+    nameBox.textContent = state
+      ? state.attributes.friendly_name || this._volumeTarget
+      : "Chưa chọn loa";
+    for (const chip of this.shadowRoot.querySelectorAll(".player-chip")) {
+      chip.classList.toggle("is-volume-target", chip.dataset.entity === this._volumeTarget);
+    }
+    this._renderSpeakerVolumes();
   }
 
   _supportsFeature(entityId, feature) {
@@ -2372,80 +2508,73 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._waveTimer = setInterval(tick, 220);
   }
 
+  /* MỘT thanh âm lượng duy nhất, cho đúng loa đang chọn ở thanh «Loa phát nhạc» —
+     thay cho cả chồng thanh trượt trước đây. Giữ lại hai điều bản cũ làm đúng:
+     chỉ dựng lại khi ĐỔI loa, và không giật thanh khi người dùng đang kéo. */
   _renderSpeakerVolumes() {
     if (!this.shadowRoot || !this._hass) return;
-    const container = this.shadowRoot.querySelector(".speaker-volumes");
+    const container = this.shadowRoot.querySelector(".spk-volume");
     if (!container) return;
-    const speakers = [...this._selectedPlayers]
-      .filter((entityId) => {
-        const state = this._hass.states[entityId];
-        return state && state.state !== "unavailable" && this._supportsFeature(entityId, 4);
-      })
-      .sort((left, right) =>
-        this._friendlyName([left, this._hass.states[left]])
-          .localeCompare(this._friendlyName([right, this._hass.states[right]]), "vi"));
-    const signature = speakers.join(",");
-
-    if (signature !== this._volumeRowsSig) {
-      this._volumeRowsSig = signature;
+    const entityId = this._volumeTarget;
+    const state = entityId ? this._hass.states[entityId] : null;
+    // supported_features bit 4 = VOLUME_SET; loa không có thì không bày thanh trượt.
+    const usable = Boolean(state) && state.state !== "unavailable" && this._supportsFeature(entityId, 4);
+    if (!usable) {
       container.replaceChildren();
-      if (!speakers.length) return;
-      for (const entityId of speakers) {
-        const state = this._hass.states[entityId];
-        const value = Number(state?.attributes?.volume_level ?? 0.35);
-        const row = document.createElement("div");
-        row.className = "svol-row";
-        row.dataset.entity = entityId;
-        const name = document.createElement("span");
-        name.className = "svol-name";
-        name.textContent = state?.attributes?.friendly_name || entityId;
-        const range = document.createElement("input");
-        range.type = "range";
-        range.min = "0";
-        range.max = "1";
-        range.step = "0.01";
-        range.className = "svol-range";
-        range.value = String(value);
-        range.setAttribute("aria-label", `Âm lượng ${name.textContent}`);
-        const pct = document.createElement("span");
-        pct.className = "svol-pct";
-        pct.textContent = `${Math.round(value * 100)}%`;
-        range.addEventListener("input", () => {
-          this._activeVolumeEntity = entityId;
-          pct.textContent = `${Math.round(Number(range.value) * 100)}%`;
-        });
-        range.addEventListener("change", async () => {
-          try {
-            await this._hass.callService("media_player", "volume_set", {
-              entity_id: entityId,
-              volume_level: Number(range.value),
-            });
-            this._setStatus(`Âm lượng ${name.textContent}: ${Math.round(Number(range.value) * 100)}%`);
-          } catch (error) {
-            this._setStatus(error?.message || "Không đổi được âm lượng.", true);
-          } finally {
-            this._activeVolumeEntity = null;
-          }
-        });
-        row.append(name, range, pct);
-        container.append(row);
-      }
+      this._volumeRowsSig = "";
+      return;
+    }
+    const value = Number(state.attributes?.volume_level ?? 0.35);
+
+    if (this._volumeRowsSig !== entityId) {
+      this._volumeRowsSig = entityId;
+      container.replaceChildren();
+      const row = document.createElement("div");
+      row.className = "svol-row";
+      row.dataset.entity = entityId;
+      const name = document.createElement("span");
+      name.className = "svol-name";
+      name.textContent = "Âm lượng";
+      const range = document.createElement("input");
+      range.type = "range";
+      range.min = "0";
+      range.max = "1";
+      range.step = "0.01";
+      range.className = "svol-range";
+      range.value = String(value);
+      range.setAttribute("aria-label", `Âm lượng ${state.attributes?.friendly_name || entityId}`);
+      const pct = document.createElement("span");
+      pct.className = "svol-pct";
+      pct.textContent = `${Math.round(value * 100)}%`;
+      range.addEventListener("input", () => {
+        this._activeVolumeEntity = entityId;
+        pct.textContent = `${Math.round(Number(range.value) * 100)}%`;
+      });
+      range.addEventListener("change", async () => {
+        try {
+          await this._hass.callService("media_player", "volume_set", {
+            entity_id: entityId,
+            volume_level: Number(range.value),
+          });
+        } catch (error) {
+          this._setStatus(error?.message || "Không đổi được âm lượng.", true);
+        } finally {
+          this._activeVolumeEntity = null;
+        }
+      });
+      row.append(name, range, pct);
+      container.append(row);
       return;
     }
 
-    // Same set of speakers: refresh values from state, but never yank a slider
-    // the user is dragging right now.
-    for (const row of container.querySelectorAll(".svol-row")) {
-      const entityId = row.dataset.entity;
-      if (entityId === this._activeVolumeEntity) continue;
-      const value = Number(this._hass.states[entityId]?.attributes?.volume_level);
-      if (!Number.isFinite(value)) continue;
-      const range = row.querySelector(".svol-range");
-      const pct = row.querySelector(".svol-pct");
-      if (this.shadowRoot.activeElement === range) continue;
-      range.value = String(value);
-      pct.textContent = `${Math.round(value * 100)}%`;
-    }
+    // Vẫn loa cũ: cập nhật số theo trạng thái, trừ khi người dùng đang kéo thanh.
+    const row = container.querySelector(".svol-row");
+    if (!row || entityId === this._activeVolumeEntity || !Number.isFinite(value)) return;
+    const range = row.querySelector(".svol-range");
+    const pct = row.querySelector(".svol-pct");
+    if (this.shadowRoot.activeElement === range) return;
+    range.value = String(value);
+    pct.textContent = `${Math.round(value * 100)}%`;
   }
 
   _syncNowPlaying() {
@@ -2749,8 +2878,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _applyLayout() {
     const grid = this.shadowRoot && this.shadowRoot.querySelector(".yt-layout");
     if (!grid) return;
-    const doc = this._config && this._config.layout === "vertical";
+    // Nút bấm trên card thắng «layout» trong YAML; chưa bấm thì theo YAML. Điện
+    // thoại vẫn luôn một cột nhờ media query, không cần đo bề rộng bằng JS.
+    const saved = layoutChoice(this._config && this._config.entity);
+    const doc = (saved || (this._config && this._config.layout)) === "vertical";
     grid.classList.toggle("yt-layout--doc", doc);
+    for (const button of this.shadowRoot.querySelectorAll(".layout-pick")) {
+      const on = (button.dataset.layout === "vertical") === doc;
+      button.classList.toggle("on", on);
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+    }
     const raw = Number(this._config && this._config.player_width);
     if (!doc && Number.isFinite(raw) && raw > 0) {
       const pct = Math.min(80, Math.max(20, raw));

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.6 - 2026-09-18
+
+### Changed
+
+- **Một thanh âm lượng cho loa đang chọn, thay cho cả chồng thanh trượt.** Thanh gọn
+  "Loa phát nhạc" cho biết đang chỉnh loa nào; nút "Đổi loa" bung danh sách để tích loa
+  phát rồi thu lại.
+- **Bấm tên loa và bấm ô tích là hai việc độc lập.** Trước đây mỗi loa là một `<label>`,
+  mà trong HTML thì bấm bất cứ đâu bên trong `<label>` đều bật/tắt ô tích — nên không
+  thể vừa chọn loa để chỉnh âm lượng vừa giữ nguyên việc loa nào phát. Nay tên loa là
+  một nút riêng: bấm để đổi đích chỉnh âm lượng, kể cả với loa chưa tích; ô tích vẫn chỉ
+  quyết định loa nào phát. Mỗi lần mở lại danh sách đều hiện đúng các loa đang được tích.
+
+### Added
+
+- **Nút chọn bố cục dọc/ngang ngay trên card**, cạnh biểu tượng YouTube. Lựa chọn được
+  nhớ theo từng máy và từng thẻ, nên máy tính để ngang còn điện thoại để dọc mà không
+  phải sửa YAML; nút này thắng khoá `layout` trong cấu hình. Màn hình hẹp vốn luôn xếp
+  một cột nên nút tự ẩn ở đó.
+
 ## 0.11.5 - 2026-09-18
 
 ### Fixed
