@@ -32,7 +32,7 @@ const PLAYLIST_ERRORS = {
 };
 // Half a second of silence, played inside the tap so Safari/iOS unlocks the audio
 // element before the player server answers with the song's stream.
-const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
 let screenOffChoice = null;
 
@@ -361,12 +361,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!config || typeof config.entity !== "string") {
       throw new Error("TriTue card requires a media_player entity");
     }
-    this._config = {
-      title: "TriTue Music",
-      layout: "vertical",
-      player_width: 40,
-      ...config,
-    };
+    this._config = { title: "TriTue Music", layout: "vertical", ...config };
+    // Config can change without the element being re-created (e.g. editing it live
+    // in the dashboard editor): re-apply the layout instead of waiting for the next render.
+    if (this._rendered) this._applyLayout();
   }
 
   set hass(hass) {
@@ -469,6 +467,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._closeVideo();
   }
 
+  /** Apply the horizontal/vertical layout option to the already-rendered DOM. */
+  _applyLayout() {
+    const wrap = this.shadowRoot?.querySelector(".wrap");
+    if (!wrap) return;
+    const horizontal = this._config.layout === "horizontal";
+    wrap.classList.toggle("horizontal", horizontal);
+    if (horizontal && this._config.player_width) {
+      const width = Math.min(80, Math.max(20, Number(this._config.player_width) || 50));
+      wrap.style.setProperty("--tritue-player-w", `${width}%`);
+    } else {
+      wrap.style.removeProperty("--tritue-player-w");
+    }
+  }
+
   _render() {
     this.shadowRoot.innerHTML = `
       <style>
@@ -482,25 +494,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             var(--ha-card-background, var(--card-background-color));
         }
         .wrap { padding: 16px; }
+        /* Horizontal layout: player on the left, search/results/playlists on the
+           right in a ".side" wrapper (see the HTML below) so nothing needs to be
+           addressed one selector at a time. */
         .wrap.horizontal {
-          display: flex;
-          align-items: flex-start;
-          gap: 16px;
+          display: grid;
+          grid-template-columns: var(--tritue-player-w, 1fr) 1fr;
+          grid-template-rows: auto 1fr;
+          column-gap: 16px;
         }
-        .wrap.horizontal > .player {
-          flex: 0 0 var(--player-width, 40%);
-          min-width: 0;
-          margin-top: 0;
-        }
-        .wrap.horizontal > .browse {
-          flex: 1 1 auto;
-          min-width: 0;
-        }
-        .wrap.horizontal .results { max-height: 60vh; }
+        .wrap.horizontal header { grid-column: 1 / -1; }
+        .wrap.horizontal .player { grid-column: 1; grid-row: 2; margin-top: 8px; align-self: start; }
+        .wrap.horizontal .side { grid-column: 2; grid-row: 2; min-width: 0; max-height: 80vh; overflow: auto; }
         @media (max-width: 800px) {
           .wrap.horizontal { display: block; }
-          .wrap.horizontal > .player { flex: initial; margin-top: 0; }
-          .wrap.horizontal > .browse { flex: initial; }
+          .wrap.horizontal .side { max-height: none; overflow: visible; }
         }
         header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
         h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
@@ -1028,7 +1036,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             </div>
           </section>
 
-          <div class="browse">
+          <div class="side">
           <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
             <button class="view-tab" type="button" data-view="search" aria-pressed="true"><ha-icon icon="mdi:magnify"></ha-icon><span>Tìm nhạc</span></button>
             <button class="view-tab" type="button" data-view="playlists" aria-pressed="false"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
@@ -1070,12 +1078,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         </div>
       </ha-card>`;
     this.shadowRoot.querySelector("h2").textContent = this._config.title;
-    const wrap = this.shadowRoot.querySelector(".wrap");
-    wrap.classList.toggle("horizontal", this._config.layout === "horizontal");
-    if (this._config.layout === "horizontal") {
-      const width = Number(this._config.player_width);
-      wrap.style.setProperty("--player-width", `${Number.isFinite(width) ? width : 40}%`);
-    }
+    this._applyLayout();
   }
 
   _bindEvents() {
