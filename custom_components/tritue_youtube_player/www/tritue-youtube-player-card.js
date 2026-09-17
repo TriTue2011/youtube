@@ -23,7 +23,7 @@
  *   entity: media_player.ten_entity_tritue_youtube_player   # bắt buộc
  *   title: 🎵 Xem YouTube                                    # tuỳ chọn
  *   waveStyle: bars                                          # tuỳ chọn: bars | simple | dots
- *
+ */
 (() => {
   'use strict';
 
