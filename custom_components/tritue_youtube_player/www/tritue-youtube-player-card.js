@@ -1449,8 +1449,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .np-zone { padding: 10px 12px; }
           .np-wave { height: 20px; }
         }
-        /* Bề rộng cột video theo «player_width»; mặc định giữ tỉ lệ cũ 1.4fr. */
-        .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(300px, 1fr); }
+        /* Bề rộng cột video theo «player_width». BẮT BUỘC bọc trong @media min-width:
+           901px. Luật này viết SAU khối @media (max-width: 900px) và cùng độ ưu tiên
+           (0,1,0), nên để trần thì nó đè mất «grid-template-columns: 1fr» của màn hình
+           hẹp: điện thoại nhận lưới 2 cột trong khi grid-template-areas đã xếp dọc một
+           cột — đó chính là lúc bố cục vỡ. */
+        @media (min-width: 901px) {
+          .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(300px, 1fr); }
+        }
         /* «layout: vertical» — xếp dọc một cột, cho dashboard cột hẹp. */
         .yt-layout.yt-layout--doc {
           grid-template-columns: 1fr;
@@ -4316,17 +4322,28 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 }
 
-  if (!customElements.get("youtube-player-card")) {
+  /* Mỗi thẻ tự canh tên của CHÍNH nó. Trước đây cả hai lệnh define nằm chung một
+     cổng hỏi về «youtube-player-card», nên chỉ cần tên đó đã bị chiếm (tệp card nạp
+     hai lần, hoặc một card khác đăng ký trùng tên) là «tritue-youtube-player-card»
+     — đúng thẻ người dùng khai trong YAML — không bao giờ được định nghĩa, và
+     dashboard báo "Custom element doesn't exist". */
+  if (!customElements.get("tritue-youtube-player-card")) {
     customElements.define("tritue-youtube-player-card", TriTueYouTubePlayerCard);
+  }
   if (!customElements.get("youtube-player-card")) {
     customElements.define("youtube-player-card", class extends TriTueYouTubePlayerCard {});
   }
-  }
 
+  /* Khai đúng tên thẻ đang dùng thì card mới hiện trong danh sách "Thêm thẻ" của
+     HA, có ảnh xem trước và nút mở trình sửa như mọi card khác. */
   window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: 'youtube-player-card',
-    name: '🎵 TriTue YouTube Player',
-    description: 'Xem/nghe YouTube, Zing MP3, phát ra loa — cần tích hợp Python "tritue_youtube_player" cài sẵn.',
-  });
+  if (!window.customCards.some((card) => card.type === "tritue-youtube-player-card")) {
+    window.customCards.push({
+      type: "tritue-youtube-player-card",
+      name: "🎵 TriTue YouTube Player",
+      description: 'Xem/nghe YouTube, Zing MP3, phát ra loa — cần tích hợp Python "tritue_youtube_player" cài sẵn.',
+      preview: true,
+      documentationURL: "https://github.com/TriTue2011/youtube",
+    });
+  }
 })();
