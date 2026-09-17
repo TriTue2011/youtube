@@ -1,4 +1,5 @@
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -138,6 +139,11 @@ class PlayerServer(ThreadingHTTPServer):
         self.zing_result_cache = {}
         self.stream_cache = {}
         self.prefetching = set()
+        # Dia chi LAN ma Home Assistant vua dung de goi add-on. Hoc tu chinh
+        # ket noi da xac thuc bang token, nen Ingress (khong mang token) khong
+        # bao gio lot vao day va lam quang ba dia chi noi bo cua Supervisor.
+        self.address_lock = threading.Lock()
+        self.learned_base_url = ""
         self.prefetch_streams = True
         self.playback_session = PlaybackSession()
         # Playlists shared by the whole household (the same store as c2a's).
@@ -384,12 +390,36 @@ class PlayerServer(ThreadingHTTPServer):
                 raise ValueError("unverified_zing_target")
         return target_url
 
+    def note_reachable_address(self, host, port):
+        """Ghi nho dia chi LAN dung duoc, de loa khoi phai cau hinh tay.
+
+        Bo qua loopback/link-local/unspecified: chung khong dung duoc cho loa.
+        Cong lay tu chinh socket, nen chi dung khi cong host trung cong container
+        (mac dinh 8099); doi map cong thi phai dat public_base_url.
+        """
+        try:
+            ip = ipaddress.ip_address(str(host))
+            port = int(port)
+        except (TypeError, ValueError):
+            return
+        if ip.is_loopback or ip.is_unspecified or ip.is_link_local or ip.is_multicast:
+            return
+        if not 1 <= port <= 65535:
+            return
+        host_part = ip.compressed if ip.version == 4 else "[" + ip.compressed + "]"
+        base = "http://" + host_part + ":" + str(port)
+        with self.address_lock:
+            self.learned_base_url = base
+
     def create_stream_url(self, source, target):
         """Create a signed LAN URL a speaker can fetch without HA credentials."""
-        if not self.public_base_url:
+        # Tuy chon dat tay thang the; khong co thi dung dia chi da hoc duoc.
+        with self.address_lock:
+            base_url = self.public_base_url or self.learned_base_url
+        if not base_url:
             raise ValueError("public_base_url_required")
         return build_signed_stream_url(
-            self.public_base_url,
+            base_url,
             target,
             self.integration_token,
             source=source,
@@ -931,6 +961,14 @@ class PlayerHandler(BaseHTTPRequestHandler):
         if not hmac.compare_digest(provided, f"Bearer {token}"):
             self.send_json(401, {"error": "invalid_auth"})
             return False
+        # Loi goi nay da xac thuc va den tu LAN: dia chi no cham tay duoc chinh
+        # la dia chi loa dung duoc.
+        try:
+            local = self.connection.getsockname()
+        except OSError:
+            local = None
+        if local and len(local) >= 2:
+            self.server.note_reachable_address(local[0], local[1])
         return True
 
     def send_file(self, path, content_type):

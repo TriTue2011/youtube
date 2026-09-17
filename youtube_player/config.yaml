@@ -1,6 +1,6 @@
 name: "TriTue YouTube Player"
 description: "Nguồn nhạc YouTube và Zing cho Home Assistant media_player"
-version: "0.8.1"
+version: "0.8.2"
 slug: "youtube_player"
 url: "https://github.com/TriTue2011/youtube/tree/main/youtube_player"
 arch:
@@ -13,9 +13,9 @@ panel_icon: "mdi:youtube"
 panel_title: "YouTube Player"
 panel_admin: false
 ports:
-  8099/tcp: null
+  8099/tcp: 8099
 ports_description:
-  8099/tcp: "Giao diện web trực tiếp; không cần mở khi dùng Ingress"
+  8099/tcp: "Loa tải luồng phát qua cổng này — để nguyên 8099 là chạy được ngay; chỉ đổi khi cổng bị trùng"
 options:
   app_title: "TriTue YouTube Player"
   max_history: 20

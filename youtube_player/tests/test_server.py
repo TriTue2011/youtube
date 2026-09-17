@@ -60,6 +60,40 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=2) as response:
             return response.status, json.load(response)
 
+    def test_learns_the_lan_address_so_speakers_need_no_configuration(self):
+        """Khong dat public_base_url: dia chi hoc duoc tu loi goi da xac thuc duoc dung."""
+        self.server.public_base_url = ""
+        self.server.learned_base_url = ""
+        # Loopback/link-local/unspecified khong dung duoc cho loa -> phai bo qua.
+        for host in ("127.0.0.1", "::1", "0.0.0.0", "169.254.3.4", "khong-phai-ip"):
+            self.server.note_reachable_address(host, 8099)
+            self.assertEqual(self.server.learned_base_url, "", host)
+        with self.assertRaises(ValueError) as caught:
+            self.server.create_stream_url("youtube", "dQw4w9WgXcQ")
+        self.assertEqual(str(caught.exception), "public_base_url_required")
+
+        self.server.note_reachable_address("192.0.2.28", 8099)
+        self.assertEqual(self.server.learned_base_url, "http://192.0.2.28:8099")
+        self.assertTrue(
+            self.server.create_stream_url("youtube", "dQw4w9WgXcQ").startswith(
+                "http://192.0.2.28:8099"
+            )
+        )
+
+    def test_explicit_public_base_url_wins_over_the_learned_one(self):
+        """Nguoi dung dat tay thi luon thang, ke ca khi da hoc duoc dia chi khac."""
+        self.server.learned_base_url = "http://192.0.2.28:8099"
+        self.assertTrue(
+            self.server.create_stream_url("youtube", "dQw4w9WgXcQ").startswith(
+                "http://172.16.10.200:8099"
+            )
+        )
+        # Cong ngoai khoang hop le thi khong ghi nhan.
+        self.server.learned_base_url = ""
+        for port in (0, 70000, "abc", None):
+            self.server.note_reachable_address("192.0.2.28", port)
+            self.assertEqual(self.server.learned_base_url, "", repr(port))
+
     def remember_public_zing_target(self, target):
         self.server.remember_public_zing_results(
             [{"source": "zing", "kind": "song", "url": target}]

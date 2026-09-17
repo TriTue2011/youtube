@@ -41,14 +41,23 @@ service loa của Home Assistant.
 | `app_title` | `TriTue YouTube Player` | Tên hiển thị trên giao diện |
 | `max_history` | `20` | Số mục lịch sử, từ 1 đến 100 |
 | `integration_token` | để trống | Token bảo mật cho custom integration; để trống thì app tự sinh và lưu trong `/data` |
-| `public_base_url` | để trống | URL LAN dạng `http://IP-máy-chạy-add-on:8099` mà loa truy cập được; bắt buộc để phát Zing |
+| `public_base_url` | để trống | **Thường không cần điền** — add-on tự lấy địa chỉ LAN của máy chạy HA. Chỉ đặt `http://IP:8099` khi bạn đổi cổng ở tab Network, hoặc khi loa vẫn không ra tiếng |
 
 Token tích hợp xuất hiện trong log khi app khởi động. Nó chỉ dùng để xác thực
 kết nối trong hệ thống của bạn và không phải license key. Không đăng token công
 khai hoặc đặt nó trong URL.
 
-Để phát Zing, công bố cổng `8099` trong tab **Network** và đặt
-`public_base_url` thành địa chỉ LAN thật, ví dụ `http://172.16.10.200:8099`.
+Loa tự tải luồng phát từ add-on, nên nó cần một địa chỉ LAN của add-on. Từ
+bản 0.8.2 **không phải cấu hình gì**: cổng `8099` được công bố sẵn và add-on tự
+lấy địa chỉ LAN của máy chạy Home Assistant từ chính lời gọi đã xác thực của
+integration.
+
+Chỉ phải đặt `public_base_url` trong hai trường hợp: bạn **đổi cổng** ở tab
+**Network** (bên trong container không thấy được cổng đã map ra host, nên phép
+tự dò sẽ quảng bá sai cổng), hoặc loa vẫn không ra tiếng. Điều này áp cho **cả
+Zing lẫn YouTube** khi phát ra loa không có app YouTube/Cast (DLNA, amply, loa
+mạng): loa loại đó nhận một URL luồng của add-on chứ không tự mở YouTube. Loa
+Cast/Android TV/webOS thì luôn phát YouTube bằng app sẵn có, không cần cổng này.
 Không dùng hostname nội bộ `b5248dd0-youtube-player` ở ô này vì loa không phân
 giải được hostname đó. URL phát công khai có chữ ký và tự hết hạn; không mở cổng
 8099 ra Internet.

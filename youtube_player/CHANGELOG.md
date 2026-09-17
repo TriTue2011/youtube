@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.2 - 2026-09-17
+
+### Fixed
+
+- **Phát ra loa không còn phải cấu hình gì.** Loa tự tải luồng phát từ add-on, nên nó
+  cần một địa chỉ LAN — trước đây phải tự vào tab **Network** công bố cổng `8099` rồi
+  điền `public_base_url`, mà dòng trợ giúp lại chỉ ghi "bắt buộc khi phát Zing" nên ai
+  nghe YouTube đều tưởng không cần. Không đặt thì loa **im tiếng**, và im lặng thật:
+  integration chỉ ghi loa đó vào `skipped_targets` rồi bỏ qua nếu còn loa khác phát được.
+  Nay cổng `8099` được công bố sẵn và add-on **tự lấy địa chỉ LAN** của máy chạy Home
+  Assistant từ chính lời gọi đã xác thực bằng token của integration.
+- Chỉ phải đặt `public_base_url` khi **đổi cổng** ở tab Network: bên trong container
+  không thấy được cổng đã map ra host, nên phép tự dò sẽ quảng bá sai cổng.
+- Phép dò học địa chỉ **chỉ từ lời gọi đã xác thực** `/api/integration/*`, nên request
+  qua Ingress (không mang token) không bao giờ làm add-on quảng bá địa chỉ nội bộ của
+  Supervisor — thứ mà loa không với tới được.
+
 ## 0.8.1 - 2026-09-15
 
 ### Added

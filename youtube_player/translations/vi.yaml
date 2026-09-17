@@ -10,6 +10,6 @@ configuration:
     description: Bearer token tùy chọn cho custom integration. Để trống để tự sinh và lưu trong /data.
   public_base_url:
     name: URL phát trong mạng LAN
-    description: URL HTTP(S) dạng http://IP:8099 mà loa có thể truy cập; bắt buộc khi phát Zing.
+    description: Để trống là được — add-on tự lấy địa chỉ LAN của máy chạy Home Assistant. Chỉ điền dạng http://IP:8099 khi bạn đã đổi cổng ở tab Mạng, hoặc khi loa không ra tiếng.
 network:
-  8099/TCP: Giao diện web trực tiếp; không cần mở khi dùng Ingress.
+  8099/TCP: Loa tải luồng phát qua cổng này; để nguyên 8099 là chạy được ngay.

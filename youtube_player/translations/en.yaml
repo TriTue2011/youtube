@@ -10,6 +10,6 @@ configuration:
     description: Optional bearer token for the Home Assistant integration. Leave empty to generate one in /data.
   public_base_url:
     name: LAN playback URL
-    description: HTTP(S) URL such as http://IP:8099 reachable by speakers; required for Zing playback.
+    description: Leave empty — the add-on detects the Home Assistant host's LAN address itself. Set http://IP:8099 only if you changed the port on the Network tab, or if speakers stay silent.
 network:
-  8099/TCP: Direct web interface; it does not need to be exposed when using Ingress.
+  8099/TCP: Speakers fetch the audio stream over this port; leaving it at 8099 works out of the box.
