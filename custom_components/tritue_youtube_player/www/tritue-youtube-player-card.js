@@ -1,3 +1,43 @@
+/**
+ * tritue-youtube-player-card.js   v1.0.0
+ * ─────────────────────────────────────────────────────────────
+ * Card "Xem/nghe YouTube" cho Home Assistant — tách riêng từ
+ * announce-center.js để dùng độc lập, không cần cả bộ card thông báo.
+ *
+ * Tính năng:
+ * ─ Tìm và phát nhạc/video từ YouTube, Zing MP3, hoặc dán link audio trực tiếp
+ * ─ Phát ra loa/màn hình bất kỳ trong nhà (chọn nhiều loa cùng lúc)
+ * ─ Lưu & quản lý Playlist riêng
+ * ─ Bố cục ngang 2 cột (Video / Danh sách phát / Loa-màn hình / Đang phát)
+ *   trên desktop, tự gập lại 1 cột trên màn hình hẹp
+ * ─ Sóng nhạc nhấp nháy khi có bài đang chạy (3 kiểu: bars/simple/dots)
+ *
+ * YÊU CẦU BẮT BUỘC:
+ *   Phải cài sẵn tích hợp Python "tritue_youtube_player" trong Home Assistant
+ *   (custom_components/tritue_youtube_player) — tích hợp này cung cấp entity
+ *   media_player ảo + API tìm kiếm/stream/playlist. File này CHỈ là giao diện
+ *   phía trình duyệt, không tự phát được nhạc nếu chưa có tích hợp trên.
+ *
+ * Cách dùng (YAML):
+ *   type: custom:youtube-player-card
+ *   entity: media_player.ten_entity_tritue_youtube_player   # bắt buộc
+ *   title: 🎵 Xem YouTube                                    # tuỳ chọn
+ *   waveStyle: bars                                          # tuỳ chọn: bars | simple | dots
+ *
+ * Cài đặt:
+ *   1. Tải file này lên /config/www/ (hoặc thư mục community/HACS tuỳ ý).
+ *   2. Cài đặt → Bảng điều khiển → Tài nguyên → thêm URL trỏ tới file
+ *      (vd /local/tritue-youtube-player-card.js), loại "JavaScript Module".
+ *   3. Thêm card bằng YAML ở trên (chưa có trình chỉnh sửa giao diện — cấu
+ *      hình qua YAML là đủ dùng, chỉ có 3 trường).
+ *
+ * Thiết kế bởi: @doanlong1412 🇻🇳
+ * Ủng hộ tách trà: https://www.paypal.com/paypalme/doanlong1412
+ * ─────────────────────────────────────────────────────────────
+ */
+(() => {
+  'use strict';
+
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
@@ -57,6 +97,26 @@ function setListenScreenOff(on) {
   }
 }
 
+// Phân loại Loa/Màn hình do người dùng tự sửa tay (khi device_class + tên thiết bị
+// không đủ để đoán đúng, vd "living" không có từ khoá gì). Lưu trên trình duyệt
+// (không cần đổi gì phía backend); áp dụng chung cho mọi dashboard trên máy này.
+const DEVICE_KIND_KEY = "tritue-youtube-player:device-kind:";
+function getDeviceKindOverride(entityId) {
+  try {
+    const v = localStorage.getItem(DEVICE_KIND_KEY + entityId);
+    return v === "audio" || v === "video" ? v : null;
+  } catch (_error) {
+    return null;
+  }
+}
+function setDeviceKindOverride(entityId, kind) {
+  try {
+    localStorage.setItem(DEVICE_KIND_KEY + entityId, kind);
+  } catch (_error) {
+    // Storage blocked: lựa chọn chỉ tồn tại đến khi tải lại trang.
+  }
+}
+
 /** What a card showed when it left the page (search, queue, video), by entity. */
 const cardMemory = new Map();
 
@@ -82,6 +142,13 @@ const deviceAudio = {
   pausedByHide: false,
   listeners: new Set(),
 
+  playRefused(error) {
+    if (error?.name === "AbortError") return;
+    this.notify(error?.name === "NotAllowedError"
+      ? "Trình duyệt chặn tự phát có tiếng — bấm ▶ để nghe."
+      : "Máy này không phát được tiếng bài này (" + (error?.name || "lỗi không rõ") + ").", true);
+  },
+
   notify(message = "", isError = false) {
     this.listeners.forEach((listener) => listener(message, isError));
   },
@@ -96,22 +163,14 @@ const deviceAudio = {
       if (this.real() && this.item && !this.next(1)) this.notify("Đã nghe hết hàng đợi.");
     });
     audio.addEventListener("error", () => {
-      if (this.real()) this.notify(`Không phát được tiếng bài này trên máy này (mã lỗi ${audio.error?.code ?? "?"}).`, true);
+      if (this.real()) this.notify("Không phát được tiếng bài này trên máy này.", true);
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {
-        // The Home Assistant app reports the page hidden for a moment while it enters
-        // fullscreen (owner 15/09/2026: "phóng to dừng video"); fullscreen is watching,
-        // not a screen switched off. It may say hidden before fullscreen has begun, so
-        // look again half a second later: a screen switched off is still hidden then.
-        clearTimeout(this.hideTimer);
-        this.hideTimer = setTimeout(() => {
-          if (document.visibilityState !== "hidden" || document.fullscreenElement) return;
-          if (!listenScreenOff() && this.real() && !audio.paused) {
-            audio.pause();
-            this.pausedByHide = true;
-          }
-        }, 500);
+        if (!listenScreenOff() && this.real() && !audio.paused) {
+          audio.pause();
+          this.pausedByHide = true;
+        }
       } else if (this.pausedByHide) {
         this.pausedByHide = false;
         audio.play().catch(() => {});
@@ -140,36 +199,18 @@ const deviceAudio = {
     return audio;
   },
 
-  urls: new Map(),
-
   async streamUrl(item) {
     if (item.source === "http") return String(item.url || item.id || "");
-    const key = `${item.source}:${item.url || item.id}`;
-    const cached = this.urls.get(key);
-    // Signed links last an hour on the player server; reuse one for ten minutes.
-    if (cached && Date.now() - cached.at < 600000) return cached.url;
-    const pending = (async () => {
-      try {
-        const payload = await this.hass.callApi("POST", "tritue_youtube_player/stream", {
-          entry_id: this.entryId,
-          source: item.source,
-          target: item.url || item.id,
-        });
-        return String(payload?.stream_url || "");
-      } catch (_error) {
-        return "";
-      }
-    })();
-    this.urls.set(key, { at: Date.now(), url: pending });
-    const url = await pending;
-    if (url) this.urls.set(key, { at: Date.now(), url });
-    else this.urls.delete(key);
-    return url;
-  },
-
-  /** Get a song's link ready before it is needed (the sound of a video just opened). */
-  prefetch(item) {
-    if (item && this.hass && item.source !== "http") this.streamUrl(item);
+    try {
+      const payload = await this.hass.callApi("POST", "tritue_youtube_player/stream", {
+        entry_id: this.entryId,
+        source: item.source,
+        target: item.url || item.id,
+      });
+      return String(payload?.stream_url || "");
+    } catch (_error) {
+      return "";
+    }
   },
 
   /** Listen alone; `startAt` = second to start from (the sound of a video watched until now). */
@@ -195,14 +236,6 @@ const deviceAudio = {
     this.notify();
   },
 
-  /** play() refused. AbortError only means a newer song or a pause took over. */
-  playRefused(error) {
-    if (error?.name === "AbortError") return;
-    this.notify(error?.name === "NotAllowedError"
-      ? "Trình duyệt chặn tự phát có tiếng — bấm ▶ để nghe."
-      : `Máy này không phát được tiếng bài này (${error?.name || "lỗi không rõ"}).`, true);
-  },
-
   /** Next (+1) / previous (-1) song of the queue; false at either end. */
   next(step) {
     const target = this.index + step;
@@ -215,7 +248,7 @@ const deviceAudio = {
   toggle() {
     const audio = this.real();
     if (!audio) return;
-    if (audio.paused) audio.play().catch((error) => this.playRefused(error));
+    if (audio.paused) audio.play().catch(() => {});
     else audio.pause();
   },
 
@@ -303,6 +336,174 @@ const deviceAudio = {
   },
 };
 
+const YOUTUBE_SUGGESTED_CATEGORIES = [
+  {
+    id: "acoustic",
+    name: "Cafe Acoustic",
+    icon: "mdi:coffee",
+    songs: [
+      {
+        id: "v4tT04yJdWg",
+        video_id: "v4tT04yJdWg",
+        title: "Full Album Khói Thuốc Đợi Chờ ☘ Phương Phương Thảo || Jimmii Nguyễn Hits Cover Acoustic",
+        artist: "Phương Phương Thảo Official",
+        duration_seconds: 3983,
+        thumbnail_url: "https://i.ytimg.com/vi/v4tT04yJdWg/hqdefault.jpg"
+      },
+      {
+        id: "xFipDLcSR8I",
+        video_id: "xFipDLcSR8I",
+        title: "Tuyển Tập Những Bản Nhạc Hay Của Phương Phương Thảo | Playlist Acoustic Cover",
+        artist: "Phương Phương Thảo Official",
+        duration_seconds: 3840,
+        thumbnail_url: "https://i.ytimg.com/vi/xFipDLcSR8I/hqdefault.jpg"
+      },
+      {
+        id: "cWAUaH7TiUE",
+        video_id: "cWAUaH7TiUE",
+        title: "Nhạc Quán Cafe Hay Nhất 2021 - Nhạc Acoustic 8x 9x Nhẹ Nhàng | Nhạc Trẻ 8x 9x Đời Đầu Hay",
+        artist: "NGUYỄN VĂN CHUNG MUSIC",
+        duration_seconds: 2980,
+        thumbnail_url: "https://i.ytimg.com/vi/cWAUaH7TiUE/hqdefault.jpg"
+      },
+      {
+        id: "x6Tcs4_Btvo",
+        video_id: "x6Tcs4_Btvo",
+        title: "Guitar Buổi Sáng ☕ Bắt Đầu Ngày Mới Bình Yên | Nhạc Tập Trung Sâu Học Tập & Làm Việc",
+        artist: "Guitar Coffee Music",
+        duration_seconds: 3120,
+        thumbnail_url: "https://i.ytimg.com/vi/x6Tcs4_Btvo/hqdefault.jpg"
+      }
+    ]
+  },
+  {
+    id: "nhactre",
+    name: "Nhạc Trẻ Hot TikTok",
+    icon: "mdi:fire",
+    songs: [
+      {
+        id: "LgRguLVuobM",
+        video_id: "LgRguLVuobM",
+        title: "BXH Nhạc Trẻ Remix Hay Nhất Hiện Nay ♫ Top 20 Bản EDM TikTok Hay Nhất - EDM Hot TikTok",
+        artist: "Myn Xinh and Việt Mix DJ",
+        duration_seconds: 3687,
+        thumbnail_url: "https://i.ytimg.com/vi/LgRguLVuobM/hqdefault.jpg"
+      },
+      {
+        id: "540JLNQBnYI",
+        video_id: "540JLNQBnYI",
+        title: "NHẠC REMIX TIKTOK TRIỆU VIEW - BXH Nhạc Trẻ Remix Hay Nhất Hiện Nay",
+        artist: "Trang Xinh Music",
+        duration_seconds: 5735,
+        thumbnail_url: "https://i.ytimg.com/vi/540JLNQBnYI/hqdefault.jpg"
+      },
+      {
+        id: "oOydk6FXGwU",
+        video_id: "oOydk6FXGwU",
+        title: "TOP 30 NHẠC REMIX TIKTOK TRIỆU VIEW: Vở Kịch Của Em, Thu Cuối, Lao Tâm Khổ Tứ",
+        artist: "H2O Remix",
+        duration_seconds: 6936,
+        thumbnail_url: "https://i.ytimg.com/vi/oOydk6FXGwU/hqdefault.jpg"
+      },
+      {
+        id: "4ZMk118CtSw",
+        video_id: "4ZMk118CtSw",
+        title: "NHẠC REMIX TIKTOK TRIỆU VIEW - BXH Nhạc Trẻ Remix Hay Nhất Hiện Nay",
+        artist: "Ness Remix & H2O Remix",
+        duration_seconds: 3952,
+        thumbnail_url: "https://i.ytimg.com/vi/4ZMk118CtSw/hqdefault.jpg"
+      }
+    ]
+  },
+  {
+    id: "lofi",
+    name: "Lofi Chill & Học Tập",
+    icon: "mdi:headphones",
+    songs: [
+      {
+        id: "ZX2mjf9dFH8",
+        video_id: "ZX2mjf9dFH8",
+        title: "30 phút nhạc Lofi Chill không lời thư giãn nhẹ nhàng 🌿",
+        artist: "Lucas Music",
+        duration_seconds: 1819,
+        thumbnail_url: "https://i.ytimg.com/vi/ZX2mjf9dFH8/hqdefault.jpg"
+      },
+      {
+        id: "JBCFKYt14P4",
+        video_id: "JBCFKYt14P4",
+        title: "Nhạc Chill Nhẹ Nhàng - Nhạc Lofi Chill Gây Nghiện Hot TikTok",
+        artist: "to thich cau",
+        duration_seconds: 3237,
+        thumbnail_url: "https://i.ytimg.com/vi/JBCFKYt14P4/hqdefault.jpg"
+      },
+      {
+        id: "jfKfPfyJRdk",
+        video_id: "jfKfPfyJRdk",
+        title: "Lofi Hip Hop Radio - Beats to Relax/Study to",
+        artist: "Lofi Girl",
+        duration_seconds: 7200,
+        thumbnail_url: "https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg"
+      },
+      {
+        id: "F0XLVSbxhAo",
+        video_id: "F0XLVSbxhAo",
+        title: "Nhạc Chill Quán Cafe - Những Ca Khúc Lofi Nhẹ Nhàng Hay Nhất Dành Cho Quán Cafe",
+        artist: "Phố Chill & Gió Xuân Chill",
+        duration_seconds: 5448,
+        thumbnail_url: "https://i.ytimg.com/vi/F0XLVSbxhAo/hqdefault.jpg"
+      }
+    ]
+  },
+  {
+    id: "bolero",
+    name: "Bolero & Trữ Tình Bất Hủ",
+    icon: "mdi:music-clef-treble",
+    songs: [
+      {
+        id: "jI5za9F3eQE",
+        video_id: "jI5za9F3eQE",
+        title: "Liên Khúc Bolero Tuyển Chọn | Em Xoá Tên Tôi Rồi - Hoàng Lâm Al",
+        artist: "Ngọc Bích Al",
+        duration_seconds: 3867,
+        thumbnail_url: "https://i.ytimg.com/vi/jI5za9F3eQE/hqdefault.jpg"
+      },
+      {
+        id: "4c6nzqeteYc",
+        video_id: "4c6nzqeteYc",
+        title: "Tuyển Chọn BOLERO Trữ Tình I Nhạc Vàng Xưa Ru Ngủ CỰC ÊM TAI - Ngọt Lịm SAY ĐẮM CON TIM",
+        artist: "Bolero Phố Cũ",
+        duration_seconds: 8357,
+        thumbnail_url: "https://i.ytimg.com/vi/4c6nzqeteYc/hqdefault.jpg"
+      },
+      {
+        id: "RXgbfTV1TQE",
+        video_id: "RXgbfTV1TQE",
+        title: "Tuyển Chọn Những Bài Nhạc Trữ Tình Hay Nhất Thế Kỷ - Sala Bolero",
+        artist: "Sala Bolero",
+        duration_seconds: 6673,
+        thumbnail_url: "https://i.ytimg.com/vi/RXgbfTV1TQE/hqdefault.jpg"
+      },
+      {
+        id: "HzVgG6qulSM",
+        video_id: "HzVgG6qulSM",
+        title: "50 Ca Khúc Bolero Tuyển Chọn KHÔNG QUẢNG CÁO Nghe 10000 Lần Không Thấy Chán",
+        artist: "ĐẠI NHẠC HỘI",
+        duration_seconds: 18813,
+        thumbnail_url: "https://i.ytimg.com/vi/HzVgG6qulSM/hqdefault.jpg"
+      }
+    ]
+  }
+];
+const QUICK_SEARCH_TAGS = [
+  "Phương Phương Thảo",
+  "Nhạc Trẻ Hot TikTok",
+  "Lofi Chill",
+  "Bằng Kiều",
+  "Acoustic Buổi Sáng",
+  "Lệ Quyên Bolero",
+  "Nhạc Chill Thư Giãn"
+];
+
 class TriTueYouTubePlayerCard extends HTMLElement {
   constructor() {
     super();
@@ -361,9 +562,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!config || typeof config.entity !== "string") {
       throw new Error("TriTue card requires a media_player entity");
     }
-    this._config = { title: "TriTue Music", layout: "vertical", ...config };
-    // Config can change without the element being re-created (e.g. editing it live
-    // in the dashboard editor): re-apply the layout instead of waiting for the next render.
+    this._config = { title: "TriTue Music", waveStyle: "bars", layout: "horizontal", ...config };
+    // Sửa cấu hình ngay trên dashboard: áp lại bố cục, khỏi chờ lần vẽ sau.
     if (this._rendered) this._applyLayout();
   }
 
@@ -374,6 +574,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._render();
       this._bindEvents();
       this._rendered = true;
+      this._applyLayout();
+      this._renderSuggestions();
     }
     this._applySharedOutputs();
     this._syncPlayers();
@@ -458,6 +660,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // Leaving the view unloads the iframe anyway; drop its listener and timers with it.
     clearInterval(this._progressTimer);
     this._progressTimer = null;
+    clearInterval(this._waveTimer);
+    this._waveTimer = null;
     if (this._onFullscreenChange) {
       document.removeEventListener("fullscreenchange", this._onFullscreenChange);
       this._onFullscreenChange = null;
@@ -467,18 +671,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._closeVideo();
   }
 
-  /** Apply the horizontal/vertical layout option to the already-rendered DOM. */
-  _applyLayout() {
-    const wrap = this.shadowRoot?.querySelector(".wrap");
-    if (!wrap) return;
-    const horizontal = this._config.layout === "horizontal";
-    wrap.classList.toggle("horizontal", horizontal);
-    if (horizontal && this._config.player_width) {
-      const width = Math.min(80, Math.max(20, Number(this._config.player_width) || 50));
-      wrap.style.setProperty("--tritue-player-w", `${width}%`);
-    } else {
-      wrap.style.removeProperty("--tritue-player-w");
+  // Sinh markup sóng nhạc theo config wave_style — gọi 1 lần lúc _render() (không phải
+  // mỗi lần cập nhật trạng thái), giống cách _veCotSong() của phicomm-r1-card.js sinh
+  // sẵn các thanh rồi để CSS lo phần "đá đá".
+  _renderWave() {
+    const style = this._config.waveStyle || "bars";
+    if (style === "simple") {
+      const bars = Array.from({ length: 9 }, (_, i) => `<span style="--i:${i}"></span>`).join("");
+      return `<div class="np-wave np-wave--simple" aria-hidden="true">${bars}</div>`;
     }
+    if (style === "dots") {
+      const cols = Array.from({ length: 14 }, (_, i) =>
+        `<div class="wv-col" style="--i:${i}"><span class="wv-max"></span><span class="wv-dot"></span></div>`
+      ).join("");
+      return `<div class="np-wave np-wave--dots" aria-hidden="true">${cols}</div>`;
+    }
+    // "bars" (mặc định) — mật độ dày hơn bản cũ (12 → 22 thanh) để trông đầy hơn.
+    const heights = [38, 62, 90, 45, 70, 33, 85, 55, 95, 40, 72, 58, 88, 42, 66, 30, 80, 50, 92, 36, 64, 78];
+    const bars = heights.map((h, i) => `<span style="--i:${i};--h:${h}%"></span>`).join("");
+    return `<div class="np-wave np-wave--bars" aria-hidden="true">${bars}</div>`;
   }
 
   _render() {
@@ -488,31 +699,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         [hidden] { display: none !important; }
         ha-card {
           overflow: hidden;
-          color: var(--primary-text-color);
+          color: #fff;
           background:
-            radial-gradient(circle at 94% 2%, rgba(255, 64, 86, .16), transparent 34%),
-            var(--ha-card-background, var(--card-background-color));
+            radial-gradient(circle at 94% 2%, rgba(var(--ad-c1,0,204,204), .22), transparent 34%),
+            linear-gradient(135deg, rgba(var(--ad-c1,0,204,204),0.22) 0%, rgba(var(--ad-c2,13,21,37),0.97) 55%);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.3);
         }
         .wrap { padding: 16px; }
-        /* Horizontal layout: player on the left, search/results/playlists on the
-           right in a ".side" wrapper (see the HTML below) so nothing needs to be
-           addressed one selector at a time. */
-        .wrap.horizontal {
-          display: grid;
-          grid-template-columns: var(--tritue-player-w, 1fr) 1fr;
-          grid-template-rows: auto 1fr;
-          column-gap: 16px;
-        }
-        .wrap.horizontal header { grid-column: 1 / -1; }
-        .wrap.horizontal .player { grid-column: 1; grid-row: 2; margin-top: 8px; align-self: start; }
-        .wrap.horizontal .side { grid-column: 2; grid-row: 2; min-width: 0; max-height: 80vh; overflow: auto; }
-        @media (max-width: 800px) {
-          .wrap.horizontal { display: block; }
-          .wrap.horizontal .side { max-height: none; overflow: visible; }
-        }
         header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+        /* Popup ngoài (announce-center-card) đã có tiêu đề + nút đóng riêng, nên h2 ở đây
+           chỉ giữ lại cho JS gán textContent, không hiển thị để khỏi trùng chữ. */
+        header .visually-hidden { display: none; }
+        header .brand-logo { color: #ff0000; --mdc-icon-size: 26px; flex: none; }
         h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
-        .subtitle, .hint { color: var(--secondary-text-color); font-size: .86rem; }
+        .subtitle, .hint { color: rgba(255,255,255,.62); font-size: .86rem; }
         .subtitle { margin: 3px 0 0; font-size: .8rem; }
         .source-switch {
           display: grid;
@@ -520,78 +720,100 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           padding: 4px;
           margin: 12px 0 10px;
           border-radius: 12px;
-          background: var(--secondary-background-color);
+          background: rgba(var(--ad-c1,0,204,204),0.08);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.15);
         }
         button, input { font: inherit; }
         button { cursor: pointer; }
         .source-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
           border: 0;
           border-radius: 9px;
           padding: 7px 10px;
-          color: var(--secondary-text-color);
+          color: rgba(255,255,255,.65);
           background: transparent;
           font-weight: 600;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
+        .source-button ha-icon { --mdc-icon-size: 18px; flex: none; color: #ff0000; }
         .source-button[aria-pressed="true"] {
-          color: var(--text-primary-color, #fff);
-          background: var(--primary-color);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, .14);
+          color: #fff;
+          background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.18));
+          box-shadow: 0 0 14px 1px rgba(var(--ad-c1,0,204,204),0.4);
         }
         form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
         input[type="search"] {
           min-width: 0;
-          border: 1px solid var(--divider-color);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.25);
           border-radius: 11px;
           padding: 9px 12px;
-          color: var(--primary-text-color);
-          background: var(--secondary-background-color);
+          color: #fff;
+          background: rgba(0,0,0,0.25);
           outline: none;
         }
-        input[type="search"]:focus { border-color: var(--primary-color); }
+        input[type="search"]:focus { border-color: var(--ad-accent,#00ffcc); box-shadow: 0 0 0 2px rgba(var(--ad-c1,0,204,204),0.25); }
         .primary {
           border: 0;
           border-radius: 11px;
           padding: 10px 15px;
           font-weight: 650;
         }
-        .primary { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+        .primary { color: #fff; background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.65), rgba(var(--ad-c1,0,204,204),0.28)); box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35); }
         .search-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; --mdc-icon-size: 19px; }
         button:disabled { cursor: not-allowed; opacity: .45; }
         .status { min-height: 18px; margin: 6px 1px 0; color: var(--secondary-text-color); font-size: .84rem; }
-        .status.error { color: var(--error-color); }
+        .status.error { color: #ff6b81; }
         .section { margin-top: 8px; }
         .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
-        .section-title h3 { margin: 0; font-size: .88rem; }
-        /* The speaker list stays folded until its title is tapped (owner 15/09/2026). */
-        .speakers-toggle {
-          width: 100%;
-          padding: 2px 0;
-          border: 0;
-          color: var(--primary-text-color);
-          background: transparent;
-          text-align: left;
+        .section-title h3 { margin: 0; font-size: .88rem; display: flex; align-items: center; gap: 6px; }
+        .section-title h3 ha-icon { --mdc-icon-size: 17px; color: var(--ad-accent,#00ffcc); }
+        /* Tách hẳn khỏi khu tìm kiếm/kết quả: khung riêng, viền + nền neon nhạt
+           giống các khối khác của card, để không bị lẫn với ô tìm kiếm phía dưới. */
+        .speaker-section {
+          margin: 10px 0 4px;
+          padding: 10px 10px 8px;
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.2);
+          border-radius: 14px;
+          background: rgba(var(--ad-c1,0,204,204),0.05);
         }
-        .section-name { display: inline-flex; align-items: center; gap: 4px; font-weight: 650; font-size: .88rem; --mdc-icon-size: 18px; }
-        .section-name ha-icon { transition: transform .15s; color: var(--secondary-text-color); }
-        .speakers-toggle[aria-expanded="true"] .section-name ha-icon { transform: rotate(180deg); }
-        .players { display: flex; flex-wrap: wrap; gap: 8px; max-height: 132px; overflow: auto; }
+        .players {
+          display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px;
+          height: 132px; overflow-y: auto; overflow-x: hidden; padding-right: 4px;
+          /* Firefox */
+          scrollbar-width: thin; scrollbar-color: rgba(var(--ad-c1,0,204,204),0.5) transparent;
+        }
+        /* Chrome/Safari/Edge: thanh scroll mảnh, màu theo theme, bo tròn thay vì
+           thanh xám mặc định của trình duyệt. */
+        .players::-webkit-scrollbar { width: 6px; }
+        .players::-webkit-scrollbar-track { background: transparent; }
+        .players::-webkit-scrollbar-thumb { background: rgba(var(--ad-c1,0,204,204),0.5); border-radius: 999px; }
+        .players::-webkit-scrollbar-thumb:hover { background: rgba(var(--ad-c1,0,204,204),0.75); }
+        .players-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .players-col-title {
+          display: flex; align-items: center; gap: 5px; margin-bottom: 5px;
+          font-size: .76rem; font-weight: 650; color: rgba(255,255,255,.6); text-transform: uppercase; letter-spacing: .02em;
+        }
+        .players-col-title ha-icon { --mdc-icon-size: 15px; color: var(--ad-accent,#00ffcc); }
+        .players-empty-col { padding: 6px 2px; text-align: left; font-size: .8rem; }
         .player-chip {
           display: flex;
           align-items: center;
           gap: 7px;
           max-width: 100%;
           padding: 5px 9px;
-          border: 1px solid var(--divider-color);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.2);
           border-radius: 999px;
-          background: var(--secondary-background-color);
+          background: rgba(var(--ad-c1,0,204,204),0.08);
           cursor: pointer;
         }
-        .player-chip:has(input:checked) { border-color: var(--primary-color); color: var(--primary-color); }
+        .player-chip:has(input:checked) { border-color: var(--ad-accent,#00ffcc); color: var(--ad-accent,#00ffcc); box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35); }
         .player-chip.source-incompatible { opacity: .62; }
-        .player-chip input { accent-color: var(--primary-color); }
+        .player-chip input { accent-color: var(--ad-accent,#00ffcc); }
         .player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .device-icon { --mdc-icon-size: 17px; color: var(--secondary-text-color); }
         .hide-player {
@@ -607,7 +829,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: transparent;
           --mdc-icon-size: 15px;
         }
-        .hide-player:hover { color: var(--error-color); background: var(--divider-color); }
+        .hide-player:hover { color: #ff6b81; background: rgba(var(--ad-c1,0,204,204),0.15); }
+        .move-player {
+          display: grid;
+          place-items: center;
+          width: 22px;
+          height: 22px;
+          margin: -2px 0;
+          padding: 0;
+          border: 0;
+          border-radius: 50%;
+          color: var(--ad-accent,#00ffcc);
+          background: transparent;
+          opacity: .55;
+          --mdc-icon-size: 14px;
+        }
+        .move-player:hover { opacity: 1; background: rgba(var(--ad-c1,0,204,204),0.18); }
         .hidden-players { margin-top: 4px; }
         .hidden-toggle {
           display: inline-flex;
@@ -635,14 +872,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           font-size: .82rem;
           --mdc-icon-size: 15px;
         }
-        .restore-player:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .restore-player:hover { border-color: var(--ad-accent,#00ffcc); color: var(--ad-accent,#00ffcc); }
         .restore-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .player {
           margin-top: 12px;
-          padding: 10px;
+          padding: 6px;
           border: 1px solid var(--divider-color);
-          border-radius: 14px;
-          background: color-mix(in srgb, var(--secondary-background-color) 78%, transparent);
+          border-radius: 12px;
+          background: transparent;
         }
         .video-frame {
           position: relative;
@@ -689,8 +926,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           pointer-events: none;
         }
         .now { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 11px; align-items: center; }
-        .player.video-on .now { grid-template-columns: minmax(0, 1fr); }
-        .player.video-on .now-cover { display: none; }
+        /* .now/.now-cover đã chuyển sang khối .np-zone (sibling của .player) —
+           dùng tổ hợp "~" thay cho descendant vì không còn nằm trong .player. */
+        .player.video-on ~ .yt-zone-playlist .np-zone .now { grid-template-columns: minmax(0, 1fr); }
+        .player.video-on ~ .yt-zone-playlist .np-zone .now-cover { display: none; }
         .now-cover {
           display: grid;
           place-items: center;
@@ -705,7 +944,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .now-copy { min-width: 0; }
         .now-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
         .now-meta { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary-text-color); font-size: .8rem; }
-        .control-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
+        /* control-bar giờ chỉ còn transport-group (đã chuyển sang .np-zone) nên căn giữa. */
+        .control-bar { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; }
+        /* stage-controls: nhóm nút liên quan tới hiển thị video (xem/xoay/phóng to/đóng),
+           vẫn ở lại trong .stage, nằm ngay dưới video-frame, căn phải. */
+        .stage-controls { display: flex; align-items: center; justify-content: flex-end; gap: 2px; margin-top: 6px; }
         .transport-group, .view-group { display: flex; align-items: center; gap: 2px; }
         .ctl {
           display: grid;
@@ -719,23 +962,72 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: transparent;
           --mdc-icon-size: 22px;
         }
-        .ctl:hover:not(:disabled) { background: var(--divider-color); }
+        .ctl:hover:not(:disabled) { background: rgba(var(--ad-c1,0,204,204),0.15); }
         .ctl.main {
           width: 42px;
           height: 42px;
           margin: 0 2px;
-          color: var(--text-primary-color, #fff);
-          background: var(--primary-color);
+          color: #fff;
+          background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.2));
+          box-shadow: 0 0 14px 2px rgba(var(--ad-c1,0,204,204),0.4);
           --mdc-icon-size: 26px;
         }
-        .ctl.main:hover:not(:disabled) { background: var(--primary-color); filter: brightness(1.08); }
-        .ctl.stop { color: var(--error-color); }
+        .ctl.main:hover:not(:disabled) { filter: brightness(1.15); }
+        /* Nút chuyển bài (trước/sau/dừng) trong bảng "Đang phát" — trước đây nền
+           trong suốt + icon màu chữ chính nên rất mờ trên nền tối. Đổi màu về
+           accent của theme + thêm viền/đổ bóng kiểu "nổi 3D" (bevel) để bấm dễ
+           nhận ra hơn. */
+        .control-bar .ctl:not(.main) {
+          color: var(--ad-accent, #00ffcc);
+          background: linear-gradient(145deg, rgba(255,255,255,.12), rgba(0,0,0,.32));
+          border: 1px solid rgba(var(--ad-c1,0,204,204),.6);
+          box-shadow:
+            0 2px 5px rgba(0,0,0,.4),
+            inset 0 1px 0 rgba(255,255,255,.18),
+            inset 0 -2px 3px rgba(0,0,0,.4);
+        }
+        .control-bar .ctl:not(.main):hover:not(:disabled) {
+          background: linear-gradient(145deg, rgba(255,255,255,.2), rgba(0,0,0,.26));
+          box-shadow:
+            0 3px 7px rgba(0,0,0,.45),
+            inset 0 1px 0 rgba(255,255,255,.22),
+            inset 0 -2px 3px rgba(0,0,0,.4),
+            0 0 9px 1px rgba(var(--ad-c1,0,204,204),.55);
+        }
+        .control-bar .ctl.stop {
+          color: #ff8a95;
+          border-color: rgba(255,107,129,.6);
+        }
+        .control-bar .ctl.stop:hover:not(:disabled) {
+          box-shadow:
+            0 3px 7px rgba(0,0,0,.45),
+            inset 0 1px 0 rgba(255,255,255,.22),
+            inset 0 -2px 3px rgba(0,0,0,.4),
+            0 0 9px 1px rgba(255,107,129,.55);
+        }
+        .ctl.stop { color: #ff6b81; }
         .view-group .ctl { width: 32px; height: 32px; color: var(--secondary-text-color); --mdc-icon-size: 19px; }
-        input[type="range"] { width: 100%; accent-color: var(--primary-color); }
-        .progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-top: 6px; font-size: .74rem; font-variant-numeric: tabular-nums; color: var(--secondary-text-color); }
-        .progress .bar { height: 4px; overflow: hidden; border-radius: 2px; background: var(--divider-color); }
-        .progress .fill { width: 0; height: 100%; background: var(--primary-color); transition: width .9s linear; }
-        .join-session { border-style: dashed; color: var(--primary-color); }
+        input[type="range"] { width: 100%; accent-color: var(--ad-accent,#00ffcc); }
+        .progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-top: 6px; font-size: .74rem; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
+        /* Timeline: trước đây cao 4px + nền mờ theo --divider-color nên khó thấy.
+           Thêm viền + bóng đổ trong (inset) để tạo cảm giác "rãnh nổi 3D", fill
+           dùng gradient + glow rõ hơn. */
+        .progress .bar {
+          height: 6px;
+          overflow: hidden;
+          border-radius: 4px;
+          background: rgba(0,0,0,.38);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),.45);
+          box-shadow: inset 0 1px 3px rgba(0,0,0,.6);
+        }
+        .progress .fill {
+          width: 0;
+          height: 100%;
+          background: linear-gradient(90deg, var(--ad-accent,#00ffcc), rgba(var(--ad-c1,0,204,204),.85));
+          box-shadow: 0 0 8px 1px var(--ad-accent,#00ffcc), inset 0 1px 0 rgba(255,255,255,.4);
+          transition: width .9s linear;
+        }
+        .join-session { border-style: dashed; color: var(--ad-accent,#00ffcc); }
         .others { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
         .others:empty { display: none; }
         .other-session {
@@ -753,7 +1045,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         .other-session img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
         .other-session span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .other-session:hover { border-color: var(--primary-color); }
+        .other-session:hover { border-color: var(--ad-accent,#00ffcc); }
         .speaker-volumes { display: grid; gap: 2px; margin-top: 4px; }
         .speaker-volumes:empty { display: none; }
         .svol-row { display: grid; grid-template-columns: minmax(70px, 30%) 1fr 36px; align-items: center; gap: 8px; }
@@ -768,7 +1060,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           align-items: center;
           padding: 6px;
           border-radius: 10px;
-          background: color-mix(in srgb, var(--secondary-background-color) 72%, transparent);
+          background: rgba(var(--ad-c1,0,204,204),0.08);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.12);
         }
         .cover { width: 48px; height: 48px; border-radius: 7px; object-fit: cover; background: var(--divider-color); }
         .track { min-width: 0; }
@@ -782,8 +1075,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           padding: 0;
           border: 0;
           border-radius: 50%;
-          color: var(--text-primary-color, #fff);
-          background: var(--primary-color);
+          color: #fff;
+          background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.6), rgba(var(--ad-c1,0,204,204),0.22));
+          box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.4);
           --mdc-icon-size: 20px;
         }
         .result-actions { display: flex; align-items: center; gap: 6px; }
@@ -800,7 +1094,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           font-weight: 650;
           --mdc-icon-size: 17px;
         }
-        .view-tab[aria-pressed="true"] { border-bottom-color: var(--primary-color); color: var(--primary-text-color); }
+        .view-tab[aria-pressed="true"] { border-bottom-color: var(--ad-accent,#00ffcc); color: var(--ad-accent,#00ffcc); }
         .icon-button {
           display: grid;
           place-items: center;
@@ -814,7 +1108,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           --mdc-icon-size: 18px;
         }
         .icon-button:hover:not(:disabled) { color: var(--primary-text-color); background: var(--divider-color); }
-        .icon-button.danger:hover:not(:disabled) { color: var(--error-color); }
+        .icon-button.danger:hover:not(:disabled) { color: #ff6b81; }
         .save-playlist {
           display: flex;
           align-items: center;
@@ -823,9 +1117,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           width: 100%;
           margin-top: 8px;
           padding: 7px 10px;
-          border: 1px dashed var(--primary-color);
+          border: 1px dashed var(--ad-accent,#00ffcc);
           border-radius: 11px;
-          color: var(--primary-color);
+          color: var(--ad-accent,#00ffcc);
           background: transparent;
           font-weight: 650;
           --mdc-icon-size: 18px;
@@ -846,7 +1140,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: var(--secondary-background-color);
           outline: none;
         }
-        .playlist { border: 1px solid var(--divider-color); border-radius: 12px; overflow: hidden; }
+        .playlist { border: 1px solid rgba(var(--ad-c1,0,204,204),0.18); border-radius: 12px; overflow: hidden; background: rgba(var(--ad-c1,0,204,204),0.05); }
         .playlist-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 6px 6px 6px 8px; }
         .playlist-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; color: var(--primary-text-color); background: transparent; text-align: left; --mdc-icon-size: 18px; }
         .playlist-toggle ha-icon { transition: transform .15s; color: var(--secondary-text-color); }
@@ -860,7 +1154,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .playlist-item .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary-text-color); font-size: .74rem; }
         .playlist-item .play-result { width: 30px; height: 30px; --mdc-icon-size: 17px; }
         .playlist-empty { padding: 12px 6px; text-align: center; color: var(--secondary-text-color); font-size: .84rem; }
-        .play-result.listen { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 18%, transparent); }
+        .play-result.listen { color: var(--ad-accent,#00ffcc); background: rgba(var(--ad-c1,0,204,204),0.2); box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.3); }
         .device-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 6px; }
         .pill {
           display: inline-flex;
@@ -877,7 +1171,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           white-space: nowrap;
           --mdc-icon-size: 15px;
         }
-        .pill[aria-pressed="true"] { border-color: var(--primary-color); color: var(--text-primary-color, #fff); background: var(--primary-color); }
+        .pill[aria-pressed="true"] { border-color: var(--ad-accent,#00ffcc); color: #fff; background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.2)); box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.35); }
         .empty { padding: 14px 8px; text-align: center; color: var(--secondary-text-color); font-size: .88rem; }
         /* Phóng to / toàn màn hình: cả khối phát (video + nút + âm lượng) phủ màn hình. */
         /* Expanded or fullscreen: the picture fills the screen like YouTube's own player
@@ -909,25 +1203,41 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           border-radius: 0;
         }
         .player:is(.expanded, :fullscreen) > .stage > :is(.speaker-volumes, .device-row, .others) { display: none; }
-        /* The YouTube frame shows its own title; the card's only over its own picture. */
-        .player:is(.expanded, :fullscreen):not(.picture-on) > .stage > .now { display: none; }
-        .player:is(.expanded, :fullscreen) > .stage > :is(.now, .progress, .control-bar) {
+        /* Nhóm nút màn hình (view-group) vẫn ở trong .stage — nổi ở góc trên-phải video. */
+        .player:is(.expanded, :fullscreen) > .stage > .stage-controls {
           position: absolute;
-          left: 0;
+          top: 0;
           right: 0;
           z-index: 2;
           margin: 0;
+          padding: max(10px, env(safe-area-inset-top)) 12px;
           transition: opacity .3s;
         }
-        .player:is(.expanded, :fullscreen) > .stage > .now {
-          top: 0;
-          padding: max(12px, env(safe-area-inset-top)) 16px 32px;
+        /* now/progress/control-bar giờ nằm trong .np-zone — là sibling của .player (không
+           còn là con của .stage) nên khi player mở rộng/toàn màn hình, dùng tổ hợp "~"
+           để nổi cả khối .np-zone lên trên video, thay cho "> .stage >" như bản cũ. */
+        .player:is(.expanded, :fullscreen):not(.picture-on) ~ .yt-zone-playlist .np-zone .now { display: none; }
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 11;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          transition: opacity .3s;
+        }
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .np-wave { display: none; }
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .now {
+          padding: max(12px, env(safe-area-inset-top)) 16px 8px;
           background: linear-gradient(rgba(0, 0, 0, .7), transparent);
         }
-        .player:is(.expanded, :fullscreen) > .stage > .progress { bottom: 52px; padding: 0 16px; }
-        .player:is(.expanded, :fullscreen) > .stage > .control-bar {
-          bottom: 0;
-          padding: 40px 10px max(6px, env(safe-area-inset-bottom));
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .progress { padding: 0 16px; }
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .control-bar {
+          padding: 12px 10px max(6px, env(safe-area-inset-bottom));
           background: linear-gradient(transparent, rgba(0, 0, 0, .8));
         }
         /* Idle: the overlays fade out after a few seconds without a touch while the video
@@ -936,7 +1246,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .idle-shield { display: none; }
         .player.idle:is(.expanded, :fullscreen) { cursor: none; }
         .player.idle:is(.expanded, :fullscreen) > .idle-shield { display: block; position: absolute; inset: 0; z-index: 3; }
-        .player.idle:is(.expanded, :fullscreen) > .stage > :is(.now, .progress, .control-bar) { opacity: 0; pointer-events: none; }
+        .player.idle:is(.expanded, :fullscreen) > .stage > .stage-controls { opacity: 0; pointer-events: none; }
+        .player.idle:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone { opacity: 0; pointer-events: none; }
         /* Phone held upright in an app or browser that can't turn the screen (the Home
            Assistant app's WebView refuses screen.orientation.lock, and turning the phone
            re-renders HA and leaves fullscreen), or turned by the rotate button: the stage
@@ -956,13 +1267,178 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .player.rotated > .stage > .video-frame { width: min(100%, calc(100vw * 16 / 9)); }
         }
         .player.expanded .ctl:not(.main),
-        .player:fullscreen .ctl:not(.main) { color: #fff; }
+        .player:fullscreen .ctl:not(.main),
+        .player.expanded ~ .yt-zone-playlist .np-zone .ctl:not(.main),
+        .player:fullscreen ~ .yt-zone-playlist .np-zone .ctl:not(.main) { color: #fff; }
         .player.expanded .ctl.stop,
-        .player:fullscreen .ctl.stop { color: #ff8a80; }
-        .player.expanded .now-meta,
-        .player:fullscreen .now-meta,
+        .player:fullscreen .ctl.stop,
+        .player.expanded ~ .yt-zone-playlist .np-zone .ctl.stop,
+        .player:fullscreen ~ .yt-zone-playlist .np-zone .ctl.stop { color: #ff8a80; }
+        .player.expanded ~ .yt-zone-playlist .np-zone .now-meta,
+        .player:fullscreen ~ .yt-zone-playlist .np-zone .now-meta,
         .player.expanded .svol-name,
         .player:fullscreen .svol-name { color: rgba(255, 255, 255, .72); }
+        /* ============ Bố cục ngang 2×2 cho popup (video / danh sách phát / loa / đang phát) ============ */
+        .yt-layout {
+          /* --yt-result-row: chiều cao 1 dòng kết quả (ảnh 48 + padding + viền + gap)
+             --yt-col-min-h : chiều cao tối thiểu của cột phải khi video đang đóng */
+          --yt-result-row: 68px;
+          --yt-col-min-h: 640px;
+          display: grid;
+          grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+          grid-template-areas:
+            "video    playlist"
+            "speakers playlist";
+          column-gap: 12px;
+          row-gap: 8px;
+          align-items: start;
+          margin-top: 12px;
+        }
+        .yt-layout > .player { grid-area: video; margin-top: 0; }
+        /* Video lấp đầy toàn bộ chiều rộng của khung .player (trước đây bị bó hẹp
+           theo --yt-video-max-h nên 2 bên thừa viền đen/rỗng) — chiều cao tự theo
+           đúng tỉ lệ 16:9 của chiều rộng thật, không còn letterbox. */
+        .yt-layout > .player:not(.expanded):not(:fullscreen) > .stage > .video-frame {
+          width: 100%;
+          margin-inline: 0;
+        }
+        /* Danh sách loa/màn hình thấp hơn một nhịp (vẫn cuộn riêng bên trong) */
+        .yt-layout .players { height: 112px; }
+        /* Cột phải trải trên 2 row (ngang bằng video + loa/màn cộng lại) và tự
+           cuộn bên trong nếu kết quả tìm kiếm dài hơn — nhờ vậy chiều cao của
+           cột trái mới là thứ quyết định layout, khối "speakers" luôn bám sát
+           ngay dưới video thay vì bị đẩy xuống theo độ dài danh sách kết quả. */
+        .yt-zone-playlist {
+          grid-area: playlist;
+          position: relative;      /* mốc cho .yt-playlist-inner định vị tuyệt đối */
+          min-width: 0;
+          height: var(--yt-col-min-h, 640px);
+          align-self: start;
+          overflow: hidden;
+        }
+        /* Toàn bộ nội dung cột phải nằm trong một lớp position:absolute nên nó
+           KHÔNG đóng góp chiều cao cho grid nữa: chiều cao 2 hàng "video" +
+           "speakers" do cột trái quyết định, cột phải chỉ việc trải đúng bằng
+           chừng đó (inset:0). Nhờ vậy dù tìm được 20-30 bài thì bố cục vẫn cân,
+           khối "Loa / màn hình" không bị kéo giãn thành khung rỗng nữa. */
+        .yt-playlist-inner {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+        }
+        .yt-zone-playlist .view-tabs { margin-top: 0; }
+        /* Danh sách kết quả: chiếm phần trống còn lại của cột phải, cao tối đa
+           bằng 15 bài — dài hơn thì tự cuộn bên trong, không đẩy layout. */
+        .yt-zone-playlist .results,
+        .yt-zone-playlist .playlist-list {
+          flex: 0 1 auto;
+          min-height: 0;
+          max-height: calc(var(--yt-result-row, 68px) * 10 - 20px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(var(--ad-c1,0,204,204),0.5) transparent;
+        }
+        .yt-zone-playlist .playlist-panel { flex: 1 1 auto; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+        .yt-zone-playlist .results::-webkit-scrollbar,
+        .yt-zone-playlist .playlist-list::-webkit-scrollbar { width: 6px; }
+        .yt-zone-playlist .results::-webkit-scrollbar-track,
+        .yt-zone-playlist .playlist-list::-webkit-scrollbar-track { background: transparent; }
+        .yt-zone-playlist .results::-webkit-scrollbar-thumb,
+        .yt-zone-playlist .playlist-list::-webkit-scrollbar-thumb { background: rgba(var(--ad-c1,0,204,204),0.5); border-radius: 999px; }
+        /* Các khối cố định phía trên (tabs / nguồn / ô tìm kiếm / status) không co lại */
+        .yt-playlist-inner > .view-tabs,
+        .yt-playlist-inner > .source-switch,
+        .yt-playlist-inner > form,
+        .yt-playlist-inner > .save-playlist,
+        .yt-playlist-inner > .status,
+        .yt-playlist-inner > .np-zone { flex: 0 0 auto; }
+        /* Khối loa giữ đúng chiều cao thật của nó, không stretch theo hàng grid */
+        .yt-layout > .speaker-section { grid-area: speakers; margin: 0; align-self: start; }
+        .np-zone {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 2px;
+          margin-top: 8px;
+          padding: 14px 16px;
+          border: 1px solid var(--divider-color);
+          border-radius: 14px;
+          background: transparent;
+          overflow: hidden;
+        }
+        /* Sóng nhạc "đá đá" — nằm ngang, full-width, ngay trên thanh timeline (giữa .now
+           và .progress), giống vị trí .wave-area trong phicomm-r1-card.js. Có 3 kiểu,
+           chọn qua config wave_style (mặc định "bars"): bars | simple | dots.
+           CSS ở đây chỉ định hình dáng/độ mờ mặc định (đứng yên) + class "is-playing"
+           để làm sáng lên. Chuyển động thật sự do _toggleWaveAnimation() (JS) đổi
+           trực tiếp transform mỗi ~220ms khi đang phát — không dùng @keyframes/:has()
+           vì một số WebView/chế độ tiết kiệm pin chặn CSS animation khiến sóng đứng im
+           dù nhạc vẫn đang chạy. */
+        .np-wave { display: flex; align-items: flex-end; justify-content: space-between; height: 26px; margin: 2px 0 6px; pointer-events: none; }
+
+        /* --- Kiểu 1: bars (mặc định) — nhiều thanh cao thấp khác nhau, có gradient + phát sáng --- */
+        .np-wave--bars span {
+          width: 3px;
+          height: var(--h, 40%);
+          border-radius: 3px;
+          background: linear-gradient(180deg, var(--ad-accent, #00ffcc), rgba(var(--ad-c1,0,204,204),.45));
+          box-shadow: 0 0 6px 0 rgba(var(--ad-c1,0,204,204),.6);
+          transform-origin: bottom;
+          transform: scaleY(.3);
+          opacity: .5;
+          transition: opacity .2s, transform .2s ease-in-out;
+        }
+        .np-zone.is-playing .np-wave--bars span { opacity: .95; }
+
+        /* --- Kiểu 2: simple — ít thanh, đều nhau, không gradient/glow, chỉ nảy + mờ-tỏ nhẹ --- */
+        .np-wave--simple { justify-content: space-between; }
+        .np-wave--simple span {
+          width: 4px;
+          height: 100%;
+          border-radius: 2px;
+          background: var(--ad-accent, #00ffcc);
+          transform-origin: bottom;
+          transform: scaleY(.35);
+          opacity: .35;
+          transition: opacity .2s, transform .2s ease-in-out;
+        }
+        .np-zone.is-playing .np-wave--simple span { opacity: .9; }
+
+        /* --- Kiểu 3: dots — mỗi cột có 1 điểm "max" cố định ở đỉnh, chấm tròn đá đá nhảy lên chạm tới --- */
+        .np-wave--dots { justify-content: space-between; }
+        .wv-col { position: relative; width: 8px; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+        .wv-max {
+          position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+          width: 5px; height: 5px; border-radius: 50%;
+          background: rgba(var(--ad-c1,0,204,204), .35);
+          box-shadow: 0 0 4px rgba(var(--ad-c1,0,204,204), .45);
+        }
+        .wv-dot {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: var(--ad-accent, #00ffcc);
+          box-shadow: 0 0 6px rgba(var(--ad-c1,0,204,204),.7);
+          opacity: .55;
+          transition: opacity .2s, transform .2s ease-in-out;
+        }
+        .np-zone.is-playing .wv-dot { opacity: 1; }
+        @media (max-width: 900px) {
+          .yt-layout {
+            grid-template-columns: 1fr;
+            grid-template-areas:
+              "video"
+              "speakers"
+              "playlist";
+          }
+          /* Một cột: trả nội dung về luồng bình thường, danh sách vẫn giới hạn 15 bài */
+          .yt-zone-playlist { position: static; min-height: 0; overflow: visible; }
+          .yt-playlist-inner { position: static; display: block; }
+          .yt-zone-playlist .results,
+          .yt-zone-playlist .playlist-list { max-height: calc(var(--yt-result-row, 68px) * 10 - 20px); }
+        }
         @media (max-width: 520px) {
           /* Phones (and the app's larger font scale): keep the search on one row
              and shrink text so the card isn't a column of oversized boxes. */
@@ -977,108 +1453,367 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .player { padding: 8px; }
           .now { grid-template-columns: 44px minmax(0, 1fr); gap: 9px; }
           .now-meta, .status { font-size: .76rem; }
-          .section-title h3, .section-name { font-size: .82rem; }
+          .section-title h3 { font-size: .82rem; }
           .player-chip { gap: 5px; padding: 3px 8px; font-size: .84rem; }
+          .players-columns { grid-template-columns: 1fr; gap: 6px; }
           .result { font-size: .88rem; }
+          .np-zone { padding: 10px 12px; }
+          .np-wave { height: 20px; }
+        }
+        /* Bề rộng cột video theo «player_width»; mặc định giữ tỉ lệ cũ 1.4fr. */
+        .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(300px, 1fr); }
+        /* «layout: vertical» — xếp dọc một cột, cho dashboard cột hẹp. */
+        .yt-layout.yt-layout--doc {
+          grid-template-columns: 1fr;
+          grid-template-areas: "video" "playlist" "speakers";
+        }
+        .yt-suggested-section { --text-muted: var(--secondary-text-color, rgba(235,235,245,.6)); }
+        .yt-suggested-section {
+          grid-column: 1 / -1;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-top: 4px;
+        }
+
+        .yt-suggested-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 2px 4px;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .yt-suggested-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 800;
+          color: #e2e8f0;
+          letter-spacing: 0.5px;
+        }
+
+        .yt-suggested-subtitle {
+          font-size: 11px;
+          color: var(--text-muted);
+        }
+
+        .yt-quick-search-pills {
+          display: flex;
+          flex-wrap: nowrap;
+          gap: 6px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+          padding: 2px 0 6px;
+        }
+
+        .yt-quick-search-pills::-webkit-scrollbar {
+          display: none;
+        }
+
+        .yt-search-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 12px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #cbd5e1;
+          font-size: 11.5px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          user-select: none;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        .yt-search-pill ha-icon {
+          --mdc-icon-size: 12px;
+          color: var(--primary-color, #ff9f09);
+        }
+
+        .yt-search-pill:hover {
+          background: rgba(255, 159, 9, 0.2);
+          border-color: var(--primary-color, #ff9f09);
+          color: #fff;
+          transform: translateY(-1px);
+        }
+
+        .yt-category-tabs {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          padding: 2px 0;
+        }
+
+        .yt-category-tabs::-webkit-scrollbar {
+          display: none;
+        }
+
+        .yt-cat-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--text-muted);
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s;
+        }
+
+        .yt-cat-btn ha-icon {
+          --mdc-icon-size: 14px;
+        }
+
+        .yt-cat-btn:hover {
+          color: #fff;
+          border-color: rgba(255, 159, 9, 0.4);
+        }
+
+        .yt-cat-btn.active {
+          background: linear-gradient(135deg, rgba(255, 159, 9, 0.35) 0%, rgba(255, 107, 53, 0.25) 100%);
+          border-color: var(--primary-color, #ff9f09);
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(255, 85, 51, 0.25);
+        }
+
+        .yt-song-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: 10px;
+        }
+
+        .yt-song-card {
+          display: flex;
+          flex-direction: column;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 10px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.22s ease;
+          user-select: none;
+        }
+
+        .yt-song-card:hover {
+          border-color: rgba(255, 159, 9, 0.5);
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .yt-song-card:active {
+          transform: scale(0.98);
+        }
+
+        .yt-card-thumb-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          overflow: hidden;
+          background: #000;
+        }
+
+        .yt-card-thumb {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform 0.3s ease;
+        }
+
+        .yt-song-card:hover .yt-card-thumb {
+          transform: scale(1.05);
+        }
+
+        .yt-play-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.3);
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+
+        .yt-play-overlay ha-icon {
+          --mdc-icon-size: 28px;
+          color: #fff;
+          filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+        }
+
+        .yt-song-card:hover .yt-play-overlay {
+          opacity: 1;
+        }
+
+        .yt-card-duration {
+          position: absolute;
+          bottom: 4px;
+          right: 4px;
+          background: rgba(0, 0, 0, 0.75);
+          color: #f1f5f9;
+          font-size: 10px;
+          font-weight: 600;
+          padding: 1px 4px;
+          border-radius: 3px;
+        }
+
+        .yt-card-info {
+          padding: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .yt-card-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: #f8fafc;
+          line-height: 1.3;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .yt-card-artist {
+          font-size: 10px;
+          color: #94a3b8;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
       </style>
       <ha-card>
         <div class="wrap">
           <header>
             <div>
-              <h2></h2>
+              <h2 class="visually-hidden"></h2>
               <p class="subtitle"></p>
             </div>
-            <ha-icon icon="mdi:music-circle"></ha-icon>
+            <ha-icon class="brand-logo" icon="mdi:youtube"></ha-icon>
           </header>
 
-          <section class="player" aria-label="Đang phát">
-            <div class="idle-shield" aria-hidden="true"></div>
-            <div class="stage">
-            <div class="video-frame" hidden></div>
-            <div class="now">
-              <div class="now-cover">
-                <ha-icon icon="mdi:music-note"></ha-icon>
-                <img alt="" hidden />
+          <div class="yt-layout">
+            <section class="player" aria-label="Đang phát">
+              <div class="idle-shield" aria-hidden="true"></div>
+              <div class="stage">
+              <div class="video-frame" hidden></div>
+              <div class="stage-controls">
+                <div class="view-group">
+                  <button class="ctl watch" type="button" aria-label="Xem video trên thẻ" title="Xem video trên thẻ" hidden><ha-icon icon="mdi:television-play"></ha-icon></button>
+                  <button class="ctl video-listen" type="button" aria-label="Chỉ nghe (tắt hình, tiếng chạy tiếp)" title="Chỉ nghe — tắt hình, tiếng chạy tiếp" hidden><ha-icon icon="mdi:headphones"></ha-icon></button>
+                  <button class="ctl video-rotate" type="button" aria-label="Xoay ngang 90°" title="Xoay ngang 90° (máy đang khoá xoay)" hidden><ha-icon icon="mdi:phone-rotate-landscape"></ha-icon></button>
+                  <button class="ctl video-expand" type="button" aria-label="Phóng to video" title="Phóng to" hidden><ha-icon icon="mdi:arrow-expand"></ha-icon></button>
+                  <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
+                  <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
+                </div>
               </div>
-              <div class="now-copy">
-                <div class="now-title">Chưa phát bài nào</div>
-                <div class="now-meta">Chọn một bài trong kết quả để bắt đầu.</div>
+              <div class="device-row">
+                <button class="pill device-sound" type="button" aria-pressed="false" hidden><ha-icon icon="mdi:volume-off"></ha-icon><span>Nghe trên máy này</span></button>
+                <button class="pill screen-off" type="button" aria-pressed="false"><ha-icon icon="mdi:cellphone-off"></ha-icon><span>Nghe khi tắt màn hình</span></button>
               </div>
-            </div>
-            <div class="progress" hidden>
-              <span class="elapsed">0:00</span>
-              <div class="bar"><div class="fill"></div></div>
-              <span class="total">0:00</span>
-            </div>
-            <div class="control-bar">
-              <div class="transport-group" role="group" aria-label="Điều khiển phát">
-                <button class="ctl previous" type="button" aria-label="Bài trước" title="Bài trước"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
-                <button class="ctl main play-pause" type="button" aria-label="Phát" title="Phát"><ha-icon icon="mdi:play"></ha-icon></button>
-                <button class="ctl next" type="button" aria-label="Bài tiếp theo" title="Bài tiếp theo"><ha-icon icon="mdi:skip-next"></ha-icon></button>
-                <button class="ctl stop" type="button" aria-label="Dừng" title="Dừng"><ha-icon icon="mdi:stop"></ha-icon></button>
+              <div class="speaker-volumes"></div>
+              <div class="others" aria-label="Nhóm loa khác đang phát"></div>
               </div>
-              <div class="view-group">
-                <button class="ctl watch" type="button" aria-label="Xem video trên thẻ" title="Xem video trên thẻ" hidden><ha-icon icon="mdi:television-play"></ha-icon></button>
-                <button class="ctl video-listen" type="button" aria-label="Chỉ nghe (tắt hình, tiếng chạy tiếp)" title="Chỉ nghe — tắt hình, tiếng chạy tiếp" hidden><ha-icon icon="mdi:headphones"></ha-icon></button>
-                <button class="ctl video-rotate" type="button" aria-label="Xoay ngang 90°" title="Xoay ngang 90° (máy đang khoá xoay)" hidden><ha-icon icon="mdi:phone-rotate-landscape"></ha-icon></button>
-                <button class="ctl video-expand" type="button" aria-label="Phóng to video" title="Phóng to" hidden><ha-icon icon="mdi:arrow-expand"></ha-icon></button>
-                <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
-                <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
+            </section>
+
+            <div class="yt-zone-playlist">
+              <div class="yt-playlist-inner">
+              <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
+                <button class="view-tab" type="button" data-view="search" aria-pressed="true"><ha-icon icon="mdi:magnify"></ha-icon><span>Tìm nhạc</span></button>
+                <button class="view-tab" type="button" data-view="playlists" aria-pressed="false"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
               </div>
-            </div>
-            <div class="device-row">
-              <button class="pill device-sound" type="button" aria-pressed="false" hidden><ha-icon icon="mdi:volume-off"></ha-icon><span>Nghe trên máy này</span></button>
-              <button class="pill screen-off" type="button" aria-pressed="false"><ha-icon icon="mdi:cellphone-off"></ha-icon><span>Nghe khi tắt màn hình</span></button>
-            </div>
-            <div class="speaker-volumes"></div>
-            <div class="others" aria-label="Nhóm loa khác đang phát"></div>
-            </div>
-          </section>
 
-          <div class="side">
-          <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
-            <button class="view-tab" type="button" data-view="search" aria-pressed="true"><ha-icon icon="mdi:magnify"></ha-icon><span>Tìm nhạc</span></button>
-            <button class="view-tab" type="button" data-view="playlists" aria-pressed="false"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
-          </div>
+              <div class="source-switch" role="group" aria-label="Nguồn nhạc">
+                <button class="source-button" type="button" data-source="youtube"><ha-icon icon="mdi:youtube"></ha-icon><span>YouTube</span></button>
+                <button class="source-button" type="button" data-source="zing">Zing MP3</button>
+                <button class="source-button" type="button" data-source="http">Link audio</button>
+              </div>
 
-          <div class="source-switch" role="group" aria-label="Nguồn nhạc">
-            <button class="source-button" type="button" data-source="youtube">YouTube</button>
-            <button class="source-button" type="button" data-source="zing">Zing MP3</button>
-            <button class="source-button" type="button" data-source="http">Link audio</button>
-          </div>
+              <form>
+                <input type="search" maxlength="2048" autocomplete="off" aria-label="Tìm tên bài hát hoặc ca sĩ" placeholder="Tìm tên bài hát, ca sĩ hoặc dán link YouTube…" required />
+                <button class="primary search-button" type="submit" aria-label="Tìm kiếm" title="Tìm kiếm"><ha-icon icon="mdi:magnify"></ha-icon><span class="search-label">Tìm kiếm</span></button>
+              </form>
+              <button class="save-playlist" type="button" hidden><ha-icon icon="mdi:playlist-plus"></ha-icon><span>Lưu cả playlist này vào Playlist</span></button>
+              <div class="playlist-panel" hidden>
+                <form class="playlist-form">
+                  <input type="text" class="playlist-input" maxlength="300000" autocomplete="off" aria-label="Link playlist, mã chia sẻ hoặc tên playlist mới" placeholder="Dán link playlist YouTube, album Zing, mã chia sẻ — hoặc gõ tên để tạo mới" />
+                  <button class="primary playlist-submit" type="submit">Lưu</button>
+                </form>
+                <div class="playlist-list"></div>
+              </div>
+              <p class="status" role="status" aria-live="polite"></p>
 
-          <form>
-            <input type="search" maxlength="2048" autocomplete="off" aria-label="Tìm tên bài hát hoặc ca sĩ" placeholder="Tìm tên bài hát, ca sĩ hoặc dán link YouTube…" required />
-            <button class="primary search-button" type="submit" aria-label="Tìm kiếm" title="Tìm kiếm"><ha-icon icon="mdi:magnify"></ha-icon><span class="search-label">Tìm kiếm</span></button>
-          </form>
-          <button class="save-playlist" type="button" hidden><ha-icon icon="mdi:playlist-plus"></ha-icon><span>Lưu cả playlist này vào Playlist</span></button>
-          <div class="playlist-panel" hidden>
-            <form class="playlist-form">
-              <input type="text" class="playlist-input" maxlength="300000" autocomplete="off" aria-label="Link playlist, mã chia sẻ hoặc tên playlist mới" placeholder="Dán link playlist YouTube, album Zing, mã chia sẻ — hoặc gõ tên để tạo mới" />
-              <button class="primary playlist-submit" type="submit">Lưu</button>
-            </form>
-            <div class="playlist-list"></div>
-          </div>
-          <p class="status" role="status" aria-live="polite"></p>
-
-          <section class="section">
-            <button class="section-title speakers-toggle" type="button" aria-expanded="false" title="Bấm để hiện danh sách loa / màn hình">
-              <span class="section-name"><ha-icon icon="mdi:chevron-down"></ha-icon>Loa / màn hình</span>
-              <span class="hint selected-count">0 đã chọn</span>
-            </button>
-            <div class="speakers-body" hidden>
-              <div class="players"></div>
-              <div class="hidden-players"></div>
-            </div>
-          </section>
-
+              <div class="yt-suggested-section"></div>
           <div class="results"></div>
+
+              <div class="np-zone" aria-label="Đang phát">
+                <div class="now">
+                  <div class="now-cover">
+                    <ha-icon icon="mdi:music-note"></ha-icon>
+                    <img alt="" hidden />
+                  </div>
+                  <div class="now-copy">
+                    <div class="now-title">Chưa phát bài nào</div>
+                    <div class="now-meta">Chọn một bài trong kết quả để bắt đầu.</div>
+                  </div>
+                </div>
+                <!-- Sóng nhạc trang trí — chỉ "đá đá" khi nút play-pause đang ở icon mdi:pause
+                     (đang phát thật), thuần CSS, không cần thêm state JS. Kiểu hiển thị
+                     (bars/simple/dots) lấy từ config wave_style, chọn 1 lần lúc render. -->
+                ${this._renderWave()}
+                <div class="progress" hidden>
+                  <span class="elapsed">0:00</span>
+                  <div class="bar"><div class="fill"></div></div>
+                  <span class="total">0:00</span>
+                </div>
+                <div class="control-bar">
+                  <div class="transport-group" role="group" aria-label="Điều khiển phát">
+                    <button class="ctl previous" type="button" aria-label="Bài trước" title="Bài trước"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
+                    <button class="ctl main play-pause" type="button" aria-label="Phát" title="Phát"><ha-icon icon="mdi:play"></ha-icon></button>
+                    <button class="ctl next" type="button" aria-label="Bài tiếp theo" title="Bài tiếp theo"><ha-icon icon="mdi:skip-next"></ha-icon></button>
+                    <button class="ctl stop" type="button" aria-label="Dừng" title="Dừng"><ha-icon icon="mdi:stop"></ha-icon></button>
+                  </div>
+                </div>
+              </div>
+              </div>
+            </div>
+
+            <section class="section speaker-section">
+              <div class="section-title">
+                <h3><ha-icon icon="mdi:speaker-multiple"></ha-icon> Loa / màn hình</h3>
+                <span class="hint selected-count">0 đã chọn</span>
+              </div>
+              <div class="players-columns">
+                <div class="players-col">
+                  <div class="players-col-title"><ha-icon icon="mdi:speaker"></ha-icon> Loa</div>
+                  <div class="players players-audio"></div>
+                </div>
+                <div class="players-col">
+                  <div class="players-col-title"><ha-icon icon="mdi:television"></ha-icon> Màn hình</div>
+                  <div class="players players-video"></div>
+                </div>
+              </div>
+              <div class="hidden-players"></div>
+            </section>
           </div>
         </div>
       </ha-card>`;
     this.shadowRoot.querySelector("h2").textContent = this._config.title;
-    this._applyLayout();
   }
 
   _bindEvents() {
@@ -1119,13 +1854,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._openPlaylist = payload.playlist.id;
         return `Đã tạo “${payload.playlist.name}”. Bấm + ở kết quả tìm để thêm bài.`;
       });
-    });
-    this.shadowRoot.querySelector(".speakers-toggle").addEventListener("click", () => {
-      const toggle = this.shadowRoot.querySelector(".speakers-toggle");
-      const open = toggle.getAttribute("aria-expanded") !== "true";
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.title = open ? "Bấm để thu gọn danh sách loa / màn hình" : "Bấm để hiện danh sách loa / màn hình";
-      this.shadowRoot.querySelector(".speakers-body").hidden = !open;
     });
     this.shadowRoot.querySelector(".previous").addEventListener("click", () => this._skip(-1));
     this.shadowRoot.querySelector(".play-pause").addEventListener("click", () => this._togglePlay());
@@ -1174,6 +1902,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._defaultsApplied = true;
   }
 
+  // device_class do integration khai báo thường KHÔNG đáng tin cậy (nhiều loa/TV
+  // không set, hoặc set sai) — nên ưu tiên device_class trước, sau đó fallback
+  // dò theo tên thiết bị (tiếng Việt lẫn tiếng Anh) trước khi mặc định coi là Loa.
+  _isAudioOnly(entityId, state) {
+    const override = getDeviceKindOverride(entityId);
+    if (override) return override === "audio";
+    const dc = state.attributes.device_class;
+    if (dc === "speaker") return true;
+    if (dc === "tv") return false;
+    const name = `${state.attributes.friendly_name || ""} ${entityId}`.toLowerCase();
+    const looksVideo = /\btv\b|tivi|television|man\s*hinh|màn\s*hình|display|nest\s*hub|chromecast/.test(name);
+    const looksAudio = /\bloa\b|speaker|amply|amplifier|receiver|echo\b|homepod|home\s*mini/.test(name);
+    if (looksVideo && !looksAudio) return false;
+    if (looksAudio && !looksVideo) return true;
+    // Không đoán được: mặc định xếp vào Loa (đa số media_player không gắn màn
+    // hình điều khiển được, và mục đích chính của card là phát âm thanh).
+    return true;
+  }
+
   _syncPlayers() {
     if (!this._hass) return;
     const virtualEntity = this._config.entity;
@@ -1200,8 +1947,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       if (!available.has(entityId)) this._selectedPlayers.delete(entityId);
     });
 
-    const container = this.shadowRoot.querySelector(".players");
-    container.replaceChildren();
+    const audioContainer = this.shadowRoot.querySelector(".players-audio");
+    const videoContainer = this.shadowRoot.querySelector(".players-video");
+    audioContainer.replaceChildren();
+    videoContainer.replaceChildren();
     if (!players.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
@@ -1210,12 +1959,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         : allPlayers.length
           ? "Chưa có loa hay tivi nào đang kết nối — thiết bị tự hiện khi kết nối lại."
           : "Không tìm thấy media_player nào khác.";
-      container.append(empty);
+      audioContainer.append(empty);
     }
+    let audioCount = 0;
+    let videoCount = 0;
     for (const [entityId, state] of players) {
       const label = document.createElement("label");
       label.className = "player-chip";
-      const isAudioOnly = state.attributes.device_class === "speaker";
+      const isAudioOnly = this._isAudioOnly(entityId, state);
+      if (isAudioOnly) audioCount++; else videoCount++;
       const capability = this._capabilities.get(entityId);
       const incompatible = !this._supportsSource(entityId, this._source);
       label.classList.toggle("source-incompatible", incompatible);
@@ -1263,8 +2015,34 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         event.stopPropagation();
         this._setHidden([entityId], true);
       });
-      label.append(checkbox, name, deviceIcon, hide);
-      container.append(label);
+      const move = document.createElement("button");
+      move.type = "button";
+      move.className = "move-player";
+      move.title = isAudioOnly ? "Chuyển sang cột Màn hình" : "Chuyển sang cột Loa";
+      move.setAttribute("aria-label", move.title);
+      const moveIcon = document.createElement("ha-icon");
+      moveIcon.setAttribute("icon", isAudioOnly ? "mdi:television" : "mdi:speaker");
+      move.append(moveIcon);
+      move.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setDeviceKindOverride(entityId, isAudioOnly ? "video" : "audio");
+        this._syncPlayers();
+      });
+      label.append(checkbox, name, deviceIcon, move, hide);
+      (isAudioOnly ? audioContainer : videoContainer).append(label);
+    }
+    if (players.length && !audioCount) {
+      const empty = document.createElement("div");
+      empty.className = "empty players-empty-col";
+      empty.textContent = "Không có loa nào.";
+      audioContainer.append(empty);
+    }
+    if (players.length && !videoCount) {
+      const empty = document.createElement("div");
+      empty.className = "empty players-empty-col";
+      empty.textContent = "Không có màn hình nào.";
+      videoContainer.append(empty);
     }
     this._renderHiddenPlayers(connected.filter(([entityId]) => this._hiddenPlayers.has(entityId)));
     this._updateSelectedCount();
@@ -1362,11 +2140,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _updateSelectedCount() {
-    // Folded list: the title still says what is ticked.
-    const names = [...this._selectedPlayers].map((entityId) => this._hass?.states?.[entityId]?.attributes?.friendly_name || entityId);
-    this.shadowRoot.querySelector(".selected-count").textContent = names.length && names.length <= 2
-      ? names.join(", ")
-      : `${names.length} đã chọn`;
+    this.shadowRoot.querySelector(".selected-count").textContent = `${this._selectedPlayers.size} đã chọn`;
   }
 
   _supportsFeature(entityId, feature) {
@@ -1552,6 +2326,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     playPause.querySelector("ha-icon").setAttribute("icon", playing ? "mdi:pause" : "mdi:play");
     playPause.setAttribute("aria-label", playing ? "Tạm dừng" : "Phát");
     playPause.title = playing ? "Tạm dừng" : "Phát";
+    // Sóng nhạc "đá đá": trước đây chỉ dựa vào CSS animation (kích hoạt qua
+    // :has() hoặc class is-playing) — trên một số thiết bị/trình duyệt (WebView
+    // cũ, chế độ tiết kiệm pin tắt animation hệ thống...) CSS animation không
+    // chạy dù mọi thứ khác đúng. Để chắc chắn "nhảy" được ở mọi nơi, JS tự đổi
+    // transform theo một interval riêng — không phụ thuộc animation/transition
+    // CSS nào cả.
+    const npZone = this.shadowRoot.querySelector(".np-zone");
+    if (npZone) npZone.classList.toggle("is-playing", playing);
+    this._toggleWaveAnimation(playing);
     playPause.disabled = !listening && !this._video.open && !this._targetsForService("media_play_pause").length;
     const canSkip = (step) => {
       if (listening) return deviceAudio.index >= 0 && !!deviceAudio.queue[deviceAudio.index + step];
@@ -1567,6 +2350,31 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".next").disabled = !canSkip(1);
     this.shadowRoot.querySelector(".stop").disabled = !listening && !session && !this._video.open && !this._selectedPlayers.size;
     this._renderSpeakerVolumes();
+  }
+
+  /** Chạy/dừng sóng nhạc bằng JS timer (không dùng @keyframes) — set thẳng
+   * transform mỗi tick nên luôn thấy "nhảy", bất kể trình duyệt/thiết bị có
+   * chặn CSS animation hay không. */
+  _toggleWaveAnimation(playing) {
+    if (!this.shadowRoot) return;
+    if (!playing) {
+      clearInterval(this._waveTimer);
+      this._waveTimer = null;
+      this.shadowRoot.querySelectorAll(".np-wave--bars span, .np-wave--simple span, .wv-dot")
+        .forEach((el) => { el.style.transform = ""; });
+      return;
+    }
+    if (this._waveTimer) return; // đã chạy rồi, khỏi tạo interval mới
+    const tick = () => {
+      const bars = this.shadowRoot?.querySelectorAll(".np-wave--bars span");
+      const simple = this.shadowRoot?.querySelectorAll(".np-wave--simple span");
+      const dots = this.shadowRoot?.querySelectorAll(".wv-dot");
+      bars?.forEach((el) => { el.style.transform = `scaleY(${(0.28 + Math.random() * 0.72).toFixed(2)})`; });
+      simple?.forEach((el) => { el.style.transform = `scaleY(${(0.3 + Math.random() * 0.7).toFixed(2)})`; });
+      dots?.forEach((el) => { el.style.transform = `translateY(-${Math.round(2 + Math.random() * 14)}px)`; });
+    };
+    tick();
+    this._waveTimer = setInterval(tick, 220);
   }
 
   _renderSpeakerVolumes() {
@@ -1918,10 +2726,142 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     };
   }
 
+  /** Bài gợi ý của R1 -> hình dạng mục nhạc mà `_playResult` đọc được.
+      R1 ghi `thumbnail_url`/`duration_seconds`, card này đọc `thumbnail`/`duration`
+      — chép thẳng là ảnh trắng và thời lượng rỗng. */
+  _ytSongToItem(song) {
+    const id = song.video_id || song.id;
+    return {
+      id,
+      url: "https://www.youtube.com/watch?v=" + id,
+      title: song.title,
+      channel: song.artist,
+      duration: song.duration_seconds,
+      thumbnail: song.thumbnail_url,
+      source: "youtube",
+    };
+  }
+
+  /** Khối gợi ý: chip từ khoá, tab nhóm, lưới thẻ có ảnh (học từ card R1).
+      Dựng bằng createElement và gắn listener NGAY LÚC TẠO, đúng nếp
+      `_renderResults`: card này không vẽ lại toàn bộ giao diện, nên gắn listener
+      một lần ở `_bindEvents` là chúng chết sau lần vẽ lại đầu tiên.
+      Dùng textContent nên không cần hàm mã hoá HTML như R1 phải làm. */
+  /** «layout» và «player_width» trong YAML của chủ máy: bản card1 vốn bỏ qua hai
+      khoá này, nên cấu hình đang dùng sẽ âm thầm mất tác dụng nếu không nối vào.
+      «horizontal» (mặc định) = lưới 2×2 của «.yt-layout»; «vertical» = một cột.
+      «player_width» (20–80) đặt bề rộng cột video. */
+  _applyLayout() {
+    const grid = this.shadowRoot && this.shadowRoot.querySelector(".yt-layout");
+    if (!grid) return;
+    const doc = this._config && this._config.layout === "vertical";
+    grid.classList.toggle("yt-layout--doc", doc);
+    const raw = Number(this._config && this._config.player_width);
+    if (!doc && Number.isFinite(raw) && raw > 0) {
+      const pct = Math.min(80, Math.max(20, raw));
+      grid.style.setProperty("--yt-video-col", pct + "%");
+    } else {
+      grid.style.removeProperty("--yt-video-col");
+    }
+  }
+
+  _renderSuggestions() {
+    const box = this.shadowRoot && this.shadowRoot.querySelector(".yt-suggested-section");
+    if (!box) return;
+    this._ytSuggestedCategory = this._ytSuggestedCategory || YOUTUBE_SUGGESTED_CATEGORIES[0].id;
+    box.replaceChildren();
+    // Có kết quả rồi thì nhường chỗ; nguồn khác YouTube hoặc đang ở tab Playlist thì gợi ý vô nghĩa.
+    if (this._results.length || this._source !== "youtube" || this._view !== "search") return;
+
+    const el = (tag, cls, text) => {
+      const node = document.createElement(tag);
+      if (cls) node.className = cls;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const icon = (name) => {
+      const i = document.createElement("ha-icon");
+      i.setAttribute("icon", name);
+      return i;
+    };
+
+    const header = el("div", "yt-suggested-header");
+    const title = el("div", "yt-suggested-title");
+    title.append(icon("mdi:youtube"), el("span", "", "BÀI HÁT GỢI Ý YOUTUBE"));
+    header.append(title, el("span", "yt-suggested-subtitle", "Chạm để phát ngay trên loa đã chọn"));
+    box.append(header);
+
+    const pills = el("div", "yt-quick-search-pills");
+    QUICK_SEARCH_TAGS.forEach((tag) => {
+      const pill = el("div", "yt-search-pill");
+      pill.setAttribute("role", "button");
+      pill.tabIndex = 0;
+      pill.append(icon("mdi:magnify"), el("span", "", tag));
+      const run = () => {
+        const input = this.shadowRoot.querySelector('input[type="search"]');
+        input.value = tag;
+        this._syncSavePlaylist();
+        this._search();
+      };
+      pill.addEventListener("click", run);
+      pill.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); run(); }
+      });
+      pills.append(pill);
+    });
+    box.append(pills);
+
+    const tabs = el("div", "yt-category-tabs");
+    YOUTUBE_SUGGESTED_CATEGORIES.forEach((cat) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = cat.id === this._ytSuggestedCategory ? "yt-cat-btn active" : "yt-cat-btn";
+      btn.append(icon(cat.icon), el("span", "", cat.name));
+      btn.addEventListener("click", () => {
+        if (this._ytSuggestedCategory === cat.id) return;
+        this._ytSuggestedCategory = cat.id;
+        this._renderSuggestions();
+      });
+      tabs.append(btn);
+    });
+    box.append(tabs);
+
+    const found = YOUTUBE_SUGGESTED_CATEGORIES.find((c) => c.id === this._ytSuggestedCategory);
+    const current = found || YOUTUBE_SUGGESTED_CATEGORIES[0];
+    const grid = el("div", "yt-song-grid");
+    (current.songs || []).forEach((song) => {
+      const card = el("div", "yt-song-card");
+      card.setAttribute("role", "button");
+      card.tabIndex = 0;
+      card.title = "Bấm để phát: " + song.title;
+      const wrap = el("div", "yt-card-thumb-wrap");
+      const img = document.createElement("img");
+      img.className = "yt-card-thumb";
+      img.alt = "";
+      img.loading = "lazy";
+      if (/^https?:\/\//.test(song.thumbnail_url || "")) img.src = song.thumbnail_url;
+      const overlay = el("div", "yt-play-overlay");
+      overlay.append(icon("mdi:play"));
+      wrap.append(img, overlay, el("span", "yt-card-duration", this._formatDuration(song.duration_seconds)));
+      const info = el("div", "yt-card-info");
+      info.append(el("div", "yt-card-title", song.title), el("div", "yt-card-artist", song.artist));
+      card.append(wrap, info);
+      const play = () => this._playResult(this._ytSongToItem(song), card, -1, true);
+      card.addEventListener("click", play);
+      card.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); play(); }
+      });
+      grid.append(card);
+    });
+    box.append(grid);
+  }
+
   _renderResults() {
     const container = this.shadowRoot.querySelector(".results");
     container.replaceChildren();
     if (this._results.some((item) => this._isVideoItem(item, item.source || this._source))) this._warmFrame();
+    // Gợi ý hiện khi chưa có kết quả, tự ẩn khi có — xem `_renderSuggestions`.
+    this._renderSuggestions();
     this._results.forEach((item, index) => {
       const row = document.createElement("article");
       row.className = "result";
@@ -2044,11 +2984,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.followsDevice = followsDevice;
     if (followsDevice) this._video.soundHere = false;
     const start = Math.max(0, Math.floor(Number(startSeconds) || 0));
-    if (iframe && (this._video.ready || this._frameReady)) {
-      // Same player (or the one loaded ahead): switch video without reloading, so it
-      // starts at once and fullscreen and mute stay put.
-      this._video.ready = true;
-      this._videoPost({ event: "command", func: "addEventListener", args: ["onError"] });
+    if (iframe && this._video.ready) {
+      // Same player: switch video without reloading, so fullscreen and mute stay put.
       this._videoCommand("loadVideoById", [{ videoId: id, startSeconds: start }]);
       this._videoCommand(this._video.soundHere ? "unMute" : "mute");
     } else {
@@ -2085,7 +3022,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.state = -1;
     this._soundHintShown = false;
     clearTimeout(this._soundCheckTimer);
-    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
+    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
     window.addEventListener("message", this._onVideoMessage);
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
     this._syncNowPlaying();
@@ -2186,13 +3123,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // The picture follows the device's sound: a new song there (the next one when a
     // song ends) changes the picture too.
     if (video.open && video.followsDevice && isError && !video.picture) {
-      // The device's sound couldn't start (no stream from the player server, or the
-      // browser refused to play it): the picture keeps its own sound, and a tap inside
-      // the video starts it. Following a silent sound paused the video each time it was
-      // tapped (owner 15/09/2026: "Kích vào play trên khung video thì giật rồi dừng").
+      // The device's sound couldn't start (no stream from the player server): the
+      // picture keeps its own sound, and a tap inside the video starts it.
       video.followsDevice = false;
       video.soundHere = true;
-      if (deviceAudio.item) deviceAudio.stop();
       // Stopped and unmuted, so the tap inside the video starts it with its sound.
       this._videoCommand("pauseVideo");
       this._videoCommand("unMute");
@@ -2228,12 +3162,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     const previous = cardMemory.get(this._config.entity);
     if (previous?.handoff) clearTimeout(previous.handoff);
-    const player = this.shadowRoot?.querySelector(".player");
     const memory = {
-      // Big (expanded or fullscreen) and turned: HA re-renders the view when the phone
-      // turns, which drops fullscreen; the new card comes back expanded instead.
-      big: !!player && (player.classList.contains("expanded") || this.shadowRoot.fullscreenElement === player || !!this._ownFullscreen),
-      rotated: !!player?.classList.contains("rotated"),
       source: this._source,
       query: this.shadowRoot?.querySelector('input[type="search"]')?.value || "",
       results: this._results,
@@ -2301,37 +3230,28 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         if (session && String(session.id) === String(saved.item.id)) this._openVideo(saved.item, { withSpeakers: true });
       } else if (saved.followsDevice || deviceAudio.item) {
         if (deviceAudio.item && this._isVideoItem(deviceAudio.item)) {
-          this._openVideo(deviceAudio.item, {
-            withSpeakers: false,
-            followsDevice: true,
-            startSeconds: deviceAudio.position()?.time || 0,
-          });
+          this._openVideo(deviceAudio.item, { withSpeakers: false, followsDevice: true });
         }
       } else {
         // Back at once: the video goes on where it was.
         const startSeconds = saved.playing ? saved.time + (Date.now() - saved.at) / 1000 : saved.time;
         this._openVideo(saved.item, { withSpeakers: false, startSeconds });
       }
-      const player = this.shadowRoot.querySelector(".player");
-      if (memory.big && this._video.open && !player.classList.contains("expanded")) {
-        // Fullscreen can't come back without a tap; the page-covering view can.
-        player.classList.add("expanded");
-        player.classList.toggle("rotated", !!memory.rotated);
-        if (player.getBoundingClientRect().width < window.innerWidth * 0.9) player.classList.remove("expanded", "rotated");
-        this._syncVideoExpandButton();
-      }
     }
-    if (!this._video.open && this._results.some((item) => this._isVideoItem(item, item.source || this._source))) this._warmFrame();
     this._syncNowPlaying();
     this._updateTransportState();
     this._updateProgress();
   }
 
-  /**
-   * Load the YouTube player ahead (hidden, no video) once results are on the card: a
-   * first "watch" then only switches the video in it instead of loading the player
-   * (owner 15/09/2026: "Khi chọn xem video thì mất 1 2 s video mới chạy").
-   */
+  /** Khung vua nap trang moi: trang do chua nghe lenh nao, ma loi cua trang bi
+      thay da danh dau san-sang va dung bat tay, nen player moi bo qua moi lenh.
+      Khong dung _frameReady nhu ban cu: bat tay o day canh theo _video.ready. */
+  _frameLoaded() {
+    this._video.ready = false;
+    this._videoHandshake();
+  }
+
+  /** Nap san khung rong khi ket qua tim co video: bam phat thi hinh len ngay. */
   _warmFrame() {
     const frame = this.shadowRoot?.querySelector(".video-frame");
     if (!frame || frame.querySelector("iframe")) return;
@@ -2345,23 +3265,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     hint.className = "sound-hint";
     hint.hidden = true;
     frame.append(iframe, hint);
-    window.addEventListener("message", this._onVideoMessage);
     const params = new URLSearchParams({ enablejsapi: "1", rel: "0", playsinline: "1", origin: location.origin });
-    iframe.setAttribute("src", `https://www.youtube-nocookie.com/embed/?${params}`);
+    iframe.setAttribute("src", "https://www.youtube-nocookie.com/embed/?" + params);
   }
 
-  /**
-   * The frame loaded a new page (a video opened before the player loaded ahead was
-   * ready, or Home Assistant moved the card and the frame reloaded). That page hasn't
-   * heard from the card yet. Words from the page it replaced had already marked the
-   * frame ready and stopped the handshake, so the new player ignored every command —
-   * play, pause, mute (reproduced on the owner's Home Assistant 15/09/2026: the video
-   * stayed cued while this device's sound played).
-   */
-  _frameLoaded() {
-    this._frameReady = false;
-    this._video.ready = false;
-    this._videoHandshake();
+  /** Tua hinh ve dung moc tieng. Gom tu hai cho von lam y het trong _syncVideo. */
+  _seekPicture(soundTime) {
+    this._videoCommand("seekTo", [soundTime, true]);
+    this._lastVideoSeekAt = Date.now();
   }
 
   _videoHandshake() {
@@ -2369,7 +3280,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     clearInterval(this._videoHandshakeTimer);
     let tries = 0;
     this._videoHandshakeTimer = setInterval(() => {
-      if (this._video.ready || (!this._video.open && this._frameReady) || ++tries > 40) {
+      if (this._video.ready || !this._video.open || ++tries > 40) {
         clearInterval(this._videoHandshakeTimer);
         return;
       }
@@ -2415,15 +3326,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     if (!data || typeof data !== "object" || this._video.picture) return;
-    if (!this._frameReady) {
-      // First word from the player: commands sent before it could take them were
-      // dropped, so ask for its events now (a refused video reports onError only then).
-      this._frameReady = true;
-      this._videoPost({ event: "command", func: "addEventListener", args: ["onStateChange"] });
-      this._videoPost({ event: "command", func: "addEventListener", args: ["onError"] });
-    }
-    // A player loaded ahead talks before any video is open: nothing else to follow yet.
-    if (!this._video.open) return;
     this._video.ready = true;
     if (data.event === "onError") {
       this._embedRefused();
@@ -2492,9 +3394,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _syncSoundHint() {
     const hint = this.shadowRoot?.querySelector(".sound-hint");
     if (!hint) return;
-    // Shown until the frame plays with its sound: stopped for a tap (state 2 after the
-    // device's sound failed) still needs the tap.
-    if (this._soundHintShown && (!this._video.soundHere || (this._video.state === 1 && this._video.muted !== true))) this._soundHintShown = false;
+    if (this._soundHintShown && (!this._video.soundHere || !this._soundBlocked())) this._soundHintShown = false;
     hint.textContent = this._video.state === 1 ? "🔇 Chạm vào video để bật tiếng" : "▶ Chạm vào video để phát có tiếng";
     hint.hidden = !this._soundHintShown;
   }
@@ -2683,20 +3583,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     video.picture = null;
     video.pictureEl = null;
     video.ready = false;
-    // That player refused a video: load a fresh one for the next.
-    this._frameReady = false;
   }
 
   _setVideoState(state) {
     if (!Number.isFinite(state) || state === this._video.state) return;
     const previous = this._video.state;
     this._video.state = state;
-    if (state === 1 && previous === 3 && this._pictureSeekStarted) {
-      // How long that seek took to show: the lead for the next one (smoothed, ≤ 1.5 s).
-      const took = (Date.now() - this._pictureSeekStarted) / 1000;
-      if (took < 4) this._pictureSeekLag = Math.min(1.5, ((this._pictureSeekLag ?? 0.3) + took) / 2);
-      this._pictureSeekStarted = 0;
-    }
     this._updateTransportState();
     // 0 = ended. With speakers the speakers drive auto-advance; alone, the video does.
     if (state !== 0 || previous === 0 || this._video.withSpeakers || this._video.followsDevice) return;
@@ -2710,14 +3602,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       // The muted picture follows this device's sound.
       const audio = deviceAudio.real();
       if (!audio) return;
-      // Sound still loading (no data yet, position 0): leave the picture alone. Following
-      // it sent the picture back to 0 s every few seconds (owner 15/09/2026: "cứ quay về
-      // 0s liên tục không chạy tiếp").
-      const soundReady = audio.readyState >= 3 && !audio.seeking;
       if (audio.paused && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
       if (!audio.paused && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
-      // This device's sound has an exact clock: keep the picture within 0.35 s of it.
-      if (soundReady && !audio.paused && video.state === 1 && Date.now() >= this._lastVideoSeekAt + 3000 && Math.abs(audio.currentTime - this._videoTimeNow()) > 0.35) {
+      if (!audio.paused && Date.now() >= this._lastVideoSeekAt + 4000 && Math.abs(audio.currentTime - this._videoTimeNow()) > 2) {
         this._seekPicture(audio.currentTime);
       }
       return;
@@ -2749,26 +3636,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (speaker.state === "playing" && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
     const speakerTime = this._speakerPosition(primary);
     if (speaker.state !== "playing" || speakerTime === null || Date.now() < this._lastVideoSeekAt + 5000) return;
-    // The speaker plays its own audio stream, a few seconds after the picture starts
-    // (the stream is prepared server-side), so the muted picture follows the speaker's
-    // reported position. Past 0.8 s the lag shows on lips and beats (owner 15/09/2026:
-    // "khi xem hình ko đc khớp với audio"); the 5 s pause after a seek stops it hunting.
-    // Home Assistant reports the speaker's position a few hundred ms late, so 0.5 s is
-    // as tight as it holds without the picture seeking over and over.
-    if (video.state === 1 && Math.abs(speakerTime - this._videoTimeNow()) > 0.5) {
+    // The speaker starts a few seconds after the picture (its stream is prepared
+    // server-side), so the muted picture follows the speaker's reported position.
+    if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
       this._seekPicture(speakerTime);
     }
-  }
-
-  /**
-   * Seek the picture to where the sound is. A seek takes a moment to show (YouTube
-   * buffers), so the picture landed late; aim ahead by the time the last seeks took.
-   */
-  _seekPicture(soundTime) {
-    const lead = this._pictureSeekLag ?? 0.3;
-    this._videoCommand("seekTo", [soundTime + lead, true]);
-    this._lastVideoSeekAt = Date.now();
-    this._pictureSeekStarted = Date.now();
   }
 
   _toggleVideoExpanded() {
@@ -2859,29 +3731,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     clearTimeout(this._soundCheckTimer);
     this._soundHintShown = false;
     clearInterval(this._videoTimer);
+    clearInterval(this._videoHandshakeTimer);
     this._videoTimer = null;
+    window.removeEventListener("message", this._onVideoMessage);
     this._pendingSpeakerSeek = null;
-    const keepFrame = !!this._frameReady && this.isConnected;
-    if (keepFrame) {
-      // Keep the loaded player (stopped, hidden) so the next video starts at once.
-      this._videoPost({ event: "command", func: "stopVideo", args: [] });
-    } else {
-      clearInterval(this._videoHandshakeTimer);
-      window.removeEventListener("message", this._onVideoMessage);
-      this._frameReady = false;
-    }
     this._video = this._idleVideo();
     const player = this.shadowRoot?.querySelector(".player");
     if (!player) return;
-    const frame = this.shadowRoot.querySelector(".video-frame");
-    if (keepFrame) {
-      for (const child of [...frame.children]) {
-        if (child.tagName !== "IFRAME" && !child.classList.contains("sound-hint")) child.remove();
-      }
-      frame.querySelector(".sound-hint")?.setAttribute("hidden", "");
-    } else {
-      frame.replaceChildren();
-    }
+    this.shadowRoot.querySelector(".video-frame").replaceChildren();
     player.classList.remove("expanded", "rotated");
     this._syncVideoExpandButton();
     this._syncNowPlaying();
@@ -2919,10 +3776,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           return;
         }
         if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
-        // Unlocked inside this tap, with the song's link fetched meanwhile: if the frame
-        // can't play its sound (the HA app), the card's sound starts without waiting.
+        // Unlocked inside this tap: if YouTube refuses the video here, its sound plays instead.
         deviceAudio.unlock();
-        deviceAudio.prefetch(queue[position]);
         this._openVideo(item, { withSpeakers: false });
         this._setStatus(`Đang xem “${name}” trên thẻ. Chọn loa để phát tiếng ra loa.`);
         return;
@@ -3087,7 +3942,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return;
     }
     if (this._video.open && !this._video.withSpeakers) {
-      if (!this._video.followsDevice && !this._video.picture && (this._soundHintShown || [-1, 5].includes(this._video.state))) {
+      if (!this._video.followsDevice && !this._video.picture && [-1, 5].includes(this._video.state)) {
         // Not started: the frame won't start without a tap inside it — this tap starts
         // the card's own sound and the muted picture follows.
         this._soundFromDevice();
@@ -3183,7 +4038,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelectorAll(".view-tab").forEach((tab) => {
       tab.setAttribute("aria-pressed", String(tab.dataset.view === this._view));
     });
-    for (const selector of [".source-switch", "form", ".results"]) {
+    for (const selector of [".source-switch", "form", ".results", ".yt-suggested-section"]) {
       this.shadowRoot.querySelector(selector).hidden = playlists;
     }
     this.shadowRoot.querySelector(".playlist-panel").hidden = !playlists;
@@ -3472,16 +4327,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 }
 
-if (!customElements.get("tritue-youtube-player-card")) {
-  customElements.define("tritue-youtube-player-card", TriTueYouTubePlayerCard);
-}
+  if (!customElements.get("youtube-player-card")) {
+    customElements.define("tritue-youtube-player-card", TriTueYouTubePlayerCard);
+  if (!customElements.get("youtube-player-card")) {
+    customElements.define("youtube-player-card", class extends TriTueYouTubePlayerCard {});
+  }
+  }
 
-window.customCards = window.customCards || [];
-if (!window.customCards.some((card) => card.type === "tritue-youtube-player-card")) {
+  window.customCards = window.customCards || [];
   window.customCards.push({
-    type: "tritue-youtube-player-card",
-    name: "TriTue Music Player",
-    description: "Search YouTube/Zing or play direct HTTP audio on Home Assistant media players.",
-    preview: true,
+    type: 'youtube-player-card',
+    name: '🎵 TriTue YouTube Player',
+    description: 'Xem/nghe YouTube, Zing MP3, phát ra loa — cần tích hợp Python "tritue_youtube_player" cài sẵn.',
   });
-}
+})();
