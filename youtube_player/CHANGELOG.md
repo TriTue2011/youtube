@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.3 - 2026-09-18
+
+### Fixed
+
+- **Phep tu do dia chi LAN o 0.8.2 khong dung duoc, da chan lai.** Log thuc te cho thay
+  integration goi add-on tu `172.30.32.1` — mang noi bo cua Supervisor. Qua NAT thi
+  `getsockname()` chi tra ve dia chi cua chinh container, nen 0.8.2 hoc duoc mot URL noi
+  bo ma loa khong voi toi, va vi `create_stream_url` lui ve dia chi do nen loi
+  `public_base_url_required` ro rang bi thay bang IM LANG. Nay tu choi cac dai
+  172.17.0.0/16 .. 172.31.0.0/16; dai 172.16.0.0/16 van duoc nhan vi la LAN that.
+- **Nhan goi y dia chi tu Home Assistant**: `/api/integration/stream` doc them khoa
+  `public_base_url`; thu tu uu tien la tuy chon dat tay > goi y > dia chi hoc duoc.
+  Goi y den tu loi goi da xac thuc bang token nen dang tin nhu phan con lai cua API.
+- Ket qua: cau hinh nhu cu — neu chua dat `public_base_url` thi bao loi ro rang, khong
+  im lang. Duong "khoi cau hinh" that su phai lay IP host qua Supervisor API, se lam rieng.
+
 ## 0.8.2 - 2026-09-17
 
 ### Fixed

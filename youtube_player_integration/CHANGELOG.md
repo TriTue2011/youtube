@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.4 - 2026-09-18
+
+### Fixed
+
+- **Phát ra loa không phải tự điền URL nữa.** Loa tải luồng phát thẳng từ add-on nên
+  cần một địa chỉ LAN, mà add-on không tự suy ra được: mọi lời gọi của integration
+  đến nó đều qua NAT của Supervisor (log thật: nguồn là `172.30.32.1`). Nay
+  integration lấy **địa chỉ LAN mà chính Home Assistant công bố** (Cài đặt → Hệ thống
+  → Mạng → URL Home Assistant) ghép với cổng của URL add-on đã cấu hình, rồi gửi kèm
+  khi xin luồng. Đổi map cổng cũng ra đúng. Chưa cấu hình URL nội bộ thì không gửi gì
+  và add-on vẫn báo lỗi rõ ràng, không im lặng.
+- Cần add-on **0.8.3 trở lên** để nhận gợi ý này; bản add-on cũ bỏ qua khoá lạ nên
+  vẫn chạy như trước.
+
 ## 0.11.3 - 2026-09-17
 
 ### Added

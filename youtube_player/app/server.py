@@ -393,9 +393,16 @@ class PlayerServer(ThreadingHTTPServer):
     def note_reachable_address(self, host, port):
         """Ghi nho dia chi LAN dung duoc, de loa khoi phai cau hinh tay.
 
-        Bo qua loopback/link-local/unspecified: chung khong dung duoc cho loa.
-        Cong lay tu chinh socket, nen chi dung khi cong host trung cong container
-        (mac dinh 8099); doi map cong thi phai dat public_base_url.
+        Log that 17/09/2026: loi goi cua integration den tu 172.30.32.1 — mang
+        NOI BO cua Supervisor, khong phai LAN. Qua NAT thi getsockname() chi tra
+        ve dia chi cua chinh container, nen KHONG BAO GIO ra IP LAN cua host o
+        cau hinh thuong gap. Vi vay phai tu choi cac dai docker/Supervisor:
+        quang ba mot URL noi bo thi loa khong voi toi, va con te hon la im lang
+        thay vi bao public_base_url_required.
+
+        Docker cap 172.17.0.0/16 .. 172.31.0.0/16 (Supervisor dung
+        172.30.32.0/23). Dai 172.16.0.0/16 KHONG bi chan vi day la LAN that o
+        nhieu nha.
         """
         try:
             ip = ipaddress.ip_address(str(host))
@@ -404,6 +411,8 @@ class PlayerServer(ThreadingHTTPServer):
             return
         if ip.is_loopback or ip.is_unspecified or ip.is_link_local or ip.is_multicast:
             return
+        if ip.version == 4 and ipaddress.IPv4Address("172.17.0.0") <= ip <= ipaddress.IPv4Address("172.31.255.255"):
+            return
         if not 1 <= port <= 65535:
             return
         host_part = ip.compressed if ip.version == 4 else "[" + ip.compressed + "]"
@@ -411,11 +420,19 @@ class PlayerServer(ThreadingHTTPServer):
         with self.address_lock:
             self.learned_base_url = base
 
-    def create_stream_url(self, source, target):
+    def create_stream_url(self, source, target, hint=None):
         """Create a signed LAN URL a speaker can fetch without HA credentials."""
-        # Tuy chon dat tay thang the; khong co thi dung dia chi da hoc duoc.
+        # Thu tu uu tien: tuy chon dat tay > goi y cua Home Assistant > dia chi
+        # hoc duoc. Goi y den tu loi goi da xac thuc bang token nen dang tin nhu
+        # phan con lai cua API.
+        goi_y = ""
+        if hint:
+            try:
+                goi_y = normalize_public_base_url(hint)
+            except ValueError:
+                goi_y = ""
         with self.address_lock:
-            base_url = self.public_base_url or self.learned_base_url
+            base_url = self.public_base_url or goi_y or self.learned_base_url
         if not base_url:
             raise ValueError("public_base_url_required")
         return build_signed_stream_url(
@@ -767,7 +784,9 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 target, resolved = self.server.prepare_stream(
                     source, payload.get("target"), *heights
                 )
-                stream_url = self.server.create_stream_url(source, target)
+                stream_url = self.server.create_stream_url(
+                    source, target, hint=payload.get("public_base_url")
+                )
             except StreamUnavailableError:
                 self.send_json(502, {"error": "stream_unavailable"})
                 return

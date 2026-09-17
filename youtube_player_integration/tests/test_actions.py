@@ -84,6 +84,7 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
                     "media_content_type": "audio/mpeg",
                 }
             ),
+            base_url="http://192.0.2.10:8099",
             async_update_session=AsyncMock(side_effect=self._record),
             async_stop=AsyncMock(return_value={"success": True, "state": "idle"}),
         )
@@ -135,8 +136,10 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             "audio/mpeg", speaker_call["service_data"]["media_content_type"]
         )
-        self.client.async_create_stream.assert_awaited_once_with(
-            "youtube", "dQw4w9WgXcQ"
+        self.client.async_create_stream.assert_awaited_once()
+        self.assertEqual(
+            ("youtube", "dQw4w9WgXcQ"),
+            self.client.async_create_stream.await_args.args,
         )
         # Reserve the session (moves these speakers out of other sessions), then
         # record the stream type in the same session.
@@ -189,8 +192,10 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.client.async_play.assert_not_awaited()
-        self.client.async_create_stream.assert_awaited_once_with(
-            "youtube", "dQw4w9WgXcQ"
+        self.client.async_create_stream.assert_awaited_once()
+        self.assertEqual(
+            ("youtube", "dQw4w9WgXcQ"),
+            self.client.async_create_stream.await_args.args,
         )
         play_call = self.hass.services.calls[-1]
         self.assertEqual("play_media", play_call["service"])
@@ -211,7 +216,10 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
             target_platforms={},
         )
 
-        self.client.async_create_stream.assert_awaited_once_with("zing", target)
+        self.client.async_create_stream.assert_awaited_once()
+        self.assertEqual(
+            ("zing", target), self.client.async_create_stream.await_args.args
+        )
         self.assertEqual(
             "audio/mpeg",
             self.hass.services.calls[0]["service_data"]["media_content_type"],

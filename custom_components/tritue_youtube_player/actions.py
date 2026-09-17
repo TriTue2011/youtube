@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from typing import Any
+from urllib.parse import urlsplit
 
 from .playback import (
     UnsupportedTargetMediaError,
@@ -14,6 +15,44 @@ from .playback import (
     is_native_youtube_transport,
     normalize_target_entity_ids,
 )
+
+
+def speaker_base_url(hass: Any, client: Any) -> str | None:
+    """Dia chi add-on ma LOA tai duoc luong phat.
+
+    Loa khong o trong mang docker, nen add-on khong tu biet dia chi nay: moi loi
+    goi cua integration den no deu qua NAT cua Supervisor (log that 17/09/2026:
+    nguon la 172.30.32.1). Nhung Home Assistant thi biet dia chi LAN cua chinh
+    no (Cai dat > He thong > Mang > URL Home Assistant), con cong thi lay tu URL
+    add-on da cau hinh -- nen doi map cong cung ra dung.
+
+    Thieu bat cu manh nao thi tra None: add-on se bao public_base_url_required
+    ro rang, hon la im lang.
+    """
+    try:
+        from homeassistant.helpers.network import get_url
+    except Exception:
+        return None
+    try:
+        ha_url = get_url(
+            hass,
+            allow_internal=True,
+            allow_external=False,
+            allow_cloud=False,
+            allow_ip=True,
+            prefer_external=False,
+        )
+    except Exception:
+        # NoURLAvailableError khi chua cau hinh URL noi bo -- khong phai loi.
+        return None
+    host = urlsplit(str(ha_url or "")).hostname
+    if not host:
+        return None
+    port = None
+    with suppress(Exception):
+        port = urlsplit(str(getattr(client, "base_url", "") or "")).port
+    host_part = f"[{host}]" if ":" in host else host
+    return f"http://{host_part}:{port or 8099}"
 
 
 async def async_play_on_players(
@@ -139,7 +178,9 @@ async def async_play_on_players(
                 )
 
         if source == "zing":
-            stream = await client.async_create_stream("zing", target)
+            stream = await client.async_create_stream(
+                "zing", target, public_base_url=speaker_base_url(hass, client)
+            )
             service_data = build_stream_request(stream)
             session_media_content_type = service_data["media_content_type"]
             await hass.services.async_call(
@@ -179,7 +220,9 @@ async def async_play_on_players(
                     physical_dispatch_completed = True
             if youtube_audio_targets:
                 try:
-                    stream = await client.async_create_stream("youtube", target)
+                    stream = await client.async_create_stream(
+                        "youtube", target, public_base_url=speaker_base_url(hass, client)
+                    )
                     audio_request = build_stream_request(stream)
                 except Exception as error:
                     first_dispatch_error = first_dispatch_error or error

@@ -58,7 +58,12 @@ class YouTubePlayerClient:
         )
 
     async def async_create_stream(
-        self, source: str, target: str, *, max_height: int | None = None
+        self,
+        source: str,
+        target: str,
+        *,
+        max_height: int | None = None,
+        public_base_url: str | None = None,
     ) -> dict[str, Any]:
         """Create a short-lived public URL for a supported source.
 
@@ -66,6 +71,10 @@ class YouTubePlayerClient:
         payload: dict[str, Any] = {"source": source, "target": target}
         if max_height:
             payload["max_height"] = max_height
+        # Dia chi LAN ma loa dung duoc, do Home Assistant tu biet. Add-on doi mat
+        # sau NAT nen khong tu suy ra duoc; ban add-on cu bo qua khoa nay.
+        if public_base_url:
+            payload["public_base_url"] = public_base_url
         return await self._async_request(
             "POST",
             "/api/integration/stream",

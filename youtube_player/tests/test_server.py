@@ -72,6 +72,14 @@ class YouTubePlayerHttpTests(unittest.TestCase):
             self.server.create_stream_url("youtube", "dQw4w9WgXcQ")
         self.assertEqual(str(caught.exception), "public_base_url_required")
 
+        # Mang noi bo cua Supervisor/docker: loa khong voi toi, phai tu choi.
+        for host in ("172.30.32.1", "172.30.33.5", "172.17.0.4", "172.31.255.254"):
+            self.server.note_reachable_address(host, 8099)
+            self.assertEqual(self.server.learned_base_url, "", host)
+        # 172.16.0.0/16 la LAN that o nhieu nha, khong duoc chan.
+        self.server.note_reachable_address("172.16.99.10", 8099)
+        self.assertEqual(self.server.learned_base_url, "http://172.16.99.10:8099")
+        self.server.learned_base_url = ""
         self.server.note_reachable_address("192.0.2.28", 8099)
         self.assertEqual(self.server.learned_base_url, "http://192.0.2.28:8099")
         self.assertTrue(
@@ -79,6 +87,27 @@ class YouTubePlayerHttpTests(unittest.TestCase):
                 "http://192.0.2.28:8099"
             )
         )
+
+    def test_home_assistant_hint_is_used_when_the_option_is_empty(self):
+        """Add-on sau NAT khong tu biet dia chi LAN; Home Assistant thi biet."""
+        self.server.public_base_url = ""
+        self.server.learned_base_url = ""
+        url = self.server.create_stream_url(
+            "youtube", "dQw4w9WgXcQ", hint="http://192.0.2.28:8099"
+        )
+        self.assertTrue(url.startswith("http://192.0.2.28:8099"), url)
+        for xau in ("khong-phai-url", "ftp://192.0.2.28",
+                    "http://192.0.2.28:8099/co/duong/dan", ""):
+            with self.assertRaises(ValueError) as caught:
+                self.server.create_stream_url("youtube", "dQw4w9WgXcQ", hint=xau)
+            self.assertEqual(str(caught.exception), "public_base_url_required")
+
+    def test_explicit_option_wins_over_the_hint(self):
+        """public_base_url dat tay luon thang goi y cua Home Assistant."""
+        url = self.server.create_stream_url(
+            "youtube", "dQw4w9WgXcQ", hint="http://192.0.2.99:8099"
+        )
+        self.assertTrue(url.startswith("http://172.16.10.200:8099"), url)
 
     def test_explicit_public_base_url_wins_over_the_learned_one(self):
         """Nguoi dung dat tay thi luon thang, ke ca khi da hoc duoc dia chi khac."""
