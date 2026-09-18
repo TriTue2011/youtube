@@ -1278,23 +1278,50 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           z-index: 0;
           border-radius: 12px;
           background: var(--ad-bia, none) center / cover no-repeat;
-          filter: blur(18px) saturate(1.15) brightness(.5);
-          transform: scale(1.15);
+          /* Mờ vừa đủ để chữ đọc được, KHÔNG làm mất hình. Bản đầu tôi đặt
+             blur(18px) + brightness(.5) nên ảnh thành một vệt xám — chủ máy báo
+             "chưa đúng như tôi gửi", và đúng là nhìn không ra ảnh bìa nữa. */
+          filter: blur(10px) saturate(1.25) brightness(.72);
+          transform: scale(1.12);
           pointer-events: none;
+        }
+        /* Lớp tối mỏng phủ lên ảnh: giữ chữ và nút đọc được mà ảnh vẫn ra hình. */
+        .nghe-anh::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.42));
         }
         .nghe-dia {
           position: absolute;
-          left: 14px;
+          left: 12px;
           top: 50%;
           z-index: 2;
-          width: 96px;
-          height: 96px;
-          margin-top: -48px;
+          /* Cỡ CO THEO bề rộng card, không cố định. Bản đầu tôi để cứng 96px rồi
+             thêm luật ẩn hẳn đĩa khi card dưới 520px — mà điện thoại rơi đúng vào
+             khoảng đó, nên đĩa KHÔNG BAO GIỜ hiện trên máy chủ máy đang dùng.
+             Tự tay tắt mất phần quan trọng nhất trên thiết bị thật. */
+          width: clamp(64px, 26cqw, 112px);
+          height: clamp(64px, 26cqw, 112px);
+          margin-top: calc(clamp(64px, 26cqw, 112px) / -2);
           border-radius: 50%;
           background: var(--ad-bia, none) center / cover no-repeat;
-          border: 3px solid rgba(255,255,255,.22);
-          box-shadow: 0 8px 22px rgba(0,0,0,.45);
+          border: 3px solid rgba(255,255,255,.28);
+          box-shadow: 0 8px 22px rgba(0,0,0,.5);
           pointer-events: none;
+        }
+        /* Lỗ đĩa ở giữa cho ra dáng đĩa than. */
+        .nghe-dia::after {
+          content: "";
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 22%;
+          height: 22%;
+          margin: -11% 0 0 -11%;
+          border-radius: 50%;
+          background: rgba(0,0,0,.55);
+          border: 2px solid rgba(255,255,255,.25);
         }
         /* Đĩa chỉ quay khi đang phát — đứng im lúc tạm dừng cho khớp cảm giác. */
         .wrap.is-playing .nghe-dia { animation: ad-quay 14s linear infinite; }
@@ -1302,30 +1329,76 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Xem video thì cả hai biến mất, trả khung hình về nguyên trạng. */
         .player.video-on .nghe-anh,
         .player.video-on .nghe-dia { display: none; }
-        /* Sóng, thanh tiến trình và nút phải nằm TRÊN lớp nền mờ. */
-        .player:not(.video-on) > .stage > :is(.np-wave, .progress, .control-bar) {
+        /* Mọi thứ của chế độ chỉ nghe phải nằm TRÊN lớp nền mờ. */
+        .player:not(.video-on) > .stage > :is(.np-wave, .progress, .control-bar, .nghe-chu) {
           position: relative;
           z-index: 3;
         }
-        .player:not(.video-on) > .stage > .control-bar {
-          margin: 6px auto 0;
-          padding: 6px 10px;
-          width: fit-content;
-          border-radius: 16px;
+        /* Chừa chỗ cho đĩa ở MỌI bề rộng, và khoảng chừa tính theo ĐÚNG công thức cỡ
+           đĩa nên hai bên không bao giờ lệch nhau.
+           Bản trước tôi để cứng 122px rồi thêm luật ẩn đĩa khi card dưới 520px — điện
+           thoại rơi đúng vào khoảng đó nên đĩa KHÔNG BAO GIỜ hiện. Tự tay tắt mất phần
+           chính trên thiết bị chủ máy dùng thật. */
+        .player:not(.video-on) > .stage > :is(.np-wave, .control-bar) {
+          margin-left: calc(clamp(64px, 26cqw, 112px) + 24px);
+          margin-right: 6px;
+        }
+        /* Sóng nhạc và hàng nút gộp thành MỘT khung kính liền, như mẫu chủ máy gửi:
+           sóng ở nửa trên, nút ở nửa dưới, chung một nền mờ và một viền. */
+        .player:not(.video-on) > .stage > .np-wave {
+          margin-top: 0;
+          padding: 12px 14px 2px;
+          border-radius: 14px 14px 0 0;
           background: rgba(255,255,255,.10);
-          border: 1px solid rgba(255,255,255,.14);
+          border: 1px solid rgba(255,255,255,.16);
+          border-bottom: 0;
           backdrop-filter: blur(10px);
         }
-        /* Card hẹp thì bỏ đĩa tròn: 96px chiếm gần nửa bề ngang, sóng nhạc sẽ chui
-           xuống dưới nó. Nền mờ vẫn giữ nên vẫn đúng tinh thần. */
-        @container ytcard (max-width: 519px) {
-          .nghe-dia { display: none; }
+        .player:not(.video-on) > .stage > .control-bar {
+          margin-top: 0;
+          padding: 2px 14px 12px;
+          border-radius: 0 0 14px 14px;
+          background: rgba(255,255,255,.10);
+          border: 1px solid rgba(255,255,255,.16);
+          border-top: 0;
+          backdrop-filter: blur(10px);
         }
-        @container ytcard (min-width: 520px) {
-          .player:not(.video-on) > .stage > :is(.np-wave, .progress, .control-bar) {
-            padding-left: 122px;
-          }
-          .player:not(.video-on) > .stage > .control-bar { margin-left: 122px; padding-left: 10px; }
+        /* Tên bài và tên kênh ĐÈ TRÊN ảnh nền. Chừa lề phải cho nhãn nguồn. */
+        .nghe-chu { padding: 12px 104px 8px 14px; }
+        .nghe-ten {
+          font-size: clamp(.95rem, 3.2cqw, 1.35rem);
+          font-weight: 800;
+          line-height: 1.25;
+          color: var(--ad-text,#fff);
+          text-shadow: 0 2px 8px rgba(0,0,0,.7);
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .nghe-kenh {
+          margin-top: 4px;
+          font-size: clamp(.78rem, 2.4cqw, .95rem);
+          font-weight: 700;
+          color: var(--ad-accent2, var(--ad-accent,#00ffcc));
+          text-shadow: 0 2px 6px rgba(0,0,0,.65);
+        }
+        /* Nhãn nguồn ở góc trên-phải — chữ YOUTUBE / ZING MP3 trong mẫu. */
+        .nghe-nhan {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 4;
+          padding: 8px 14px;
+          border-radius: 12px;
+          font-size: .76rem;
+          font-weight: 800;
+          letter-spacing: .06em;
+          text-transform: uppercase;
+          color: var(--ad-text,#fff);
+          background: rgba(255,255,255,.16);
+          border: 1px solid rgba(255,255,255,.22);
+          backdrop-filter: blur(8px);
         }
         .join-session { border-style: dashed; color: var(--ad-accent,#00ffcc); }
         .others { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -2113,6 +2186,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                    thì đĩa cũng bị làm mờ theo. -->
               <div class="nghe-anh" hidden aria-hidden="true"></div>
               <div class="nghe-dia" hidden aria-hidden="true"></div>
+              <!-- Tên bài ĐÈ TRÊN ảnh nền, như mẫu chủ máy gửi. Đây là lớp chữ RIÊNG,
+                   không phải chuyển khối «.now» từ vùng playlist sang: sáu luật CSS và
+                   ba chỗ JavaScript đang bám vào đường «.np-zone .now…», chuyển là phá
+                   cả sáu. Thêm thì không đụng gì tới chúng. -->
+              <div class="nghe-chu" hidden>
+                <div class="nghe-ten"></div>
+                <div class="nghe-kenh"></div>
+              </div>
+              <div class="nghe-nhan" hidden></div>
               <!-- Sóng nhạc, thanh tiến trình và nút điều khiển nằm NGAY DƯỚI khung video.
                    Xem video thì điều khiển ở sát dưới hình (sóng nhạc tự ẩn); chỉ nghe nhạc
                    thì khung video ẩn nên sóng nhạc chiếm đúng chỗ trống đó — không phóng to
@@ -3128,6 +3210,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const video = this._video;
     const titleNode = this.shadowRoot.querySelector(".now-title");
     const metaNode = this.shadowRoot.querySelector(".now-meta");
+    /* Lớp chữ đè trên ảnh của chế độ chỉ nghe. Điền ở CUỐI hàm này (xem _lopChuNghe)
+       để nó luôn lấy đúng thứ vừa được tính cho «.now-title», không thể lệch nội dung
+       giữa hai nơi. */
     const session = this._focusedSession();
     this.shadowRoot.querySelector(".player").classList.toggle("video-on", video.open);
     this.shadowRoot.querySelector(".video-frame").hidden = !video.open;
@@ -3241,6 +3326,33 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     else player.style.removeProperty("--ad-bia");
     nen.hidden = !co;
     dia.hidden = !co;
+    this._lopChuNghe(co);
+  }
+
+  /** Lớp chữ đè trên ảnh của chế độ chỉ nghe.
+   *
+   * Lấy THẲNG nội dung vừa đặt cho «.now-title» và «.now-meta» thay vì tự dựng lại
+   * từ dữ liệu — hai nơi hiển thị cùng một bài thì không được phép lệch chữ.
+   * Gọi từ _showCover vì CẢ HAI nhánh của _syncNowPlaying đều kết thúc bằng lời gọi
+   * đó (nghe trên máy này, và phát ra loa), nên chỉ cần một điểm nối duy nhất.
+   */
+  _lopChuNghe(coAnh) {
+    const chu = this.shadowRoot.querySelector(".nghe-chu");
+    const ten = this.shadowRoot.querySelector(".nghe-ten");
+    const kenh = this.shadowRoot.querySelector(".nghe-kenh");
+    const nhan = this.shadowRoot.querySelector(".nghe-nhan");
+    if (!chu || !ten || !kenh || !nhan) return;
+    const tieuDe = this.shadowRoot.querySelector(".now-title")?.textContent || "";
+    const phu = this.shadowRoot.querySelector(".now-meta")?.textContent || "";
+    // Dòng thông tin ghép bằng « · ». Mảnh đầu là tên nguồn khi có (xem TEN_NGUON).
+    const manh = phu.split("·").map((x) => x.trim()).filter(Boolean);
+    const nguon = Object.values(TEN_NGUON).includes(manh[0]) ? manh[0] : "";
+    ten.textContent = tieuDe;
+    kenh.textContent = nguon ? (manh[1] || "") : (manh[0] || "");
+    nhan.textContent = nguon;
+    const hien = Boolean(coAnh && tieuDe) && !this._video.open;
+    chu.hidden = !hien;
+    nhan.hidden = !hien || !nguon;
   }
 
   /** Other groups of speakers playing something else: tap one to control it. */

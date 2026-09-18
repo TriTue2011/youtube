@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.20.5 - 2026-09-18
+
+### Fixed — chế độ chỉ nghe ở 0.20.4 gần như không hiện gì trên điện thoại
+
+Đây là lỗi của bản trước, và nguyên nhân nằm trong chính CSS tôi viết:
+
+- **Tôi tự đặt luật ẩn đĩa tròn khi card hẹp dưới 520px.** Điện thoại rơi đúng vào
+  khoảng đó, nên đĩa **không bao giờ hiện** trên thiết bị dùng thật. Nay đĩa hiện ở mọi
+  bề rộng, cỡ **co theo bề ngang card** thay vì đặt cứng.
+- **Ảnh nền mờ quá tay**: `blur(18px)` kèm giảm sáng còn một nửa làm ảnh thành vệt xám,
+  nhìn không ra ảnh bìa. Nay mờ nhẹ hơn và sáng hơn, thêm một lớp tối mỏng để chữ vẫn
+  đọc được mà ảnh vẫn ra hình.
+- Khoảng chừa chỗ cho đĩa nay **tính theo đúng công thức cỡ đĩa**, nên hai bên không thể
+  lệch nhau khi màn hình đổi kích thước.
+
+### Added — đúng bố cục mẫu
+
+- **Tên bài và tên kênh nằm đè trên ảnh nền**, kèm **nhãn nguồn** (YOUTUBE / ZING MP3)
+  ở góc trên-phải.
+- **Sóng nhạc và hàng nút gộp thành một khung kính liền**, đặt bên phải đĩa.
+- Đĩa có lỗ giữa cho ra dáng đĩa than, và chỉ quay khi đang phát.
+
+### Cách làm, để không phá thứ đang chạy
+
+- Lớp chữ này là **thẻ mới thêm vào**, không phải chuyển khối tên bài cũ sang. Đo trước
+  khi làm: có **sáu luật CSS** và **ba chỗ JavaScript** đang bám vào đường
+  `.np-zone .now…`; chuyển là phá cả sáu.
+- Nội dung lấy **thẳng từ dòng tên bài vừa được đặt**, không dựng lại từ dữ liệu — hai
+  nơi hiển thị cùng một bài thì không được phép lệch chữ.
+- Điểm nối đặt trong `_showCover`, vì cả hai nhánh (nghe trên máy này, phát ra loa) đều
+  kết thúc bằng lời gọi đó.
+- **Không vẽ nút trái tim** như trong ảnh mẫu: card chưa có tính năng yêu thích, thêm
+  vào sẽ là một nút bấm không làm gì.
+
 ## 0.20.4 - 2026-09-18
 
 ### Added — chế độ chỉ nghe có diện mạo riêng
