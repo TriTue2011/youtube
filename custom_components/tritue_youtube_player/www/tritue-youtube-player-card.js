@@ -1070,6 +1070,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .restore-player:hover { border-color: var(--ad-accent,#00ffcc); color: var(--ad-accent,#00ffcc); }
         .restore-player span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .player {
+          /* Làm MỐC ĐỊNH VỊ cho lớp nền mờ của chế độ chỉ nghe. Không thể tô lên
+             «.stage» vì nó là display: contents — không phải một hộp thật, các con
+             của nó do chính «.player» xếp. Thêm mốc ở đây an toàn: thứ duy nhất neo
+             tuyệt đối bên trong là «.picture-note», mà nó neo vào «.video-frame» vốn
+             đã có mốc riêng. */
+          position: relative;
           margin-top: 12px;
           padding: 6px;
           border: 1px solid var(--divider-color);
@@ -1223,7 +1229,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            dùng gradient + glow rõ hơn. */
         .progress .bar {
           height: 6px;
-          overflow: hidden;
+          /* MỞ ra cho núm tròn thò khỏi rãnh. Trước đây «overflow: hidden» sẽ cắt
+             cụt đúng nửa cái núm. Vệt màu bên trong tự bo góc nên không tràn. */
+          overflow: visible;
           border-radius: 4px;
           /* Bấm/kéo để tua. touch-action: none để ngón tay kéo ngang trên thanh không
              bị trình duyệt hiểu nhầm thành cuộn trang. */
@@ -1234,11 +1242,90 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           box-shadow: inset 0 1px 3px rgba(0,0,0,.6);
         }
         .progress .fill {
+          position: relative;
           width: 0;
           height: 100%;
-          background: linear-gradient(90deg, var(--ad-accent,#00ffcc), rgba(var(--ad-c1,0,204,204),.85));
+          border-radius: 4px;
+          /* Chuyển sắc từ màu nhấn PHỤ sang màu nhấn CHÍNH — chưa đặt màu phụ thì rơi
+             về đúng dáng cũ, nên thẻ chưa cấu hình gì không đổi gì. */
+          background: linear-gradient(90deg, var(--ad-accent2, var(--ad-accent,#00ffcc)), var(--ad-accent,#00ffcc));
           box-shadow: 0 0 8px 1px var(--ad-accent,#00ffcc), inset 0 1px 0 rgba(255,255,255,.4);
           transition: width .9s linear;
+        }
+        /* Núm tròn ở đầu vệt màu: vừa cho biết đang ở đâu, vừa mời người ta kéo. */
+        .progress .fill::after {
+          content: "";
+          position: absolute;
+          right: -7px;
+          top: 50%;
+          width: 14px;
+          height: 14px;
+          margin-top: -7px;
+          border-radius: 50%;
+          background: #fff;
+          box-shadow: 0 1px 5px rgba(0,0,0,.5);
+        }
+
+        /* ── CHỈ NGHE: ảnh bìa làm nền mờ, đĩa tròn quay, sóng và nút nổi lên trên ──
+           Ảnh lấy từ biến «--ad-bia» do _showCover đặt. Dùng đúng điểm nút ấy vì cả
+           hai đường phát (nghe trên máy này, và phát ra loa) đều đổ về đó — nếu tự đi
+           tìm ảnh ở chỗ khác thì sẽ có lúc nền và ảnh bìa nhỏ lệch nhau.
+           Biến «--poster» sẵn có KHÔNG tái dùng được: nó chỉ áp cho .video-frame
+           .no-embed và dựng địa chỉ từ mã video YouTube, nên sai với Zing MP3. */
+        .nghe-anh {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          border-radius: 12px;
+          background: var(--ad-bia, none) center / cover no-repeat;
+          filter: blur(18px) saturate(1.15) brightness(.5);
+          transform: scale(1.15);
+          pointer-events: none;
+        }
+        .nghe-dia {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          z-index: 2;
+          width: 96px;
+          height: 96px;
+          margin-top: -48px;
+          border-radius: 50%;
+          background: var(--ad-bia, none) center / cover no-repeat;
+          border: 3px solid rgba(255,255,255,.22);
+          box-shadow: 0 8px 22px rgba(0,0,0,.45);
+          pointer-events: none;
+        }
+        /* Đĩa chỉ quay khi đang phát — đứng im lúc tạm dừng cho khớp cảm giác. */
+        .wrap.is-playing .nghe-dia { animation: ad-quay 14s linear infinite; }
+        @keyframes ad-quay { to { transform: rotate(360deg); } }
+        /* Xem video thì cả hai biến mất, trả khung hình về nguyên trạng. */
+        .player.video-on .nghe-anh,
+        .player.video-on .nghe-dia { display: none; }
+        /* Sóng, thanh tiến trình và nút phải nằm TRÊN lớp nền mờ. */
+        .player:not(.video-on) > .stage > :is(.np-wave, .progress, .control-bar) {
+          position: relative;
+          z-index: 3;
+        }
+        .player:not(.video-on) > .stage > .control-bar {
+          margin: 6px auto 0;
+          padding: 6px 10px;
+          width: fit-content;
+          border-radius: 16px;
+          background: rgba(255,255,255,.10);
+          border: 1px solid rgba(255,255,255,.14);
+          backdrop-filter: blur(10px);
+        }
+        /* Card hẹp thì bỏ đĩa tròn: 96px chiếm gần nửa bề ngang, sóng nhạc sẽ chui
+           xuống dưới nó. Nền mờ vẫn giữ nên vẫn đúng tinh thần. */
+        @container ytcard (max-width: 519px) {
+          .nghe-dia { display: none; }
+        }
+        @container ytcard (min-width: 520px) {
+          .player:not(.video-on) > .stage > :is(.np-wave, .progress, .control-bar) {
+            padding-left: 122px;
+          }
+          .player:not(.video-on) > .stage > .control-bar { margin-left: 122px; padding-left: 10px; }
         }
         .join-session { border-style: dashed; color: var(--ad-accent,#00ffcc); }
         .others { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -1447,11 +1534,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           padding: max(12px, env(safe-area-inset-top)) 16px 8px;
           background: linear-gradient(rgba(0, 0, 0, .7), transparent);
         }
-        .player:is(.expanded, :fullscreen) > .stage > .progress { padding: 0 16px; }
-        .player:is(.expanded, :fullscreen) > .stage > .control-bar {
-          padding: 12px 10px max(6px, env(safe-area-inset-bottom));
-          background: linear-gradient(transparent, rgba(0, 0, 0, .8));
-        }
+        /* TOÀN MÀN HÌNH: ẩn hẳn thanh tiến trình và hàng nút phát của card.
+           Chủ máy chốt 18/09/2026: "khi phóng to toàn màn hình tôi muốn ẩn hết các cái
+           này vì lúc này dùng bằng youtube là được" — trình phát YouTube đã có đủ thanh
+           tua và nút của nó, bày thêm một bộ nữa chỉ che mất hình.
+           GIỮ LẠI hàng biểu tượng góc trên-phải («.stage-controls»): đó là đường thoát
+           chắc chắn của card, và nó vốn đã tự mờ khi để yên (xem luật «.idle» ngay bên
+           dưới) nên không choán hình. */
+        .player:is(.expanded, :fullscreen) > .stage > :is(.progress, .control-bar) { display: none; }
         /* Idle: the overlays fade out after a few seconds without a touch while the video
            plays; the shield catches the next touch (taps inside the YouTube frame never
            reach the card) and only brings them back. */
@@ -1460,6 +1550,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .player.idle:is(.expanded, :fullscreen) > .idle-shield { display: block; position: absolute; inset: 0; z-index: 3; }
         .player.idle:is(.expanded, :fullscreen) > .stage > .stage-controls { opacity: 0; pointer-events: none; }
         .player.idle:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone { opacity: 0; pointer-events: none; }
+        /* Dải thông tin bài hát dưới đáy cũng ẩn ở toàn màn hình — YouTube đã hiện tên
+           bài ngay trên hình. Đặt SAU khối định vị và sau luật «.idle» ở trên, cùng độ
+           ưu tiên nên luật đứng sau thắng; viết trước chúng thì không ăn. */
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone { display: none; }
         /* Phone held upright in an app or browser that can't turn the screen (the Home
            Assistant app's WebView refuses screen.orientation.lock, and turning the phone
            re-renders HA and leaves fullscreen), or turned by the rotate button: the stage
@@ -2014,6 +2108,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <div class="idle-shield" aria-hidden="true"></div>
               <div class="stage">
               <div class="video-frame" hidden></div>
+              <!-- Chế độ chỉ nghe: nền mờ và đĩa tròn, cùng lấy ảnh từ --ad-bia. Hai
+                   thẻ RIÊNG chứ không lồng nhau, vì lớp nền có filter blur — lồng vào
+                   thì đĩa cũng bị làm mờ theo. -->
+              <div class="nghe-anh" hidden aria-hidden="true"></div>
+              <div class="nghe-dia" hidden aria-hidden="true"></div>
               <!-- Sóng nhạc, thanh tiến trình và nút điều khiển nằm NGAY DƯỚI khung video.
                    Xem video thì điều khiển ở sát dưới hình (sóng nhạc tự ẩn); chỉ nghe nhạc
                    thì khung video ẩn nên sóng nhạc chiếm đúng chỗ trống đó — không phóng to
@@ -3128,9 +3227,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _showCover(imageUrl) {
     const image = this.shadowRoot.querySelector(".now-cover img");
     const icon = this.shadowRoot.querySelector(".now-cover ha-icon");
-    image.hidden = !/^https?:\/\//.test(imageUrl);
+    const co = /^https?:\/\//.test(imageUrl);
+    image.hidden = !co;
     icon.hidden = !image.hidden;
     if (!image.hidden && image.src !== imageUrl) image.src = imageUrl;
+    /* Cùng ảnh ấy làm nền mờ và mặt đĩa của chế độ chỉ nghe. Đặt tại ĐÂY vì đây là
+       điểm nút duy nhất mà cả hai đường phát đều đi qua, nên ba chỗ không thể lệch. */
+    const player = this.shadowRoot.querySelector(".player");
+    const nen = this.shadowRoot.querySelector(".nghe-anh");
+    const dia = this.shadowRoot.querySelector(".nghe-dia");
+    if (!player || !nen || !dia) return;
+    if (co) player.style.setProperty("--ad-bia", `url("${imageUrl}")`);
+    else player.style.removeProperty("--ad-bia");
+    nen.hidden = !co;
+    dia.hidden = !co;
   }
 
   /** Other groups of speakers playing something else: tap one to control it. */

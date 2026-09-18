@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.20.4 - 2026-09-18
+
+### Added — chế độ chỉ nghe có diện mạo riêng
+
+- **Ảnh bìa bài hát làm nền mờ** tràn kín khu phát, và một **đĩa tròn** mang chính ảnh
+  ấy, quay đều khi đang phát và đứng im khi tạm dừng.
+- **Sóng nhạc và hàng nút nổi lên trên nền mờ**, hàng nút nằm trong một khung kính mờ.
+- **Thanh tiến trình chuyển sắc** từ màu nhấn phụ sang màu nhấn chính, có **núm tròn**
+  ở đầu vệt màu — vừa cho biết đang ở đâu, vừa mời kéo để tua.
+- Xem video thì tất cả biến mất, khung hình trở lại nguyên trạng.
+
+### Changed — toàn màn hình nhường hẳn cho trình phát YouTube
+
+- Ở toàn màn hình, card **ẩn thanh tiến trình, hàng nút phát và dải thông tin bài hát**.
+  Trình phát YouTube đã có đủ thanh tua và nút của nó; bày thêm một bộ nữa chỉ che hình.
+- **Giữ lại hàng biểu tượng nhỏ ở góc trên-phải** (tai nghe, thu nhỏ, toàn màn hình,
+  đóng). Đó là đường thoát chắc chắn của card, và nó vốn tự mờ đi khi để yên vài giây,
+  chạm một cái là hiện lại. Muốn ẩn nốt thì nói, tôi bỏ.
+
+### Về việc "bấm nút thu nhỏ của YouTube để thoát về card"
+
+- Phần này **đã có sẵn trong mã từ trước**, không phải thêm mới: khi lớp toàn màn hình
+  của YouTube xuất hiện bên trong khu phát mà card đang giữ toàn màn hình, card thoát
+  luôn khỏi toàn màn hình. Tôi cố ý **không viết lại** — lắp thêm một đường thứ hai làm
+  cùng việc là cách chắc chắn để hai bên đá nhau.
+- Nếu sau khi cài bản này mà vẫn không thoát được, xin báo lại để tôi dựng đúng tình
+  huống mà bắt lỗi, thay vì sửa mò vào đoạn đang chạy đúng.
+
+### Những thứ phải làm kèm, thiếu là hỏng âm thầm
+
+- **`.player` phải làm mốc định vị.** Lớp nền mờ không thể tô lên `.stage` vì `.stage`
+  là `display: contents` — nó không phải một hộp thật, các con của nó do `.player` xếp.
+  Đã kiểm trước khi thêm mốc: thứ duy nhất neo tuyệt đối bên trong là chú thích trên
+  khung hình, mà nó neo vào `.video-frame` vốn có mốc riêng, nên không gì lệch chỗ.
+- **Rãnh thanh tiến trình phải mở `overflow`.** Nó vốn đặt `hidden`, giữ nguyên thì cái
+  núm tròn bị cắt cụt đúng một nửa.
+- **Không tái dùng được biến `--poster` sẵn có**, dù nghe như đúng việc: nó chỉ áp cho
+  khung hình lúc YouTube từ chối nhúng, và dựng địa chỉ ảnh từ mã video YouTube — tức
+  sai với Zing MP3.
+- **Ảnh được đặt tại `_showCover`**, điểm nút duy nhất mà cả hai đường phát (nghe trên
+  máy này, và phát ra loa) đều đi qua. Nhờ vậy ảnh nền, mặt đĩa và ảnh bìa nhỏ không bao
+  giờ lệch nhau.
+- **Card hẹp thì bỏ đĩa tròn**: 96px chiếm gần nửa bề ngang điện thoại, giữ lại thì sóng
+  nhạc bị đẩy xuống dưới nó. Nền mờ vẫn còn nên vẫn đúng tinh thần.
+
 ## 0.20.3 - 2026-09-18
 
 ### Added — chỉnh được cả bảng màu, và có bộ màu dựng sẵn
