@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.7 - 2026-09-18
+
+### Fixed
+
+- **Điện thoại không thấy thanh điều khiển.** Khối "Đang phát" — sóng nhạc, thanh tiến
+  trình và bốn nút bài trước / phát tạm dừng / dừng / bài sau — nằm ở **cuối** cột danh
+  sách, phía sau cả dải gợi ý lẫn lưới kết quả, nên phải cuộn rất lâu mới tới. Màn hình
+  rộng không lộ ra vì cột phải cao cố định và khối này được ghim đáy bằng flex; nhưng ở
+  màn hình hẹp `.yt-playlist-inner` bị đổi về `display: block`, mất luôn cách xếp flex,
+  nên mọi khối rơi về đúng thứ tự trong tài liệu. Nay màn hình hẹp giữ nguyên flex column
+  và khối điều khiển được đưa lên **đầu cột**, ngay dưới thanh chọn loa.
+
 ## 0.11.6 - 2026-09-18
 
 ### Changed

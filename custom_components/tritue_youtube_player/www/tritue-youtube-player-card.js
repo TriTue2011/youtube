@@ -1493,7 +1493,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           }
           /* Một cột: trả nội dung về luồng bình thường, danh sách vẫn giới hạn 15 bài */
           .yt-zone-playlist { position: static; min-height: 0; overflow: visible; }
-          .yt-playlist-inner { position: static; display: block; }
+          /* Giữ flex column (KHÔNG dùng display:block) để còn xếp lại thứ tự được.
+             Bản cũ đổi về block, nên mọi khối rơi về đúng thứ tự trong tài liệu và
+             khối "Đang phát" — vốn nằm CUỐI cột, sau cả dải gợi ý lẫn lưới kết quả —
+             bị đẩy xuống quá sâu, trên điện thoại phải cuộn rất lâu mới thấy nút
+             phát/dừng. Màn hình rộng không lộ ra vì cột phải cao cố định và khối này
+             được ghim đáy. */
+          .yt-playlist-inner { position: static; display: flex; flex-direction: column; }
+          /* Nút điều khiển lên ngay đầu cột, nằm dưới thanh chọn loa. */
+          .yt-playlist-inner > .np-zone { order: -1; margin-bottom: 10px; }
           .yt-zone-playlist .results,
           .yt-zone-playlist .playlist-list { max-height: calc(var(--yt-result-row, 68px) * 10 - 20px); }
         }
