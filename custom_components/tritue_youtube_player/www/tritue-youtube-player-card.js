@@ -3047,6 +3047,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const box = this.shadowRoot && this.shadowRoot.querySelector(".yt-suggested-section");
     if (!box) return;
     this._ytSuggestedCategory = this._ytSuggestedCategory || YOUTUBE_SUGGESTED_CATEGORIES[0].id;
+    /* Khối này KHÔNG đọc gì từ trạng thái nhà — nội dung chỉ phụ thuộc bốn thứ dưới
+       đây, còn bài hát thì lấy từ hằng số. Nhưng nó được gọi từ «set hass», tức mỗi
+       lần bất kỳ thực thể nào đổi trạng thái: dựng lại vô điều kiện là xoá rồi dựng
+       hơn 60 nút (kể cả các thẻ ảnh) để cho ra kết quả y hệt, nhiều lần mỗi giây.
+       Hệ quả thấy được: cú vuốt ngang đang dở bị xoá mất nên dải gợi ý khó cuộn. */
+    const chuKy = [
+      this._ytSuggestedCategory,
+      this._results.length ? "1" : "0",
+      this._source,
+      this._view,
+    ].join("|");
+    if (chuKy === this._goiYChuKy) return;
+    this._goiYChuKy = chuKy;
     box.replaceChildren();
     // Có kết quả rồi thì nhường chỗ; nguồn khác YouTube hoặc đang ở tab Playlist thì gợi ý vô nghĩa.
     if (this._results.length || this._source !== "youtube" || this._view !== "search") return;
@@ -4809,6 +4822,11 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     this._fillEntities();
   }
 
+  /** Chỉ dựng lại danh sách khi TẬP THIẾT BỊ thật sự đổi. Home Assistant gán lại
+      «.hass» mỗi lần có bất kỳ thực thể nào đổi trạng thái — nhiều lần mỗi giây
+      trong một căn nhà đang chạy — nên dựng lại vô điều kiện sẽ thay ruột thẻ
+      «select» liên tục, và danh sách đang mở thì nháy rồi đóng. Canh bằng chữ ký,
+      đúng cách «_renderSpeakerVolumes» của card đang làm. */
   _fillEntities() {
     const select = this.shadowRoot && this.shadowRoot.getElementById("ed-entity");
     if (!select) return;
@@ -4820,20 +4838,27 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
       const ub = b.includes("tritue_youtube_player") ? 0 : 1;
       return ua - ub || a.localeCompare(b, "vi");
     });
+    const ten = (id) => states[id]?.attributes?.friendly_name || id;
+    // Chữ ký gồm cả TÊN: đổi tên thiết bị thì danh sách cũng phải đổi theo.
+    const chuKy = ids.map((id) => `${id}|${ten(id)}`).join(",");
     const dang = this._config.entity || "";
-    select.replaceChildren();
-    const trong = document.createElement("option");
-    trong.value = "";
-    trong.textContent = "— Chọn thiết bị —";
-    select.append(trong);
-    for (const id of ids) {
-      const option = document.createElement("option");
-      option.value = id;
-      const ten = states[id]?.attributes?.friendly_name || id;
-      option.textContent = id.includes("tritue_youtube_player") ? `★ ${ten}` : ten;
-      select.append(option);
+
+    if (chuKy !== this._dsChuKy) {
+      this._dsChuKy = chuKy;
+      select.replaceChildren();
+      const trong = document.createElement("option");
+      trong.value = "";
+      trong.textContent = "— Chọn thiết bị —";
+      select.append(trong);
+      for (const id of ids) {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = id.includes("tritue_youtube_player") ? `★ ${ten(id)}` : ten(id);
+        select.append(option);
+      }
     }
-    select.value = dang;
+    // Gán lại value khi đang đúng cũng làm danh sách đang mở giật, nên chỉ gán khi lệch.
+    if (select.value !== dang) select.value = dang;
   }
 
   _fill() {
