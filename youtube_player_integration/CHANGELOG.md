@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.16.0 - 2026-09-18
+
+### Fixed
+
+- **Card co giãn theo BỀ RỘNG CỦA CHÍNH NÓ, không theo cửa sổ.** Đây là lỗi thiết kế của
+  tôi từ đầu: mọi điểm ngắt viết bằng `@media`, tức đo bề rộng **cửa sổ trình duyệt** —
+  trong khi bề rộng card do **cột của dashboard** quyết định. Card đặt trong cột hẹp trên
+  màn hình rộng vẫn nhận luật "máy tính" rồi **tràn ra ngoài**; thấy rõ nhất ở ô xem trước
+  của trình sửa (~330px) nằm trong cửa sổ ~1040px. Nay card tự làm mốc đo
+  (`container-type: inline-size`) và cả **5** điểm ngắt chuyển sang `@container`.
+- **Đổi bố cục trong trình sửa nay có tác dụng.** Nút dọc/ngang trên card ghi vào bộ nhớ
+  của máy và **đè vĩnh viễn** lên cấu hình, nên sửa trong trình sửa không thấy gì đổi —
+  đúng chỗ "không đồng bộ giữa card và config". Nay đổi cấu hình thì xoá lựa chọn riêng
+  của máy; bấm nút trên card vẫn thắng cho tới lần đổi cấu hình kế tiếp.
+- **Card không rộng ra được**: `getGridOptions` của tôi trả thêm khoá `rows: "auto"` mà
+  tôi chưa kiểm — một khoá sai là Home Assistant bỏ qua cả object. Nay chỉ khai `columns`
+  và `min_columns`. Lưu ý: cơ chế này **chỉ áp dụng cho dashboard kiểu Sections**.
+- **Dải trống phía trên nút "Nghe khi tắt màn hình"**: hàng sáu nút điều khiển video đều
+  ẩn khi chưa mở video, nhưng khối cha vẫn chiếm trọn một dòng kèm lề. Nay ẩn cả khối khi
+  bên trong không còn nút nào hiện.
+- **Khoảng trống lớn trong khung Playlist**: luật gốc ép cột cao cứng 640px cho bố cục hai
+  cột; khối điểm ngắt card hẹp gỡ `position` và `min-height` nhưng **quên gỡ `height`**.
+
+### Changed
+
+- **Hai hàng gợi ý đổi thành danh sách thả xuống.** Hàng cuộn ngang chỉ vuốt được bằng
+  cảm ứng: chuột không kéo ngang được mà thanh cuộn lại bị ẩn, nên phần lớn từ khoá coi
+  như không với tới. Thả xuống thì chuột, phím và cảm ứng đều dùng được, và không bao giờ
+  tràn ở bất kỳ bề rộng nào.
+
+### Added
+
+- **Xoá được từ khoá, xoá mục, và gỡ video đã gắn.** Máy chủ đã hỗ trợ sẵn từ 0.15.0
+  nhưng card chưa có nút nào — nay đủ cả ba. Nút xoá chỉ bật cho mục **của nhà**; mục dựng
+  sẵn nằm trong mã nên không xoá được, và nút mờ đi kèm lời giải thích thay vì bấm không
+  thấy gì xảy ra. Xoá mục có hỏi lại vì nó kéo theo mọi video đã gắn.
+
+### Ghi chú
+
+- **Nguồn nhạc "tự nhảy" sang Zing MP3 không phải lỗi**: card cố ý nhớ lần tìm gần nhất
+  (nguồn, từ khoá, kết quả) để rời dashboard quay lại không mất — hành vi này đang được
+  một điều kiện trong bộ test khoá lại. Muốn bỏ thì nói, tôi sẽ sửa cả test kèm lý do.
+
 ## 0.15.0 - 2026-09-18
 
 ### Added

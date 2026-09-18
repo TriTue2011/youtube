@@ -615,6 +615,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       zoom: 100,              // thu phóng chữ và nút, 50-150
       ...config,
     };
+    /* Đổi «layout» trong trình sửa PHẢI thắng nút bấm trên card. Trước đây nút bấm
+       ghi vào bộ nhớ của máy và đè VĨNH VIỄN, nên sửa trong trình sửa không thấy gì
+       đổi — đúng chỗ «không đồng bộ giữa card và config». Nay: đổi trong cấu hình thì
+       xoá lựa chọn riêng của máy này; bấm nút trên card vẫn thắng cho tới lần đổi
+       cấu hình kế tiếp. */
+    const layoutMoi = this._config.layout || "";
+    if (this._layoutTuConfig !== undefined && this._layoutTuConfig !== layoutMoi) {
+      setLayoutChoice(this._config.entity, "");
+    }
+    this._layoutTuConfig = layoutMoi;
     // Sửa cấu hình ngay trên dashboard: áp lại ngay, khỏi chờ lần vẽ sau.
     if (this._rendered) {
       this._applyTheme();
@@ -660,7 +670,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       được trong phần Bố cục của từng thẻ. min_columns giữ card còn dùng được khi
       bị kéo hẹp. */
   getGridOptions() {
-    return { columns: 12, min_columns: 6, rows: "auto" };
+    // KHÔNG khai «rows»: chiều cao để Home Assistant tự tính. Trước đây tôi đặt
+    // rows: "auto" mà không kiểm — một khoá sai là HA bỏ qua cả object, tức card
+    // không rộng ra chút nào.
+    return { columns: 12, min_columns: 6 };
   }
 
   connectedCallback() {
@@ -763,6 +776,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       <style>
         :host { display: block; }
         [hidden] { display: none !important; }
+        /* Card tự làm MỐC ĐO cho chính nó. Trước đây mọi điểm ngắt viết bằng @media,
+           tức đo bề rộng CỬA SỔ — sai về bản chất, vì bề rộng card do cột của
+           dashboard quyết định chứ không phải cửa sổ. Card đặt trong cột hẹp trên
+           màn hình rộng vẫn nhận luật "máy tính" rồi tràn ra ngoài; thấy rõ nhất ở
+           ô xem trước của trình sửa (~330px) trong cửa sổ ~1040px. Đặt tên mốc để
+           khỏi vô tình bám vào một khối bao khác của Home Assistant. */
+        :host { container-type: inline-size; container-name: ytcard; }
         /* Nền do «bg_style» + «opacity» trong cấu hình điều khiển, qua hai biến
            --ad-bg-alpha (độ đục) và --ad-bg-image (kiểu nền). Mặc định giữ đúng
            diện mạo cũ, nên thẻ chưa cấu hình gì thì không đổi gì. */
@@ -911,7 +931,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .layout-pick ha-icon { --mdc-icon-size: 18px; }
         .layout-pick.on { background: rgba(var(--ad-c1,0,204,204),0.18); color: var(--ad-accent,#00ffcc); }
         /* Màn hình hẹp luôn xếp một cột, nên nút chọn bố cục không còn ý nghĩa. */
-        @media (max-width: 900px) { .layout-switch { display: none; } }
+        @container ytcard (max-width: 900px) { .layout-switch { display: none; } }
         .spk-toggle.open ha-icon { transform: rotate(180deg); }
         .spk-volume { margin-top: 8px; }
         .spk-volume:empty { display: none; }
@@ -1101,6 +1121,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* stage-controls: nhóm nút liên quan tới hiển thị video (xem/xoay/phóng to/đóng),
            vẫn ở lại trong .stage, nằm ngay dưới video-frame, căn phải. */
         .stage-controls { display: flex; align-items: center; justify-content: flex-end; gap: 2px; margin-top: 6px; }
+        /* Sáu nút trong đây đều «hidden» cho tới khi mở video, nhưng khối cha vẫn
+           chiếm TRỌN MỘT DÒNG kèm margin — nên lúc chưa mở video có một dải trống
+           toang phía trên nút «Nghe khi tắt màn hình». Ẩn cả khối khi bên trong
+           không còn nút nào hiện. */
+        .stage-controls:not(:has(.ctl:not([hidden]))) { display: none; }
         .transport-group, .view-group { display: flex; align-items: center; gap: 2px; }
         .ctl {
           display: grid;
@@ -1433,9 +1458,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           margin-top: 12px;
         }
         /* Hai cột đọc như HAI THẺ liền nhau chứ không phải một khối lớn: mỗi cột có
-           nền, viền và bo góc riêng. Chỉ áp từ 901px trở lên — màn hình hẹp xếp dọc
-           một cột thì viền lồng trong viền trông rối. */
-        @media (min-width: 901px) {
+           nền, viền và bo góc riêng. Chỉ áp khi CHÍNH CARD rộng từ 901px — card hẹp
+           xếp dọc một cột thì viền lồng trong viền trông rối. */
+        @container ytcard (min-width: 901px) {
           .yt-layout > .player,
           .yt-layout > .yt-zone-playlist {
             background: rgba(var(--ad-c2,13,21,37),0.38);
@@ -1574,7 +1599,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           transition: opacity .2s, transform .2s ease-in-out;
         }
         .np-zone.is-playing .wv-dot { opacity: 1; }
-        @media (max-width: 900px) {
+        @container ytcard (max-width: 900px) {
           .yt-layout {
             grid-template-columns: 1fr;
             grid-template-areas:
@@ -1583,7 +1608,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               "playlist";
           }
           /* Một cột: trả nội dung về luồng bình thường, danh sách vẫn giới hạn 15 bài */
-          .yt-zone-playlist { position: static; min-height: 0; overflow: visible; }
+          /* height: auto BẮT BUỘC có. Luật gốc ép cột cao cứng 640px cho bố cục hai
+             cột; khối này gỡ position và min-height nhưng QUÊN gỡ height, nên ở card
+             hẹp cột vẫn cao 640px — mở Playlist chỉ có một dòng mà phía dưới trống
+             toang một mảng. */
+          .yt-zone-playlist { position: static; height: auto; min-height: 0; overflow: visible; }
           /* Giữ flex column (KHÔNG dùng display:block) để còn xếp lại thứ tự được.
              Bản cũ đổi về block, nên mọi khối rơi về đúng thứ tự trong tài liệu và
              khối "Đang phát" — vốn nằm CUỐI cột, sau cả dải gợi ý lẫn lưới kết quả —
@@ -1596,7 +1625,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .yt-zone-playlist .results,
           .yt-zone-playlist .playlist-list { max-height: calc(var(--yt-result-row, 68px) * 10 - 20px); }
         }
-        @media (max-width: 520px) {
+        @container ytcard (max-width: 520px) {
           /* Phones (and the app's larger font scale): keep the search on one row
              and shrink text so the card isn't a column of oversized boxes. */
           .wrap { padding: 12px; }
@@ -1618,11 +1647,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .np-wave { height: 20px; }
         }
         /* Bề rộng cột video theo «player_width». BẮT BUỘC bọc trong @media min-width:
-           901px. Luật này viết SAU khối @media (max-width: 900px) và cùng độ ưu tiên
-           (0,1,0), nên để trần thì nó đè mất «grid-template-columns: 1fr» của màn hình
-           hẹp: điện thoại nhận lưới 2 cột trong khi grid-template-areas đã xếp dọc một
-           cột — đó chính là lúc bố cục vỡ. */
-        @media (min-width: 901px) {
+           901px. Luật này viết SAU khối điểm ngắt hẹp và cùng độ ưu tiên (0,1,0), nên
+           để trần thì nó đè mất «grid-template-columns: 1fr» của card hẹp: card nhận
+           lưới 2 cột trong khi grid-template-areas đã xếp dọc một cột — đó chính là
+           lúc bố cục vỡ. */
+        @container ytcard (min-width: 901px) {
           .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(300px, 1fr); }
         }
         /* «layout: vertical» — xếp dọc một cột, cho dashboard cột hẹp. */
@@ -1713,14 +1742,39 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           transform: translateY(-1px);
         }
 
-        .yt-category-tabs {
-          display: flex;
-          gap: 6px;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-          padding: 2px 0;
+        /* Hai ô thả xuống thay cho hai hàng nút cuộn ngang. Hàng cuộn chỉ vuốt được
+           bằng cảm ứng — chuột không kéo ngang được mà thanh cuộn lại bị ẩn, nên phần
+           lớn mục coi như không với tới. Thả xuống thì chuột, phím, cảm ứng đều dùng
+           được và không bao giờ tràn, ở mọi bề rộng card. */
+        .yt-pick {
+          width: 100%;
+          box-sizing: border-box;
+          margin: 2px 0 6px;
+          padding: 8px 10px;
+          font: inherit;
+          font-size: .88rem;
+          color: var(--primary-text-color, #fff);
+          background: rgba(var(--ad-c2,13,21,37),0.55);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.25);
+          border-radius: 10px;
         }
+        .yt-pick:focus { outline: none; border-color: var(--ad-accent,#00ffcc); }
+        .yt-pick-cat { font-weight: 600; }
+        /* Ô chọn co giãn, nút xoá giữ nguyên cỡ — cùng bài học với thanh «Loa phát
+           nhạc»: phần co được phải là phần chữ, không phải cái nút. */
+        .yt-pick-row { display: flex; align-items: center; gap: 6px; }
+        .yt-pick-row .yt-pick { flex: 1 1 auto; min-width: 0; }
+        .yt-pick-del { flex: 0 0 auto; --mdc-icon-size: 18px; color: #ff8a80; }
+        .yt-pick-del:disabled { opacity: .35; cursor: default; }
+        /* Nút gỡ ghim nằm đè góc ảnh bài hát đã gắn. */
+        .yt-card-unpin {
+          position: absolute; top: 4px; right: 4px; z-index: 2;
+          display: grid; place-items: center; width: 24px; height: 24px;
+          border: 0; border-radius: 999px; cursor: pointer;
+          color: #fff; background: rgba(0,0,0,.6);
+          --mdc-icon-size: 16px;
+        }
+        .yt-card-unpin:hover { background: rgba(255,82,82,.85); }
 
         .yt-category-tabs::-webkit-scrollbar {
           display: none;
@@ -3191,40 +3245,98 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     header.append(congCu);
     box.append(header);
 
-    const pills = el("div", "yt-quick-search-pills");
+    /* Danh sách thả xuống thay cho hàng cuộn ngang. Hàng cuộn chỉ vuốt được bằng
+       cảm ứng: trên máy tính chuột không kéo ngang được, mà thanh cuộn lại bị ẩn —
+       nên phần lớn từ khoá coi như không với tới. Thả xuống thì chuột, phím và cảm
+       ứng đều dùng được, và không còn tràn ở mọi bề rộng. */
+    const oTuKhoa = document.createElement("select");
+    oTuKhoa.className = "yt-pick yt-pick-tag";
+    oTuKhoa.setAttribute("aria-label", "Tìm nhanh theo từ khoá");
+    const dauTien = document.createElement("option");
+    dauTien.value = "";
+    dauTien.textContent = "🔍 Tìm nhanh…";
+    oTuKhoa.append(dauTien);
     tuKhoa.forEach((tag) => {
-      const pill = el("div", "yt-search-pill");
-      pill.setAttribute("role", "button");
-      pill.tabIndex = 0;
-      pill.append(icon("mdi:magnify"), el("span", "", tag));
-      const run = () => {
-        const input = this.shadowRoot.querySelector('input[type="search"]');
-        input.value = tag;
-        this._syncSavePlaylist();
-        this._search();
-      };
-      pill.addEventListener("click", run);
-      pill.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); run(); }
-      });
-      pills.append(pill);
+      const chon = document.createElement("option");
+      chon.value = tag;
+      chon.textContent = tag;
+      oTuKhoa.append(chon);
     });
-    box.append(pills);
+    /* Nút xoá đi kèm, và CHỈ bật cho từ khoá của nhà. Từ khoá dựng sẵn không nằm
+       trong kho nên gọi xoá sẽ không làm gì — bấm mà không thấy gì xảy ra còn khó
+       hiểu hơn là nút mờ đi. */
+    const xoaTuKhoa = document.createElement("button");
+    xoaTuKhoa.type = "button";
+    xoaTuKhoa.className = "icon-button yt-pick-del";
+    const xoaTuKhoaIcon = document.createElement("ha-icon");
+    xoaTuKhoaIcon.setAttribute("icon", "mdi:trash-can-outline");
+    xoaTuKhoa.append(xoaTuKhoaIcon);
+    const canhXoaTuKhoa = () => {
+      const cuaNha = (this._goiY?.tags || []).includes(oTuKhoa.value);
+      xoaTuKhoa.disabled = !cuaNha;
+      xoaTuKhoa.title = cuaNha
+        ? `Xoá từ khoá “${oTuKhoa.value}”`
+        : "Chọn một từ khoá do nhà tự thêm để xoá";
+      xoaTuKhoa.setAttribute("aria-label", xoaTuKhoa.title);
+    };
+    xoaTuKhoa.addEventListener("click", () => {
+      const tag = oTuKhoa.value;
+      if (!tag) return;
+      this._saveSuggestion({ action: "remove_tag", text: tag }, `Đã xoá từ khoá “${tag}”.`);
+    });
+    oTuKhoa.addEventListener("change", () => {
+      canhXoaTuKhoa();
+      const tag = oTuKhoa.value;
+      if (!tag) return;
+      const input = this.shadowRoot.querySelector('input[type="search"]');
+      input.value = tag;
+      this._syncSavePlaylist();
+      this._search();
+    });
+    canhXoaTuKhoa();
+    const hangTuKhoa = el("div", "yt-pick-row");
+    hangTuKhoa.append(oTuKhoa, xoaTuKhoa);
+    box.append(hangTuKhoa);
 
-    const tabs = el("div", "yt-category-tabs");
+    // Cùng lý do: thả xuống thay hàng nút cuộn ngang.
+    const oMuc = document.createElement("select");
+    oMuc.className = "yt-pick yt-pick-cat";
+    oMuc.setAttribute("aria-label", "Chọn nhóm bài gợi ý");
     mucGoiY.forEach((cat) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = cat.id === this._ytSuggestedCategory ? "yt-cat-btn active" : "yt-cat-btn";
-      btn.append(icon(cat.icon), el("span", "", cat.name));
-      btn.addEventListener("click", () => {
-        if (this._ytSuggestedCategory === cat.id) return;
-        this._ytSuggestedCategory = cat.id;
-        this._renderSuggestions();
-      });
-      tabs.append(btn);
+      const chon = document.createElement("option");
+      chon.value = cat.id;
+      chon.textContent = cat.name;
+      if (cat.id === this._ytSuggestedCategory) chon.selected = true;
+      oMuc.append(chon);
     });
-    box.append(tabs);
+    oMuc.addEventListener("change", () => {
+      if (this._ytSuggestedCategory === oMuc.value) return;
+      this._ytSuggestedCategory = oMuc.value;
+      this._renderSuggestions();
+    });
+    // Xoá mục — cũng chỉ bật cho mục của nhà, mục dựng sẵn không xoá được.
+    const xoaMuc = document.createElement("button");
+    xoaMuc.type = "button";
+    xoaMuc.className = "icon-button yt-pick-del";
+    const xoaMucIcon = document.createElement("ha-icon");
+    xoaMucIcon.setAttribute("icon", "mdi:trash-can-outline");
+    xoaMuc.append(xoaMucIcon);
+    const mucCuaNha = (this._goiY?.groups || []).find((g) => g.id === this._ytSuggestedCategory);
+    xoaMuc.disabled = !mucCuaNha;
+    xoaMuc.title = mucCuaNha
+      ? `Xoá mục “${mucCuaNha.name}” và các video đã gắn`
+      : "Mục dựng sẵn không xoá được";
+    xoaMuc.setAttribute("aria-label", xoaMuc.title);
+    xoaMuc.addEventListener("click", () => {
+      if (!mucCuaNha) return;
+      if (!window.confirm(`Xoá mục “${mucCuaNha.name}” và mọi video đã gắn trong đó?`)) return;
+      this._ytSuggestedCategory = "";
+      this._saveSuggestion({ action: "remove_group", id: mucCuaNha.id },
+        `Đã xoá mục “${mucCuaNha.name}”.`);
+    });
+    const hangMuc = el("div", "yt-pick-row");
+    hangMuc.append(oMuc, xoaMuc);
+    box.append(hangMuc);
 
     const found = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
     const current = found || mucGoiY[0];
@@ -3245,6 +3357,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       wrap.append(img, overlay, el("span", "yt-card-duration", this._formatDuration(song.duration_seconds)));
       const info = el("div", "yt-card-info");
       info.append(el("div", "yt-card-title", song.title), el("div", "yt-card-artist", song.artist));
+      /* Gỡ ghim — chỉ hiện ở mục của nhà. Mục dựng sẵn nằm trong mã, không gỡ được;
+         gọi lên máy chủ sẽ bị từ chối vì không tìm thấy mục. */
+      if (mucCuaNha) {
+        const goGhim = document.createElement("button");
+        goGhim.type = "button";
+        goGhim.className = "yt-card-unpin";
+        goGhim.title = `Gỡ “${song.title}” khỏi mục “${mucCuaNha.name}”`;
+        goGhim.setAttribute("aria-label", goGhim.title);
+        const goIcon = document.createElement("ha-icon");
+        goIcon.setAttribute("icon", "mdi:close");
+        goGhim.append(goIcon);
+        goGhim.addEventListener("click", (ev) => {
+          // Nút nằm TRONG thẻ bài hát, thẻ này bấm là phát — phải chặn nổi bọt.
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._saveSuggestion(
+            { action: "unpin_song", id: mucCuaNha.id, video_id: song.id || song.video_id },
+            `Đã gỡ “${song.title}” khỏi mục “${mucCuaNha.name}”.`);
+        });
+        wrap.append(goGhim);
+      }
       card.append(wrap, info);
       const play = () => this._playResult(this._ytSongToItem(song), card, -1, true);
       card.addEventListener("click", play);
