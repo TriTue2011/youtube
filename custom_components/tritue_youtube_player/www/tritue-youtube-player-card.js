@@ -618,6 +618,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       // Diện mạo: để trống là giữ đúng giao diện cũ, không ép màu nào.
       bg_style: "gradient",   // gradient | solid | none (trong suốt, ăn theo dashboard)
       bg_color: "",           // màu nền, dạng #rrggbb
+      bg_blur: 6,             // độ mờ ảnh nền của chế độ chỉ nghe, 0-30 px
       accent_color: "",       // màu nhấn (nút, viền, sóng nhạc), dạng #rrggbb
       /* Bộ màu mở rộng. ĐỂ TRỐNG là giữ nguyên diện mạo cũ — _applyTheme chỉ đặt
          biến khi có màu hợp lệ, nên thẻ chưa cấu hình gì thì không đổi gì. */
@@ -1274,14 +1275,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            .no-embed và dựng địa chỉ từ mã video YouTube, nên sai với Zing MP3. */
         .nghe-anh {
           position: absolute;
-          inset: 0;
+          /* DỪNG PHÍA TRÊN vạch tiến độ, không phủ kín khu phát. Chủ máy chốt
+             18/09/2026: "vạch khoảng thời gian tôi muốn nó nằm ngoài".
+             Làm bằng cách thu lớp nền chứ KHÔNG chuyển thẻ vạch ra khỏi khu phát: có
+             BA luật CSS đang bám vào đường «.player > .stage > .progress» (trong đó
+             một luật ẩn nó khi toàn màn hình), chuyển thẻ là phá cả ba. */
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 34px;
           z-index: 0;
           border-radius: 12px;
           background: var(--ad-bia, none) center / cover no-repeat;
           /* Mờ vừa đủ để chữ đọc được, KHÔNG làm mất hình. Bản đầu tôi đặt
              blur(18px) + brightness(.5) nên ảnh thành một vệt xám — chủ máy báo
              "chưa đúng như tôi gửi", và đúng là nhìn không ra ảnh bìa nữa. */
-          filter: blur(6px) saturate(1.3) brightness(.85);
+          /* Độ mờ do người dùng chỉnh, qua «--ad-bia-mo» (trình sửa → Nền → Độ mờ ảnh
+             nền). Để trống là 6px như trước, nên thẻ chưa cấu hình gì không đổi gì. */
+          filter: blur(var(--ad-bia-mo, 6px)) saturate(1.3) brightness(.85);
           transform: scale(1.08);
           pointer-events: none;
         }
@@ -1358,7 +1369,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            chiều cao, mà đệm là phần cắt được mà không mất thứ gì. */
         .player:not(.video-on) > .stage > .np-wave {
           margin-top: 0;
-          padding: 6px 12px 0;
+          /* Đệm dưới dày hơn để HÀNG NÚT tụt xuống, tách khỏi sóng nhạc —
+             chủ máy 18/09/2026: "đẩy điều khiển thấp xuống". */
+          padding: 8px 12px 6px;
           border-radius: 12px 12px 0 0;
           background: rgba(255,255,255,.10);
           border: 1px solid rgba(255,255,255,.16);
@@ -1781,7 +1794,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            trực tiếp transform mỗi ~220ms khi đang phát — không dùng @keyframes/:has()
            vì một số WebView/chế độ tiết kiệm pin chặn CSS animation khiến sóng đứng im
            dù nhạc vẫn đang chạy. */
-        .np-wave { display: flex; align-items: flex-end; justify-content: space-between; height: 26px; margin: 2px 0 6px; pointer-events: none; }
+        /* Sóng nhạc cao hơn hẳn (26px → 40px) theo yêu cầu "tăng wave" 18/09/2026. */
+        .np-wave { display: flex; align-items: flex-end; justify-content: space-between; height: 40px; margin: 2px 0 6px; pointer-events: none; }
 
         /* --- Kiểu 1: bars (mặc định) — nhiều thanh cao thấp khác nhau, có gradient + phát sáng --- */
         .np-wave--bars span {
@@ -1872,7 +1886,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .players-columns { grid-template-columns: 1fr; gap: 6px; }
           .result { font-size: .88rem; }
           .np-zone { padding: 10px 12px; }
-          .np-wave { height: 20px; }
+          .np-wave { height: 32px; }
         }
         /* Bề rộng cột video theo «player_width». BẮT BUỘC bọc trong @media min-width:
            640px. Luật này viết SAU khối điểm ngắt hẹp và cùng độ ưu tiên (0,1,0), nên
@@ -3578,6 +3592,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     dat("--ad-accent2", config.accent2_color);
     dat("--ad-surface", config.surface_color, "--card-background-color", "--secondary-background-color");
     dat("--ad-line", config.line_color, "--divider-color");
+
+    /* Độ mờ ảnh nền của chế độ chỉ nghe. Chặn trong 0–30px ngay tại đây: giá trị
+       ngoài khoảng đó không làm card hỏng nhưng cho ra thứ vô dụng (0 là ảnh sắc lẹm
+       khó đọc chữ, quá 30 là một mảng màu). */
+    const mo = Number(config.bg_blur);
+    if (Number.isFinite(mo)) host.style.setProperty("--ad-bia-mo", `${Math.min(30, Math.max(0, mo))}px`);
+    else host.style.removeProperty("--ad-bia-mo");
 
     /* Độ đục phải áp cho CẢ lớp chuyển sắc, không riêng lớp màu phẳng. Lớp chuyển
        sắc vẽ ĐÈ lên màu nền và các mốc màu của nó có độ đục cố định sẵn trong CSS
@@ -5662,6 +5683,13 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
             <input id="ed-line" type="color" value="#8a642f" />
           </div>
           <div class="row">
+            <label for="ed-blur">Độ mờ ảnh nền (px) <span class="hint">Ảnh bìa làm nền lúc chỉ nghe nhạc — 0 là sắc nét</span></label>
+            <div class="slider">
+              <input id="ed-blur" type="range" min="0" max="30" step="1" value="6" />
+              <output id="ed-blur-out">6px</output>
+            </div>
+          </div>
+          <div class="row">
             <label for="ed-opacity">Độ đục của nền (%)</label>
             <div class="slider">
               <input id="ed-opacity" type="range" min="0" max="100" step="1" value="100" />
@@ -5767,6 +5795,7 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
       });
     }
     on("ed-layout", "layout", (el) => el.value);
+    on("ed-blur", "bg_blur", (el) => Number(el.value));
     on("ed-opacity", "opacity", (el) => Number(el.value));
     on("ed-zoom", "zoom", (el) => Number(el.value));
     on("ed-width", "player_width", (el) => Number(el.value));
@@ -5777,6 +5806,7 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
       const out = this.shadowRoot.getElementById(id + "-out");
       el.addEventListener("input", () => { out.textContent = el.value + hau; });
     };
+    keo("ed-blur", "px");
     keo("ed-opacity", "%");
     keo("ed-zoom", "%");
     keo("ed-width", "%");
@@ -5842,6 +5872,7 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     dat("ed-danger", config.danger_color);
     dat("ed-line", config.line_color);
     dat("ed-layout", config.layout || "horizontal");
+    dat("ed-blur", config.bg_blur === undefined ? 6 : config.bg_blur);
     dat("ed-opacity", config.opacity === undefined ? 100 : config.opacity);
     dat("ed-zoom", config.zoom === undefined ? 100 : config.zoom);
     dat("ed-width", config.player_width === undefined ? 55 : config.player_width);
@@ -5850,6 +5881,7 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
       const out = this.shadowRoot.getElementById(id + "-out");
       if (el && out) out.textContent = el.value + hau;
     };
+    soDi("ed-blur", "px");
     soDi("ed-opacity", "%");
     soDi("ed-zoom", "%");
     soDi("ed-width", "%");

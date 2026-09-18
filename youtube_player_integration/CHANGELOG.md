@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.20.10 - 2026-09-18
+
+### Added — tự chỉnh độ mờ ảnh nền trong cấu hình card
+
+- Trình sửa card → **Nền → Độ mờ ảnh nền (px)**, kéo từ 0 tới 30. Mức 0 là ảnh bìa sắc
+  nét hoàn toàn. Mặc định vẫn 6px như bản trước, nên thẻ chưa chỉnh gì thì không đổi gì.
+- Giá trị bị chặn trong khoảng 0–30 ngay khi áp: ngoài khoảng đó không làm hỏng card
+  nhưng cho ra thứ vô dụng — 0 thì chữ khó đọc trên ảnh, quá 30 thì chỉ còn một mảng màu.
+
+### Changed — vạch thời gian ra ngoài vùng mờ, sóng cao hơn, nút xuống thấp
+
+- **Vạch khoảng thời gian nay nằm ngoài lớp nền mờ.** Lớp nền dừng lại phía trên nó thay
+  vì phủ kín khu phát.
+- **Sóng nhạc cao hơn hẳn**: 26px → 40px (màn hình hẹp 20px → 32px).
+- **Hàng nút tụt xuống**, tách rõ khỏi sóng nhạc.
+
+### Một con số tôi phải nói rõ là ƯỚC LƯỢNG
+
+- Khoảng chừa để vạch thời gian thoát khỏi vùng mờ đang đặt **34px**. Tôi không đo được
+  chiều cao thật của hàng đó — CSS không có cách hỏi "hàng này cao bao nhiêu" để tự trừ.
+  Lệch thì sẽ thấy ngay: hoặc vạch còn dính rìa mờ, hoặc có một dải trống mỏng phía dưới.
+  Chỉnh lại chỉ là đổi một con số.
+
 ## 0.20.9 - 2026-09-18
 
 ### Fixed — hết cái khung rỗng dưới khu phát
