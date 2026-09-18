@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.17.0 - 2026-09-18
+
+### Đính chính một điều tôi đã nói sai ở 0.14.0
+
+- Tôi từng ghi rằng "card nào **không khai** `getGridOptions` thì bị Home Assistant cấp
+  mặc định hẹp — đó là lý do card chật". **Sai.** Tài liệu chính thức nói ngược lại: card
+  không khai gì thì **mặc định đã lấy trọn 12 cột**. Nên hàm đó không phải thứ làm card
+  hết chật, và tôi xin rút lại lời ấy.
+
+### Changed
+
+- **Khai `columns: "full"`** thay cho con số 12. Đây mới là cách tài liệu nêu để **ép**
+  card rộng hết khổ, tương đương công tắc "Full width card" trong giao diện; con số 12
+  chỉ là bề rộng mặc định của một section 12 cột.
+- **Giới hạn cần biết:** cơ chế này **chỉ có ở dashboard kiểu Sections**. Ở **Masonry**
+  (kiểu cũ) thì bề rộng card bằng bề rộng cột, `getCardSize()` chỉ ảnh hưởng chiều cao, và
+  `layout-card` cũng không giúp được trừ khi dùng chế độ Panel. Muốn card thật sự rộng thì
+  đổi view sang **Sections** hoặc **Panel**.
+
+### Added
+
+- **Phụ đề tắt mặc định** khi xem trên thẻ (`cc_load_policy=0`), và tắt chú thích nổi
+  (`iv_load_policy=3`).
+- Hai việc **không làm được**, nói rõ để khỏi chờ: YouTube đã bỏ tác dụng của tham số ẩn
+  logo nên **logo vẫn còn**, và **không cho đặt độ phân giải** qua khung nhúng — người xem
+  tự chọn trong nút bánh răng của trình phát.
+
 ## 0.16.0 - 2026-09-18
 
 ### Fixed

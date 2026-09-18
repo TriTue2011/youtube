@@ -670,10 +670,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       được trong phần Bố cục của từng thẻ. min_columns giữ card còn dùng được khi
       bị kéo hẹp. */
   getGridOptions() {
-    // KHÔNG khai «rows»: chiều cao để Home Assistant tự tính. Trước đây tôi đặt
-    // rows: "auto" mà không kiểm — một khoá sai là HA bỏ qua cả object, tức card
-    // không rộng ra chút nào.
-    return { columns: 12, min_columns: 6 };
+    /* «columns: "full"» là cách tài liệu chính thức nêu để ép card rộng hết khổ,
+       tương đương công tắc "Full width card" trong giao diện — khác với con số 12,
+       vốn chỉ là chiều rộng mặc định của một section 12 cột.
+       ĐÍNH CHÍNH điều tôi từng ghi ở 0.14.0: card KHÔNG khai gì thì vẫn được 12 cột
+       sẵn, nên hàm này không phải thứ "làm card hết chật" như tôi đã nói.
+       KHÔNG khai «rows»: tài liệu chỉ nhận số, và bỏ trống thì card không bị lưới
+       ép chiều cao. Giới hạn thật: cơ chế này CHỈ áp dụng cho dashboard kiểu
+       Sections; ở Masonry thì bề rộng card là bề rộng cột, mã card không đổi được. */
+    return { columns: "full", min_columns: 6 };
   }
 
   connectedCallback() {
@@ -3565,11 +3570,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       }
       this._video.ready = false;
       // enablejsapi + origin let the card drive the player over postMessage.
+      /* cc_load_policy=0: phụ đề TẮT mặc định. iv_load_policy=3: tắt chú thích nổi.
+         Hai thứ KHÔNG làm được, nói thẳng để khỏi hứa suông: YouTube đã bỏ tác dụng
+         của «modestbranding» nên logo vẫn còn, và không cho đặt độ phân giải qua
+         khung nhúng — người xem tự chọn ở nút bánh răng của trình phát. */
       const params = new URLSearchParams({
         enablejsapi: "1",
         autoplay: "1",
         rel: "0",
         playsinline: "1",
+        cc_load_policy: "0",
+        iv_load_policy: "3",
         origin: location.origin,
       });
       if (!this._video.soundHere) params.set("mute", "1");
@@ -3824,7 +3835,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     hint.className = "sound-hint";
     hint.hidden = true;
     frame.append(iframe, hint);
-    const params = new URLSearchParams({ enablejsapi: "1", rel: "0", playsinline: "1", origin: location.origin });
+    // Khung hình đi kèm cũng phát video thật khi loa dẫn nhịp, nên phụ đề và chú
+    // thích nổi phải tắt giống khung chính — để lệch nhau thì cùng một bài, xem ở
+    // hai chỗ lại ra hai kiểu.
+    const params = new URLSearchParams({
+      enablejsapi: "1", rel: "0", playsinline: "1",
+      cc_load_policy: "0", iv_load_policy: "3", origin: location.origin,
+    });
     iframe.setAttribute("src", "https://www.youtube-nocookie.com/embed/?" + params);
   }
 
