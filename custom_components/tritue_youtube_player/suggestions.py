@@ -95,22 +95,10 @@ def normalize_group(value: Any) -> dict[str, Any] | None:
     }
 
 
-def _hidden_list(value: Any, limit: int) -> list[str]:
-    """Names of built-in entries the household chose to hide."""
-    if not isinstance(value, list):
-        return []
-    out: list[str] = []
-    for candidate in value:
-        text = _text(candidate)
-        if text and text not in out:
-            out.append(text)
-    return out[:limit]
-
-
 def normalize_suggestions(value: Any) -> dict[str, Any]:
     """Return the stored document with anything malformed dropped."""
     if not isinstance(value, dict):
-        return {"tags": [], "groups": [], "hidden_tags": [], "hidden_groups": []}
+        return {"tags": [], "groups": [], "seeded": False}
     # Phải đúng là list. Nhận bừa rồi lặp qua một chuỗi sẽ tách nó thành TỪNG KÝ TỰ:
     # {"tags": "abc"} biến thành ["a", "b", "c"] chứ không bị loại.
     raw_tags = value.get("tags")
@@ -134,10 +122,10 @@ def normalize_suggestions(value: Any) -> dict[str, Any]:
     return {
         "tags": tags[:MAX_TAGS],
         "groups": groups[:MAX_GROUPS],
-        # Từ khoá/mục DỰNG SẴN mà nhà không muốn thấy. Chúng nằm trong mã của card
-        # nên không xoá khỏi kho được — chỉ ghi lại tên để card lọc đi.
-        "hidden_tags": _hidden_list(value.get("hidden_tags"), MAX_TAGS),
-        "hidden_groups": _hidden_list(value.get("hidden_groups"), MAX_GROUPS),
+        # Đã nạp danh sách mặc định vào kho lần đầu hay chưa. Từ lúc nạp xong, KHO LÀ
+        # NGUỒN DUY NHẤT — nhờ vậy xoá là xoá thật khỏi dữ liệu, không cần danh sách
+        # ẩn nào và không để lại dấu vết.
+        "seeded": bool(value.get("seeded")),
     }
 
 
@@ -156,6 +144,18 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
     tags: list[str] = document["tags"]
     groups: list[dict[str, Any]] = document["groups"]
 
+    if action == "seed":
+        # Nạp danh sách mặc định vào kho ĐÚNG MỘT LẦN.
+        if document["seeded"]:
+            # Đã nạp rồi thì không nạp lại — nếu không, xoá sạch xong lần tải sau lại
+            # thấy mọi thứ quay về, tức xoá không có tác dụng thật.
+            return document
+        return normalize_suggestions({
+            "tags": payload.get("tags"),
+            "groups": payload.get("groups"),
+            "seeded": True,
+        })
+
     if action == "add_tag":
         tag = _text(payload.get("text"))
         if not tag:
@@ -170,13 +170,8 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
         tag = _text(payload.get("text"))
         if not tag:
             raise ValueError("invalid_text")
-        con_lai = [item for item in tags if item != tag]
-        # Xoá đúng cái của nhà thì bỏ khỏi danh sách; còn cái DỰNG SẴN thì không có
-        # trong kho để mà bỏ, nên ghi tên vào danh sách ẩn để card lọc đi.
-        an = document["hidden_tags"]
-        if len(con_lai) == len(tags) and tag not in an:
-            an.append(tag)
-        return {**document, "tags": con_lai, "hidden_tags": an}
+        # Xoá THẬT khỏi dữ liệu, không ghi lại dấu vết ở đâu cả.
+        return {**document, "tags": [item for item in tags if item != tag]}
 
     if action == "add_group":
         group = normalize_group(
@@ -200,12 +195,8 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
         group_id = _text(payload.get("id"), 32)
         if not group_id:
             raise ValueError("invalid_group")
-        con_lai = [item for item in groups if item["id"] != group_id]
-        # Cùng cách với từ khoá: mục dựng sẵn thì ghi id vào danh sách ẩn.
-        an = document["hidden_groups"]
-        if len(con_lai) == len(groups) and group_id not in an:
-            an.append(group_id)
-        return {**document, "groups": con_lai, "hidden_groups": an}
+        # Xoá THẬT cả mục và mọi video đã gắn trong đó; không giữ lại dấu vết.
+        return {**document, "groups": [g for g in groups if g["id"] != group_id]}
 
     if action in ("pin_song", "unpin_song"):
         group_id = _text(payload.get("id"), 32)

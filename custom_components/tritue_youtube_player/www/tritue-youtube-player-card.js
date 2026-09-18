@@ -620,6 +620,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        đổi — đúng chỗ «không đồng bộ giữa card và config». Nay: đổi trong cấu hình thì
        xoá lựa chọn riêng của máy này; bấm nút trên card vẫn thắng cho tới lần đổi
        cấu hình kế tiếp. */
+    /* Ghi lại liệu người dùng có THẬT SỰ khai «layout» hay không. setConfig đặt sẵn
+       mặc định "horizontal", nên nếu chỉ đọc this._config thì không phân biệt được
+       "chưa ai chọn" với "đã chọn ngang" — mà hai trường hợp đó phải xử khác nhau. */
+    this._layoutRo = typeof config.layout === "string" && config.layout !== "";
     const layoutMoi = this._config.layout || "";
     if (this._layoutTuConfig !== undefined && this._layoutTuConfig !== layoutMoi) {
       setLayoutChoice(this._config.entity, "");
@@ -1125,11 +1129,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* stage-controls: nhóm nút liên quan tới hiển thị video (xem/xoay/phóng to/đóng),
            vẫn ở lại trong .stage, nằm ngay dưới video-frame, căn phải. */
         .stage-controls { display: flex; align-items: center; justify-content: flex-end; gap: 2px; margin-top: 6px; }
-        /* Sáu nút trong đây đều «hidden» cho tới khi mở video, nhưng khối cha vẫn
-           chiếm TRỌN MỘT DÒNG kèm margin — nên lúc chưa mở video có một dải trống
-           toang phía trên nút «Nghe khi tắt màn hình». Ẩn cả khối khi bên trong
-           không còn nút nào hiện. */
-        .stage-controls:not(:has(.ctl:not([hidden]))) { display: none; }
+        /* Không còn cần luật ẩn cả khối nữa: hai nút «Nghe…» nay nằm CHUNG hàng này,
+           nên hàng luôn có nội dung và dải trống cũ tự hết. Giữ luật ẩn lại thì nó
+           sẽ ẩn luôn nút «Nghe khi tắt màn hình». */
+        .stage-controls { flex-wrap: wrap; }
         .transport-group, .view-group { display: flex; align-items: center; gap: 2px; }
         .ctl {
           display: grid;
@@ -1322,7 +1325,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .playlist-item .play-result { width: 30px; height: 30px; --mdc-icon-size: 17px; }
         .playlist-empty { padding: 12px 6px; text-align: center; color: var(--secondary-text-color); font-size: .84rem; }
         .play-result.listen { color: var(--ad-accent,#00ffcc); background: rgba(var(--ad-c1,0,204,204),0.2); box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.3); }
-        .device-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+        /* Bỏ margin-top: nó nay là phần tử cùng hàng với sáu biểu tượng, không phải
+           một dòng riêng nữa. «margin-right: auto» đẩy nó sang trái để sáu biểu tượng
+           vẫn dồn phải như trước. */
+        .device-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-right: auto; }
         .pill {
           display: inline-flex;
           align-items: center;
@@ -1370,6 +1376,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           border-radius: 0;
         }
         .player:is(.expanded, :fullscreen) > .stage > :is(.speaker-volumes, .device-row, .others) { display: none; }
+        /* «.device-row» giờ nằm TRONG «.stage-controls» nên luật trên (con trực tiếp
+           của .stage) không còn với tới nó. Thiếu dòng này là lúc phóng to/toàn màn
+           hình hai nút «Nghe…» lọt vào giữa màn hình. */
+        .player:is(.expanded, :fullscreen) > .stage > .stage-controls > .device-row { display: none; }
         /* Nhóm nút màn hình (view-group) vẫn ở trong .stage — nổi ở góc trên-phải video. */
         .player:is(.expanded, :fullscreen) > .stage > .stage-controls {
           position: absolute;
@@ -1657,6 +1667,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            lúc bố cục vỡ. */
         @container ytcard (min-width: 640px) {
           .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(240px, 1fr); }
+        }
+        /* «layout: horizontal» do người dùng CHỌN — ép hai cột kể cả card hẹp. Hai lớp
+           cho độ ưu tiên (0,2,0) nên thắng luật một lớp «.yt-layout» của khối điểm ngắt
+           hẹp, bất kể thứ tự. Cột phải hạ xuống 200px để ở ~550px vẫn đủ chỗ hai cột. */
+        .yt-layout.yt-layout--ngang {
+          grid-template-columns: var(--yt-video-col, minmax(0, 1.2fr)) minmax(200px, 1fr);
+          grid-template-areas:
+            "video    playlist"
+            "speakers playlist";
         }
         /* «layout: vertical» — xếp dọc một cột, cho dashboard cột hẹp. */
         .yt-layout.yt-layout--doc {
@@ -1969,10 +1988,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                   <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
                   <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
                 </div>
-              </div>
-              <div class="device-row">
-                <button class="pill device-sound" type="button" aria-pressed="false" hidden><ha-icon icon="mdi:volume-off"></ha-icon><span>Nghe trên máy này</span></button>
-                <button class="pill screen-off" type="button" aria-pressed="false"><ha-icon icon="mdi:cellphone-off"></ha-icon><span>Nghe khi tắt màn hình</span></button>
+                <div class="device-row">
+                  <button class="pill device-sound" type="button" aria-pressed="false" hidden><ha-icon icon="mdi:volume-off"></ha-icon><span>Nghe trên máy này</span></button>
+                  <button class="pill screen-off" type="button" aria-pressed="false"><ha-icon icon="mdi:cellphone-off"></ha-icon><span>Nghe khi tắt màn hình</span></button>
+                </div>
               </div>
               <div class="speaker-volumes"></div>
               <div class="others" aria-label="Nhóm loa khác đang phát"></div>
@@ -2409,7 +2428,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._goiY = {
         tags: Array.isArray(payload?.tags) ? payload.tags : [],
         groups: Array.isArray(payload?.groups) ? payload.groups : [],
+        seeded: Boolean(payload?.seeded),
       };
+      /* Lần đầu: đẩy danh sách dựng sẵn VÀO KHO, rồi từ đó kho là nguồn duy nhất —
+         nhờ vậy xoá mới xoá được dữ liệu thật. Chỉ quản trị mới ghi được, nên người
+         xem thường sẽ bị từ chối; lúc đó card vẫn bày danh sách dựng sẵn để dùng. */
+      if (!this._goiY.seeded) {
+        try {
+          const doc = await this._hass.callApi("POST", "tritue_youtube_player/suggestions", {
+            action: "seed",
+            tags: QUICK_SEARCH_TAGS,
+            groups: YOUTUBE_SUGGESTED_CATEGORIES,
+          });
+          this._goiY = {
+            tags: Array.isArray(doc?.tags) ? doc.tags : [],
+            groups: Array.isArray(doc?.groups) ? doc.groups : [],
+            seeded: Boolean(doc?.seeded),
+          };
+        } catch (_loi) {
+          // Không phải quản trị, hoặc tích hợp bản cũ: giữ danh sách dựng sẵn.
+        }
+      }
       this._renderSuggestions();
     } catch (_error) {
       // Tích hợp đang khởi động, hoặc bản cũ chưa có đường này: dùng danh sách dựng sẵn.
@@ -2424,9 +2463,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   async _saveSuggestion(payload, thanhCong) {
     try {
       const doc = await this._hass.callApi("POST", "tritue_youtube_player/suggestions", payload);
+      /* «seeded» PHẢI mang theo. Bỏ nó là sau mỗi lần lưu cờ thành undefined, card
+         tưởng chưa nạp rồi rơi về hằng số dựng sẵn — thứ vừa xoá hiện lại ngay. */
       this._goiY = {
         tags: Array.isArray(doc?.tags) ? doc.tags : [],
         groups: Array.isArray(doc?.groups) ? doc.groups : [],
+        seeded: Boolean(doc?.seeded),
       };
       this._renderSuggestions();
       if (thanhCong) this._setStatus(thanhCong);
@@ -3162,8 +3204,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // Nút bấm trên card thắng «layout» trong YAML; chưa bấm thì theo YAML. Điện
     // thoại vẫn luôn một cột nhờ media query, không cần đo bề rộng bằng JS.
     const saved = layoutChoice(this._config && this._config.entity);
-    const doc = (saved || (this._config && this._config.layout)) === "vertical";
+    const chon = saved || (this._config && this._config.layout) || "";
+    const doc = chon === "vertical";
     grid.classList.toggle("yt-layout--doc", doc);
+    /* Người dùng CHỌN ngang thì tôn trọng, kể cả khi card hẹp. Luật tự động xếp một
+       cột chỉ để giúp lúc chưa ai chọn — nó không được đè lên ý người dùng, vì đó
+       đúng là lúc chủ máy thấy "chỉnh ngang mất tác dụng". Chỉ tính là đã chọn khi
+       bấm nút trên card, hoặc khai «layout» thật trong cấu hình. */
+    const roRang = Boolean(saved) || this._layoutRo === true;
+    grid.classList.toggle("yt-layout--ngang", roRang && chon === "horizontal");
     for (const button of this.shadowRoot.querySelectorAll(".layout-pick")) {
       const on = (button.dataset.layout === "vertical") === doc;
       button.classList.toggle("on", on);
@@ -3183,20 +3232,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!box) return;
     // Mục dựng sẵn cộng mục của nhà. Mục nhà đứng sau nhưng tìm theo id nên bấm vào
     // đâu cũng đúng; trùng id thì mục nhà thắng vì nó cụ thể hơn.
-    // Mục/từ khoá dựng sẵn mà nhà đã xoá thì lọc đi. Chúng nằm trong mã nên không
-    // xoá khỏi kho được — máy chủ ghi tên vào danh sách ẩn, card lọc theo đó.
-    const anMuc = new Set(this._goiY?.hidden_groups || []);
-    const anTuKhoa = new Set(this._goiY?.hidden_tags || []);
-    const mucGoiY = [
-      ...YOUTUBE_SUGGESTED_CATEGORIES.filter(
-        (c) => !anMuc.has(c.id) && !(this._goiY?.groups || []).some((g) => g.id === c.id)),
-      ...(this._goiY?.groups || []),
-    ];
-    const tuKhoa = [
-      ...QUICK_SEARCH_TAGS.filter((t) => !anTuKhoa.has(t)),
-      ...(this._goiY?.tags || []),
-    ];
-    this._ytSuggestedCategory = this._ytSuggestedCategory || mucGoiY[0].id;
+    /* Đã nạp một lần rồi thì KHO LÀ NGUỒN DUY NHẤT — tuyệt đối không ghép thêm hằng
+       số dựng sẵn vào nữa. Còn ghép thì thứ vừa xoá sẽ hiện lại ngay lần vẽ sau và
+       việc xoá thành vô nghĩa; đó đúng là lý do bản trước phải bày ra danh sách ẩn.
+       Chưa nạp (hoặc chưa gọi được tích hợp) thì mới lấy danh sách dựng sẵn, để card
+       không trống trơn lúc mới cài. */
+    const daNap = Boolean(this._goiY?.seeded);
+    const mucGoiY = daNap ? (this._goiY.groups || []) : YOUTUBE_SUGGESTED_CATEGORIES;
+    const tuKhoa = daNap ? (this._goiY.tags || []) : QUICK_SEARCH_TAGS;
+    // «?.» bắt buộc: xoá hết mục thì danh sách rỗng, mucGoiY[0] là undefined.
+    this._ytSuggestedCategory = this._ytSuggestedCategory || mucGoiY[0]?.id || "";
     /* Khối này KHÔNG đọc gì từ trạng thái nhà — nội dung chỉ phụ thuộc bốn thứ dưới
        đây, còn bài hát thì lấy từ hằng số. Nhưng nó được gọi từ «set hass», tức mỗi
        lần bất kỳ thực thể nào đổi trạng thái: dựng lại vô điều kiện là xoá rồi dựng
@@ -3306,6 +3351,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       if (!tag) return;
       this._saveSuggestion({ action: "remove_tag", text: tag }, `Đã xoá từ khoá “${tag}”.`);
     });
+    /* KHÔNG tìm ngay khi chọn. Trước đây chọn xong là gọi _search(), mà có kết quả
+       thì khối gợi ý này bị xoá sạch (xem chỗ thoát sớm ở đầu hàm) — cùng với nút
+       xoá vừa mới được bật. Nghĩa là KHÔNG tồn tại trạng thái nào từ khoá đang chọn
+       mà nút xoá còn trên màn hình, nên lệnh xoá không bao giờ gửi được: đo trên máy
+       chủ nhà thấy hidden_tags rỗng hoàn toàn. Nay chọn chỉ điền vào ô tìm và bật nút
+       xoá; bấm kính lúp mới tìm. */
     oTuKhoa.addEventListener("change", () => {
       canhXoaTuKhoa();
       const tag = oTuKhoa.value;
@@ -3313,7 +3364,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       const input = this.shadowRoot.querySelector('input[type="search"]');
       input.value = tag;
       this._syncSavePlaylist();
-      this._search();
+      this._setStatus(`Đã điền “${tag}”. Bấm kính lúp để tìm, hoặc thùng rác để xoá từ khoá này.`);
     });
     canhXoaTuKhoa();
     // Cả hai ô nằm CHUNG một hàng theo yêu cầu, thay vì xếp thành hai hàng.
@@ -3364,7 +3415,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     box.append(hangChon);
 
     const found = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
-    const current = found || mucGoiY[0];
+    // Xoá hết mục thì không còn gì để lấy — cho một mục rỗng để khỏi nổ ở current.songs.
+    const current = found || mucGoiY[0] || { songs: [] };
     const grid = el("div", "yt-song-grid");
     (current.songs || []).forEach((song) => {
       const card = el("div", "yt-song-card");

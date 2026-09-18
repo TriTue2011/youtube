@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.19.0 - 2026-09-18
+
+### Changed — xoá là xoá DỮ LIỆU, không để dấu vết
+
+- Bản 0.18.0 "xoá" mục dựng sẵn bằng cách **ghi tên vào danh sách ẩn** rồi lọc đi. Chủ
+  máy nói thẳng là sai, và đúng: tên đã xoá vẫn nằm trong kho mãi mãi. Nguyên nhân gốc là
+  danh sách mặc định **nằm cứng trong mã card**, nên không có "dữ liệu" nào để xoá.
+- Nay **đảo nguồn sự thật**: lần đầu mở, card đẩy danh sách mặc định **vào kho** (một lần
+  duy nhất, có cờ `seeded`). Từ đó **kho là nguồn duy nhất** — card không ghép hằng số
+  dựng sẵn vào nữa, và **xoá là xoá thật khỏi dữ liệu**. Không còn khoá `hidden_tags` /
+  `hidden_groups` nào.
+- Nạp lại lần hai **không hồi sinh** thứ đã xoá; nếu không thì xoá xong tải lại trang là
+  thấy mọi thứ quay về, tức xoá vô nghĩa.
+- Chưa nạp được (tích hợp bản cũ, hoặc người xem không phải quản trị nên không có quyền
+  ghi) thì card vẫn bày danh sách dựng sẵn để dùng được bình thường.
+
+### Changed — "Nghe khi tắt màn hình" về cùng hàng với các biểu tượng
+
+- Hai nút **"Nghe trên máy này"** và **"Nghe khi tắt màn hình"** nay nằm **chung một hàng**
+  với sáu biểu tượng điều khiển video (chỉ nghe, xoay, phóng to, toàn màn hình, đóng) thay
+  vì chiếm một dòng riêng bên dưới.
+- Nhờ gộp hàng, **bỏ được luật vá ở 0.16.0** vốn phải ẩn cả khối để khỏi lộ dải trống khi
+  chưa mở video: hàng bây giờ luôn có nội dung nên dải trống tự hết. Giữ luật vá đó lại thì
+  nó sẽ ẩn luôn nút "Nghe khi tắt màn hình".
+- Xử luôn một hệ quả dễ ship âm thầm: luật ẩn hai nút này lúc phóng to/toàn màn hình vốn
+  nhắm "con trực tiếp của khung video", mà sau khi chuyển chỗ thì chúng không còn là con
+  trực tiếp nữa — thiếu bước này là lúc xem toàn màn hình hai nút sẽ lọt vào giữa màn hình.
+
+### Fixed — "chỉnh ngang mất tác dụng"
+
+- **Lựa chọn của người dùng nay thắng luật tự động.** Card hẹp dưới 640px bị luật "xếp một
+  cột" đè, kể cả khi đã chọn "Ngang" — nên chủ máy thấy chỉnh mà không có gì đổi. Đó là
+  thiết kế sai của tôi: **luật tự động chỉ nên giúp khi chưa ai chọn, không được đè lên ý
+  người dùng**. Nay chọn "Ngang" là ép hai cột, kể cả card hẹp (cột phải hạ tối thiểu
+  xuống 200px để vừa). Chỉ tính là "đã chọn" khi bấm nút trên card hoặc khai `layout`
+  thật trong cấu hình — không tính giá trị mặc định.
+
+### Fixed
+
+- **Nút xoá từ khoá không bao giờ bấm được — nay bấm được.** Bản 0.18.0 mở khoá nút xoá
+  nhưng vẫn không xoá được, và lý do là một **vòng kín do tôi tự tạo**:
+  1. Nút xoá bật theo ô đang chọn, mà ô mở ra ở dòng "🔍 Tìm nhanh…" có giá trị rỗng →
+     lúc dựng lên nút **mờ**.
+  2. Muốn bật thì phải chọn một từ khoá.
+  3. Nhưng chọn xong là **tìm ngay**.
+  4. Có kết quả tìm thì khối gợi ý **tự xoá sạch** — mang theo cả nút xoá vừa bật.
+
+  Tức là không tồn tại trạng thái nào từ khoá đang chọn mà nút xoá còn trên màn hình.
+  Đo trên máy chủ nhà xác nhận: `hidden_tags` **rỗng hoàn toàn**, lệnh xoá chưa bao giờ
+  gửi được. Nay **chọn từ khoá chỉ điền vào ô tìm** và bật nút xoá; bấm **kính lúp** mới
+  tìm.
+
+### Đánh đổi, nói trước
+
+- Trước đây chọn từ khoá là tìm luôn; nay phải bấm thêm kính lúp. Đây là cái giá để nút
+  xoá còn trên màn hình mà bấm được — không phải sơ suất.
+
+### Lớp lỗi để không lặp lại
+
+- **Đừng đặt nút quản lý vào một khối tự xoá chính nó.** Khối gợi ý bị
+  `replaceChildren()` rồi thoát sớm mỗi khi có kết quả tìm; mọi thứ bên trong đều biến
+  mất. Chỗ đúng đắn về lâu dài là trình sửa cấu hình (không bao giờ tự xoá).
+
 ## 0.18.0 - 2026-09-18
 
 ### Fixed
