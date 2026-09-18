@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.20.11 - 2026-09-18
+
+### Fixed — nút xoay ngang chưa từng hiện
+
+- Chỗ gỡ thuộc tính ẩn cho các nút video chỉ liệt kê **bốn** nút (tai nghe, phóng to,
+  toàn màn, đóng) — **thiếu nút xoay ngang**, trong khi thẻ của nó khai sẵn `hidden`.
+  Nghĩa là nút ấy **chưa bao giờ hiện**, không phải mới mất.
+- Đây là thiếu sót có sẵn chứ không do lần sửa nào gây ra. Luật ẩn nút khi máy đã nằm
+  ngang vẫn giữ: lúc đó xoay thêm là vô nghĩa.
+
+### Fixed — phóng to (chưa toàn màn) vẫn thấy dòng tên bài
+
+- Lớp chữ đè trên ảnh chỉ được ẩn khi **đang mở video**. Phóng to lúc **chỉ nghe nhạc**
+  thì video không mở, nên điều kiện cũ không với tới và tên bài lọt vào giữa màn hình.
+- Nay ẩn theo cả trạng thái phóng to lẫn toàn màn hình, chặn ở **cả hai phía** — điều
+  kiện trong JavaScript và một luật CSS, phòng khi JavaScript chưa kịp cập nhật.
+
+### Changed — toàn màn hình chỉ còn đúng nút đóng
+
+- Ở bản 0.20.4 tôi cố ý giữ hàng biểu tượng làm đường thoát và có ghi "muốn ẩn nốt thì
+  bảo". Nay bỏ hết, **chỉ chừa nút đóng**.
+- Giữ lại đúng nút đó là có lý do: bỏ sạch thì lối ra chỉ còn nút của YouTube và phím
+  Esc — mà trình phát đang là thứ trục trặc, không nên để đường thoát duy nhất phụ
+  thuộc vào chính nó.
+
+### Đang tìm — video mở ra nhưng đứng im
+
+- Chưa sửa trong bản này. Trong mã đã có sẵn bộ máy cho đúng triệu chứng ấy, kèm ghi
+  chú dẫn lời chủ máy ngày 15/09, nên nhiều khả năng là hạn chế của trình duyệt: nhiều
+  máy chỉ cho phát sau khi người dùng chạm thẳng vào khung video. Tôi đang đo lại đường
+  bắt tay và tham số nhúng trước khi kết luận.
+
 ## 0.20.10 - 2026-09-18
 
 ### Added — tự chỉnh độ mờ ảnh nền trong cấu hình card

@@ -1643,6 +1643,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            chắc chắn của card, và nó vốn đã tự mờ khi để yên (xem luật «.idle» ngay bên
            dưới) nên không choán hình. */
         .player:is(.expanded, :fullscreen) > .stage > :is(.progress, .control-bar) { display: none; }
+        /* Ở phóng to / toàn màn hình, BỎ NỐT hàng biểu tượng — chủ máy 18/09/2026:
+           "phóng to toàn màn vẫn thấy các icon rác mà tôi kêu bỏ đi". Ở 0.20.4 tôi cố
+           ý giữ lại làm đường thoát và có nói "muốn ẩn nốt thì bảo"; nay bảo rồi.
+           GIỮ LẠI ĐÚNG NÚT ĐÓNG: bỏ sạch thì đường ra chỉ còn nút của YouTube và phím
+           Esc, mà chủ máy vừa báo trình phát không chạy — không nên để lối thoát duy
+           nhất phụ thuộc vào đúng thứ đang trục trặc.
+           Lớp chữ và nhãn nguồn của chế độ chỉ nghe cũng ẩn ở đây, để phòng khi JS
+           chưa kịp cập nhật. */
+        .player:is(.expanded, :fullscreen) > .stage > .stage-controls .ctl:not(.video-close) { display: none; }
+        .player:is(.expanded, :fullscreen) > .stage > :is(.nghe-chu, .nghe-nhan) { display: none; }
         /* Idle: the overlays fade out after a few seconds without a touch while the video
            plays; the shield catches the next touch (taps inside the YouTube frame never
            reach the card) and only brings them back. */
@@ -3251,7 +3261,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const session = this._focusedSession();
     this.shadowRoot.querySelector(".player").classList.toggle("video-on", video.open);
     this.shadowRoot.querySelector(".video-frame").hidden = !video.open;
-    for (const selector of [".video-listen", ".video-expand", ".video-fullscreen", ".video-close"]) {
+    /* «.video-rotate» PHẢI có trong danh sách này. Thẻ của nó khai sẵn `hidden`, mà
+       trước đây không chỗ nào gỡ ra — nên nút xoay ngang KHÔNG BAO GIỜ hiện. Thiếu
+       sót có sẵn, không phải do lần sửa nào gây ra; chủ máy báo 18/09/2026 "làm mất
+       nút quay ngang rồi". Luật ẩn theo hướng máy ở CSS vẫn giữ: máy đã nằm ngang thì
+       xoay thêm là vô nghĩa. */
+    for (const selector of [".video-listen", ".video-rotate", ".video-expand",
+      ".video-fullscreen", ".video-close"]) {
       this.shadowRoot.querySelector(selector).hidden = !video.open;
     }
     // "Nghe trên máy này": speakers play, and this device plays the sound too (the
@@ -3385,7 +3401,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     ten.textContent = tieuDe;
     kenh.textContent = nguon ? (manh[1] || "") : (manh[0] || "");
     nhan.textContent = nguon;
-    const hien = Boolean(coAnh && tieuDe) && !this._video.open;
+    /* Ẩn cả khi PHÓNG TO hoặc TOÀN MÀN HÌNH, không chỉ khi đang mở video. Phóng to
+       lúc chỉ nghe nhạc thì video KHÔNG mở, nên điều kiện cũ không với tới và dòng
+       tên bài lọt vào giữa màn hình — chủ máy báo 18/09/2026: "Phóng to, không toàn
+       màn mà có dòng chữ tên bài". */
+    const player0 = this.shadowRoot.querySelector(".player");
+    const toHon = Boolean(player0?.classList.contains("expanded")
+      || this.shadowRoot.fullscreenElement === player0);
+    const hien = Boolean(coAnh && tieuDe) && !this._video.open && !toHon;
     chu.hidden = !hien;
     nhan.hidden = !hien || !nguon;
     /* Báo cho CSS biết lớp chữ ĐANG hiện, để nó ẩn hàng tên bài trùng lặp ở dưới.
