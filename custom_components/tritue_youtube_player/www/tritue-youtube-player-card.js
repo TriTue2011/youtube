@@ -576,6 +576,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._openPlaylist = "";
     this._playlistsRequested = false;
     this._addMenuFor = null;
+    // Bảng chọn mục để ghim bài, khai cạnh «_addMenuFor» vì hai bảng cùng một lối.
+    this._ghimMenuFor = null;
     this._onDeviceAudio = (message, isError) => this._deviceAudioChanged(message, isError);
   }
 
@@ -1132,7 +1134,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Không còn cần luật ẩn cả khối nữa: hai nút «Nghe…» nay nằm CHUNG hàng này,
            nên hàng luôn có nội dung và dải trống cũ tự hết. Giữ luật ẩn lại thì nó
            sẽ ẩn luôn nút «Nghe khi tắt màn hình». */
-        .stage-controls { flex-wrap: wrap; }
+        /* KHÔNG cho xuống dòng. Trước đây hàng này để flex-wrap: wrap, nên trên điện
+           thoại hễ cụm nút chữ không đủ chỗ là bị đẩy hẳn xuống dòng riêng — trông
+           đúng như lỗi, và chủ máy đã báo hai lần.
+           Cách chữa không dựa vào việc tôi đoán đúng số đo màn hình: cụm biểu tượng
+           giữ nguyên cỡ, cụm nút chữ được phép CO lại và cắt bớt chữ khi chật. Nhờ
+           vậy chúng luôn nằm chung một hàng ở mọi bề rộng. */
+        .stage-controls { flex-wrap: nowrap; }
+        .stage-controls > .view-group { flex: 0 0 auto; }
+        .stage-controls > .device-row { flex: 1 1 auto; min-width: 0; }
+        .device-row .pill { min-width: 0; }
+        .device-row .pill span { overflow: hidden; text-overflow: ellipsis; }
         .transport-group, .view-group { display: flex; align-items: center; gap: 2px; }
         .ctl {
           display: grid;
@@ -3494,30 +3506,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         add.append(addIcon);
         add.addEventListener("click", () => this._toggleAddMenu(row, { ...item, source: item.source || this._source }));
         actions.append(add);
-        /* Gắn bài đang xem vào mục gợi ý của nhà — chỉ hiện khi nhà ĐÃ tạo mục,
-           vì gắn vào chỗ chưa có sẽ bị máy chủ từ chối với unknown_group. */
-        const mucNha = this._goiY?.groups || [];
-        if (mucNha.length && (item.source || this._source) === "youtube") {
+        /* Bấm ghim thì MỞ BẢNG CHỌN MỤC ngay tại dòng bài hát, chứ không ghim thẳng.
+           Trước đây nút này dùng mục đã chọn sẵn bên khu gợi ý, mà khu đó biến mất
+           ngay khi có kết quả tìm — nên đúng lúc bấm thì không nhìn thấy đích đến,
+           cũng không đổi được; chưa chọn gì thì bài rơi âm thầm vào mục ĐẦU TIÊN, và
+           tên mục chỉ nằm trong thuộc tính title, thứ điện thoại không hiện ra.
+           Điều kiện «nhà đã có mục» cũng bỏ luôn: bảng chọn tạo được mục mới tại chỗ,
+           nên không còn cảnh chưa có mục nào thì nút ghim không thèm hiện. */
+        if ((item.source || this._source) === "youtube") {
           const ghim = document.createElement("button");
           ghim.type = "button";
           ghim.className = "icon-button pin-suggestion";
-          const much = mucNha.find((g) => g.id === this._ytSuggestedCategory) || mucNha[0];
-          ghim.title = `Gắn “${title.textContent}” vào mục “${much.name}”`;
+          ghim.title = `Gắn “${title.textContent}” vào một mục gợi ý`;
           ghim.setAttribute("aria-label", ghim.title);
           const ghimIcon = document.createElement("ha-icon");
           ghimIcon.setAttribute("icon", "mdi:pin-outline");
           ghim.append(ghimIcon);
-          ghim.addEventListener("click", () => this._saveSuggestion({
-            action: "pin_song",
-            id: much.id,
-            item: {
-              video_id: item.id,
-              title: item.title,
-              artist: item.channel,
-              thumbnail_url: item.thumbnail,
-              duration_seconds: item.duration,
-            },
-          }, `Đã gắn “${title.textContent}” vào mục “${much.name}”.`));
+          ghim.addEventListener("click", () => this._toggleGhimMenu(row, item, title.textContent));
           actions.append(ghim);
         }
       }
@@ -4738,6 +4743,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _toggleAddMenu(row, item) {
     const open = this._addMenuFor?.row === row;
     this.shadowRoot.querySelectorAll(".add-menu").forEach((menu) => menu.remove());
+    /* Hai bảng dùng CHUNG lớp .add-menu, nên dòng trên xoá luôn bảng chọn mục ghim
+       nếu nó đang mở. Không xoá dấu vết của nó thì lần bấm ghim kế tiếp trên cùng
+       dòng sẽ tưởng bảng còn mở và chỉ đóng, phải bấm hai lần mới hiện. */
+    this._ghimMenuFor = null;
     this._addMenuFor = open ? null : { row, item };
     if (this._addMenuFor) {
       if (this._playlists === null) this._loadPlaylists().then(() => this._renderAddMenu());
@@ -4794,6 +4803,95 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     menu.append(form);
     target.row.append(menu);
+  }
+
+  /* Bảng chọn mục để ghim. Dựng theo đúng khuôn của bảng «thêm vào playlist» ngay ở
+     trên: gắn vào chính dòng bài hát, và dùng lại lớp .add-menu nên không phải đẻ
+     thêm kiểu dáng nào, trông cũng đồng bộ với thứ chủ máy đã quen. */
+  _toggleGhimMenu(row, item, tenBai) {
+    const dangMo = this._ghimMenuFor?.row === row;
+    this.shadowRoot.querySelectorAll(".add-menu").forEach((menu) => menu.remove());
+    this._addMenuFor = null;
+    this._ghimMenuFor = dangMo ? null : { row, item, tenBai };
+    if (this._ghimMenuFor) this._renderGhimMenu();
+  }
+
+  _renderGhimMenu() {
+    const dich = this._ghimMenuFor;
+    if (!dich || !dich.row.isConnected) return;
+    dich.row.querySelector(".add-menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "add-menu";
+    const banGhi = {
+      video_id: dich.item.id,
+      title: dich.item.title,
+      artist: dich.item.channel,
+      thumbnail_url: dich.item.thumbnail,
+      duration_seconds: dich.item.duration,
+    };
+    const dong = () => {
+      this._ghimMenuFor = null;
+      menu.remove();
+    };
+    for (const muc of this._goiY?.groups || []) {
+      const daCo = (muc.songs || []).some((bai) => bai.id === dich.item.id);
+      const nut = document.createElement("button");
+      nut.type = "button";
+      nut.className = "add-to";
+      const bieuTuong = document.createElement("ha-icon");
+      bieuTuong.setAttribute("icon", daCo ? "mdi:check" : (muc.icon || "mdi:folder-music"));
+      const ten = document.createElement("span");
+      ten.textContent = muc.name;
+      const dem = document.createElement("span");
+      dem.className = "count";
+      dem.textContent = String((muc.songs || []).length);
+      nut.append(bieuTuong, ten, dem);
+      nut.addEventListener("click", () => {
+        dong();
+        // Máy chủ lặng lẽ bỏ qua bài trùng; nói thẳng ra còn hơn để người dùng bấm
+        // xong chẳng thấy gì đổi.
+        if (daCo) {
+          this._setStatus(`“${dich.tenBai}” đã có sẵn trong mục “${muc.name}”.`);
+          return;
+        }
+        this._saveSuggestion({ action: "pin_song", id: muc.id, item: banGhi },
+          `Đã gắn “${dich.tenBai}” vào mục “${muc.name}”.`);
+      });
+      menu.append(nut);
+    }
+    /* Tạo mục mới rồi ghim luôn bài vào đó — hai lệnh nối tiếp, vì máy chủ không có
+       lệnh gộp. _saveSuggestion nuốt lỗi và chỉ báo ra dòng trạng thái, nên chờ xong
+       tôi KHÔNG bắt được ngoại lệ; cách kiểm chắc chắn là dò lại danh sách xem mục
+       vừa đặt tên đã có chưa. Cũng vì thế mà không chép hàm bỏ dấu tiếng Việt của máy
+       chủ sang đây để tự đoán mã mục: cùng một logic nằm hai nơi là mầm sai về sau. */
+    const form = document.createElement("form");
+    const oTen = document.createElement("input");
+    oTen.type = "text";
+    oTen.maxLength = 80;
+    oTen.placeholder = this._goiY?.groups?.length ? "Mục mới…" : "Chưa có mục — đặt tên để tạo…";
+    oTen.setAttribute("aria-label", "Tên mục gợi ý mới");
+    const tao = document.createElement("button");
+    tao.type = "submit";
+    tao.className = "primary";
+    tao.textContent = "Tạo";
+    form.append(oTen, tao);
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const ten = oTen.value.trim();
+      if (!ten) return;
+      tao.disabled = true;
+      await this._saveSuggestion({ action: "add_group", name: ten });
+      const moi = (this._goiY?.groups || []).find((muc) => muc.name === ten);
+      if (!moi) {
+        tao.disabled = false;
+        return; // Lý do đã hiện ở dòng trạng thái rồi, đừng đè lên nó.
+      }
+      dong();
+      this._saveSuggestion({ action: "pin_song", id: moi.id, item: banGhi },
+        `Đã tạo mục “${ten}” và gắn “${dich.tenBai}” vào đó.`);
+    });
+    menu.append(form);
+    dich.row.append(menu);
   }
 
   _renderPlaylists() {

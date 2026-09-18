@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.20.1 - 2026-09-18
+
+### Changed — ghim bài hát: chọn mục NGAY LÚC ghim, không phải chọn trước khi tìm
+
+- Bấm nút ghim ở một bài trong kết quả tìm, nay **mở bảng chọn mục ngay tại dòng bài
+  hát đó** — liệt kê các mục kèm số bài đang có, bấm một cái là xong. Bảng này giống hệt
+  bảng "thêm vào playlist" mà anh đã quen, vì nó dùng chung một khuôn.
+- **Tạo mục mới ngay trong bảng.** Gõ tên rồi bấm Tạo là mục được tạo và bài được gắn
+  vào đó luôn, không phải quay ra khu gợi ý làm trước.
+- **Vì sao cách cũ khó dùng.** Nút ghim lấy mục đã chọn sẵn bên khu gợi ý, mà khu đó
+  biến mất ngay khi có kết quả tìm kiếm. Nên đúng lúc bấm ghim thì anh không nhìn thấy
+  đích đến và cũng không đổi được; nếu chưa chọn gì thì bài **rơi âm thầm vào mục đầu
+  tiên**. Tên mục chỉ nằm trong phần chú giải khi rê chuột — điện thoại không hiện ra.
+- Nút ghim nay **luôn hiện** với bài YouTube. Trước đây nhà chưa tạo mục nào thì nút
+  không hiện, thành ra không có đường bắt đầu.
+
+### Fixed — "Nghe khi tắt màn hình" không còn bị đẩy xuống dòng riêng
+
+- Hàng nút trước đây cho phép xuống dòng, nên trên điện thoại hễ chật là cái nút chữ dài
+  bị đẩy hẳn xuống một dòng của riêng nó, trông như lỗi. Nay cụm biểu tượng giữ nguyên
+  cỡ, cụm nút chữ được phép co lại và cắt bớt chữ khi chật, nên chúng **luôn nằm chung
+  một hàng** ở mọi bề rộng — không phụ thuộc vào việc tôi đoán đúng cỡ màn hình.
+
+### Hai điều cần nói thẳng
+
+- **Logo YouTube trên video thì không bỏ được.** Tham số `modestbranding` từng làm mờ nó
+  đã bị YouTube khai tử, chính họ ghi là "sẽ không có tác dụng"; logo và dòng tiêu đề lúc
+  tạm dừng là do trình phát của YouTube vẽ, card không với tới được. Muốn không thấy nó
+  thì dùng chế độ chỉ nghe.
+- **Ảnh anh gửi là bản cũ.** Trong ảnh còn hai ô thả xuống kèm thùng rác, thứ đã bị gỡ
+  sạch khỏi 0.20.0. Tôi đã tải file card thẳng từ máy chủ nhà anh và đếm: máy chủ đang
+  phục vụ đúng bản mới. Nên phần "còn wave khi xem video" và "thùng rác xuống dòng" là
+  do trình duyệt điện thoại còn giữ bản đã lưu đệm — xin anh tải lại trang một lần.
+
 ## 0.20.0 - 2026-09-18
 
 ### Changed — sóng nhạc và nút điều khiển chuyển lên ngay dưới video
