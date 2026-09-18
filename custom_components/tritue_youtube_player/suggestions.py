@@ -150,9 +150,20 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
             # Đã nạp rồi thì không nạp lại — nếu không, xoá sạch xong lần tải sau lại
             # thấy mọi thứ quay về, tức xoá không có tác dụng thật.
             return document
-        return normalize_suggestions({
+        # GỘP, tuyệt đối không ghi đè. Kho có thể ĐÃ CÓ dữ liệu trước lần nạp đầu:
+        # nhà tự thêm từ khoá ở bản cũ (khi chưa có cờ seeded). Ghi đè là xoá mất
+        # công của họ — đo trên máy chủ nhà thấy đúng tình huống này: tags đã có
+        # một từ khoá tự thêm mà seeded thì chưa có.
+        mac_dinh = normalize_suggestions({
             "tags": payload.get("tags"),
             "groups": payload.get("groups"),
+        })
+        da_co_id = {group["id"] for group in document["groups"]}
+        return normalize_suggestions({
+            "tags": document["tags"]
+            + [tag for tag in mac_dinh["tags"] if tag not in document["tags"]],
+            "groups": document["groups"]
+            + [g for g in mac_dinh["groups"] if g["id"] not in da_co_id],
             "seeded": True,
         })
 

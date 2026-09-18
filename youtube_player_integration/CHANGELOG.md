@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.1 - 2026-09-18
+
+### Fixed — bản 0.19.0 làm MẤT từ khoá bạn đã tự thêm
+
+- **Hãy bỏ qua 0.19.0, cài thẳng 0.19.1.** Hàm nạp lần đầu ở 0.19.0 **ghi đè** danh sách
+  trong kho bằng danh sách mặc định. Nhà nào đã tự thêm từ khoá ở bản trước (lúc chưa có
+  cờ `seeded`) thì lần đầu mở 0.19.0 là **mất sạch công đó**.
+- Nay nạp lần đầu **GỘP** thay vì ghi đè: giữ nguyên mọi thứ đã có trong kho, chỉ thêm
+  những mục mặc định còn thiếu. Nhóm trùng id thì giữ bản của nhà, không ghi đè tên.
+- Tôi phát hiện ra khi soi lại kho thật trên máy chủ nhà: `tags` đã có một từ khoá tự thêm
+  mà `seeded` thì chưa có — đúng kịch bản sẽ mất dữ liệu. Nay có phép thử dựng lại đúng
+  tình huống đó, 8/8 đạt.
+
 ## 0.19.0 - 2026-09-18
 
 ### Changed — xoá là xoá DỮ LIỆU, không để dấu vết
