@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.13.0 - 2026-09-18
+
+### Changed
+
+- **Gộp hai hàng nút thành một: YouTube · Zing MP3 · Playlist.** Hàng "Tìm nhạc /
+  Playlist" riêng đã bỏ; nút Playlist chuyển vào chung hàng với nguồn nhạc. Nút nào sáng
+  là do khung đang xem quyết định — đang mở Playlist thì nút Playlist sáng, ngược lại là
+  nguồn đang chọn.
+
+### Removed
+
+- **Nguồn "Link audio" đã gỡ theo yêu cầu.** Gỡ trọn chứ không chỉ giấu nút: nút bấm,
+  nhánh xử lý trong `_search`, cả hàm `_prepareHttpResult`, phần đổi gợi ý và nhãn nút
+  tìm, và khoá cấu hình `http_content_type` của card. Từ nay **dán link MP3/FLAC/HLS
+  thẳng vào ô tìm sẽ không phát được nữa**.
+  Phần hỗ trợ `http` của *tích hợp* (dịch vụ `play_on_players`) **giữ nguyên** — đó là
+  đường khác, không liên quan tới nút trên card.
+- Hai điều kiện trong bộ test khoá hợp đồng (`data-source="http"` và
+  `_prepareHttpResult`) được viết lại thành điều kiện **phải vắng mặt**, kèm một điều
+  kiện mới cho nút Playlist. Hợp đồng đổi vì **tính năng bị gỡ theo yêu cầu**, không phải
+  để lách test.
+
+### Fixed
+
+- **Mở Playlist xong không bị kẹt.** Khi gộp hàng, `_showView` vẫn đang ẩn cả
+  `.source-switch` lúc mở Playlist — mà nút Playlist nay nằm trong chính hàng đó, nên ẩn
+  đi là mất luôn đường quay lại YouTube/Zing. Nay hàng nút luôn hiện ở cả hai khung.
+
 ## 0.12.2 - 2026-09-18
 
 ### Fixed

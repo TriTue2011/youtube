@@ -35,8 +35,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('this._capabilityEntryId = "";', script)
         self.assertIn("this._supportsSource(entityId, this._source)", script)
         self.assertIn('callService("tritue_youtube_player", "play_on_players"', script)
-        self.assertIn('data-source="http"', script)
-        self.assertIn('this._prepareHttpResult(query)', script)
+        # 0.13: nguồn "Link audio" đã gỡ theo yêu cầu chủ máy — hàng nút nay là
+        # YouTube / Zing MP3 / Playlist, nên hai điều kiện ghim nút và hàm xử lý
+        # link trực tiếp không còn đúng nữa. Đổi hợp đồng vì TÍNH NĂNG đổi, không
+        # phải để lách test.
+        self.assertNotIn('data-source="http"', script)
+        self.assertNotIn("_prepareHttpResult", script)
+        self.assertIn('data-view="playlists"', script)
         self.assertIn('media_content_type: item.media_content_type', script)
         self.assertIn('callService("media_player", "volume_set"', script)
         self.assertIn('this._skip(-1)', script)

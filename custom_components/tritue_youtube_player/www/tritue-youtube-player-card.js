@@ -1199,20 +1199,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           --mdc-icon-size: 20px;
         }
         .result-actions { display: flex; align-items: center; gap: 6px; }
-        .view-tabs { display: flex; gap: 16px; margin-top: 12px; }
-        .view-tab {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 2px 2px 6px;
-          border: 0;
-          border-bottom: 2px solid transparent;
-          color: var(--secondary-text-color);
-          background: transparent;
-          font-weight: 650;
-          --mdc-icon-size: 17px;
-        }
-        .view-tab[aria-pressed="true"] { border-bottom-color: var(--ad-accent,#00ffcc); color: var(--ad-accent,#00ffcc); }
         .icon-button {
           display: grid;
           place-items: center;
@@ -1446,7 +1432,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           flex-direction: column;
           min-height: 0;
         }
-        .yt-zone-playlist .view-tabs { margin-top: 0; }
+        .yt-zone-playlist .source-switch { margin-top: 0; }
         /* Danh sách kết quả: chiếm phần trống còn lại của cột phải, cao tối đa
            bằng 15 bài — dài hơn thì tự cuộn bên trong, không đẩy layout. */
         .yt-zone-playlist .results,
@@ -1467,7 +1453,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .yt-zone-playlist .results::-webkit-scrollbar-thumb,
         .yt-zone-playlist .playlist-list::-webkit-scrollbar-thumb { background: rgba(var(--ad-c1,0,204,204),0.5); border-radius: 999px; }
         /* Các khối cố định phía trên (tabs / nguồn / ô tìm kiếm / status) không co lại */
-        .yt-playlist-inner > .view-tabs,
         .yt-playlist-inner > .source-switch,
         .yt-playlist-inner > form,
         .yt-playlist-inner > .save-playlist,
@@ -1879,15 +1864,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
             <div class="yt-zone-playlist">
               <div class="yt-playlist-inner">
-              <div class="view-tabs" role="group" aria-label="Tìm nhạc hoặc playlist">
-                <button class="view-tab" type="button" data-view="search" aria-pressed="true"><ha-icon icon="mdi:magnify"></ha-icon><span>Tìm nhạc</span></button>
-                <button class="view-tab" type="button" data-view="playlists" aria-pressed="false"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
-              </div>
-
-              <div class="source-switch" role="group" aria-label="Nguồn nhạc">
+              <div class="source-switch" role="group" aria-label="Nguồn nhạc và playlist">
                 <button class="source-button" type="button" data-source="youtube"><ha-icon icon="mdi:youtube"></ha-icon><span>YouTube</span></button>
                 <button class="source-button" type="button" data-source="zing">Zing MP3</button>
-                <button class="source-button" type="button" data-source="http">Link audio</button>
+                <button class="source-button" type="button" data-view="playlists"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
               </div>
 
               <form>
@@ -1980,10 +1960,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _bindEvents() {
     this.shadowRoot.querySelectorAll(".source-button").forEach((button) => {
       button.addEventListener("click", () => {
+        // Nút Playlist nằm chung hàng với nguồn nhạc nhưng KHÔNG phải một nguồn —
+        // nó chỉ đổi khung đang xem. Phân biệt bằng data-view.
+        if (button.dataset.view) {
+          this._showView("playlists");
+          return;
+        }
         this._source = button.dataset.source;
         this._results = [];
         this._queue = [];
         this._queueIndex = -1;
+        this._showView("search");
         this._updateSourceButtons();
         this._syncPlayers();
         this._renderResults();
@@ -1997,9 +1984,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     const searchInput = this.shadowRoot.querySelector('input[type="search"]');
     searchInput.addEventListener("input", () => this._syncSavePlaylist());
-    this.shadowRoot.querySelectorAll(".view-tab").forEach((tab) => {
-      tab.addEventListener("click", () => this._showView(tab.dataset.view));
-    });
     this.shadowRoot.querySelector(".save-playlist").addEventListener("click", () => this._importPlaylist(searchInput.value, true));
     const playlistInput = this.shadowRoot.querySelector(".playlist-input");
     playlistInput.addEventListener("input", () => this._syncPlaylistSubmit());
@@ -2819,33 +2803,32 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
+  /** Một hàng gộp: hai nguồn nhạc và nút Playlist. Nút nào sáng là do khung đang
+      xem quyết định — đang mở Playlist thì nút Playlist sáng, ngược lại là nguồn
+      đang chọn. */
   _updateSourceButtons() {
     if (!this.shadowRoot) return;
+    const playlists = this._view === "playlists";
     this.shadowRoot.querySelectorAll(".source-button").forEach((button) => {
-      button.setAttribute("aria-pressed", String(button.dataset.source === this._source));
+      const dangChon = button.dataset.view
+        ? playlists
+        : !playlists && button.dataset.source === this._source;
+      button.setAttribute("aria-pressed", String(dangChon));
     });
     const input = this.shadowRoot.querySelector('input[type="search"]');
     const submit = this.shadowRoot.querySelector(".search-button");
-    const isHttp = this._source === "http";
-    input.placeholder = isHttp
-      ? "Dán URL MP3, AAC, FLAC, OGG hoặc HLS…"
-      : this._source === "youtube"
-        ? "Tìm tên bài hát, ca sĩ hoặc dán link YouTube…"
-        : "Tìm tên bài hát hoặc ca sĩ…";
-    input.setAttribute(
-      "aria-label",
-      isHttp ? "Địa chỉ HTTP audio trực tiếp" : "Tìm tên bài hát hoặc ca sĩ",
-    );
+    input.placeholder = this._source === "youtube"
+      ? "Tìm tên bài hát, ca sĩ hoặc dán link YouTube…"
+      : "Tìm tên bài hát hoặc ca sĩ…";
+    input.setAttribute("aria-label", "Tìm tên bài hát hoặc ca sĩ");
     input.maxLength = this._source === "zing" ? 120 : 2048;
-    const submitLabel = isHttp ? "Thêm URL" : "Tìm kiếm";
-    submit.querySelector(".search-label").textContent = submitLabel;
-    submit.setAttribute("aria-label", submitLabel);
-    submit.title = submitLabel;
-    submit.querySelector("ha-icon").setAttribute("icon", isHttp ? "mdi:link-plus" : "mdi:magnify");
+    submit.querySelector(".search-label").textContent = "Tìm kiếm";
+    submit.setAttribute("aria-label", "Tìm kiếm");
+    submit.title = "Tìm kiếm";
+    submit.querySelector("ha-icon").setAttribute("icon", "mdi:magnify");
     const hints = {
       youtube: "YouTube · tivi mở ứng dụng, loa nhận tiếng · không chọn loa thì nghe/xem trên máy này",
       zing: "Zing MP3 · bài công khai, không VIP · phát ra loa hoặc nghe trên máy này",
-      http: "Link MP3/AAC/FLAC/HLS trực tiếp · phát ra loa hoặc nghe trên máy này",
     };
     this.shadowRoot.querySelector(".subtitle").textContent = hints[this._source] || "";
   }
@@ -2855,24 +2838,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!query) return;
     const button = this.shadowRoot.querySelector(".search-button");
     button.disabled = true;
-    this._setStatus(this._source === "http" ? "Đang kiểm tra URL…" : "Đang tìm kiếm…");
+    this._setStatus("Đang tìm kiếm…");
     try {
-      if (this._source === "http") {
-        this._results = [this._prepareHttpResult(query)];
-      } else {
-        const entryId = this._entryId();
-        if (!entryId) throw new Error("Không tìm thấy config entry. Hãy tải lại integration.");
-        const payload = await this._hass.callApi("GET", `tritue_youtube_player/search?entry_id=${encodeURIComponent(entryId)}&source=${encodeURIComponent(this._source)}&q=${encodeURIComponent(query)}&limit=20`);
-        this._results = Array.isArray(payload.items) ? payload.items : [];
-      }
+      const entryId = this._entryId();
+      if (!entryId) throw new Error("Không tìm thấy config entry. Hãy tải lại integration.");
+      const payload = await this._hass.callApi("GET", `tritue_youtube_player/search?entry_id=${encodeURIComponent(entryId)}&source=${encodeURIComponent(this._source)}&q=${encodeURIComponent(query)}&limit=20`);
+      this._results = Array.isArray(payload.items) ? payload.items : [];
       this._saveSearch(query);
       this._renderResults();
       this._setStatus(
-        this._source === "http"
-          ? "URL audio đã sẵn sàng. Nhấn nút phát."
-          : this._results.length
-            ? `Tìm thấy ${this._results.length} bài.`
-            : "Không tìm thấy bài phù hợp.",
+        this._results.length
+          ? `Tìm thấy ${this._results.length} bài.`
+          : "Không tìm thấy bài phù hợp.",
       );
     } catch (error) {
       this._results = [];
@@ -2881,49 +2858,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     } finally {
       button.disabled = false;
     }
-  }
-
-  _prepareHttpResult(value) {
-    let url;
-    try {
-      url = new URL(value);
-    } catch (_error) {
-      throw new Error("URL audio không hợp lệ.");
-    }
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
-      throw new Error("Chỉ hỗ trợ URL HTTP/HTTPS không chứa tài khoản hoặc mật khẩu.");
-    }
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    if (hostname === "youtube.com" || hostname.endsWith(".youtube.com") || hostname === "youtu.be") {
-      throw new Error("Đây là trang YouTube, không phải URL audio trực tiếp.");
-    }
-    const path = url.pathname.toLowerCase();
-    const mediaTypes = {
-      ".mp3": "audio/mpeg",
-      ".aac": "audio/aac",
-      ".m4a": "audio/mp4",
-      ".flac": "audio/flac",
-      ".ogg": "audio/ogg",
-      ".opus": "audio/ogg",
-      ".wav": "audio/wav",
-      ".m3u8": "application/vnd.apple.mpegurl",
-    };
-    const extension = Object.keys(mediaTypes).find((item) => path.endsWith(item));
-    let title = url.pathname.split("/").filter(Boolean).pop() || url.hostname;
-    try {
-      title = decodeURIComponent(title);
-    } catch (_error) {
-      // Keep the encoded filename when the URL contains malformed escape sequences.
-    }
-    return {
-      id: url.href,
-      url: url.href,
-      title,
-      channel: "HTTP Audio",
-      thumbnail: "",
-      duration: 0,
-      media_content_type: this._config.http_content_type || mediaTypes[extension] || "audio/mpeg",
-    };
   }
 
   /** Bài gợi ý của R1 -> hình dạng mục nhạc mà `_playResult` đọc được.
@@ -4326,10 +4260,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _showView(view) {
     this._view = view === "playlists" ? "playlists" : "search";
     const playlists = this._view === "playlists";
-    this.shadowRoot.querySelectorAll(".view-tab").forEach((tab) => {
-      tab.setAttribute("aria-pressed", String(tab.dataset.view === this._view));
-    });
-    for (const selector of [".source-switch", "form", ".results", ".yt-suggested-section"]) {
+    // Hàng nút đã gộp làm một, nên chính nó lo việc tô sáng mục đang mở.
+    this._updateSourceButtons();
+    /* KHÔNG ẩn «.source-switch» nữa: nút Playlist giờ nằm trong chính hàng đó.
+       Ẩn nó đi là ẩn luôn đường quay về YouTube/Zing — mở Playlist xong sẽ kẹt
+       lại, không có nút nào để thoát. Trước đây ẩn được vì hàng tab riêng vẫn còn. */
+    for (const selector of ["form", ".results", ".yt-suggested-section"]) {
       this.shadowRoot.querySelector(selector).hidden = playlists;
     }
     this.shadowRoot.querySelector(".playlist-panel").hidden = !playlists;
@@ -4340,7 +4276,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _syncSavePlaylist() {
     const value = this.shadowRoot.querySelector('input[type="search"]').value.trim();
     this.shadowRoot.querySelector(".save-playlist").hidden =
-      this._view !== "search" || this._source === "http" || !PLAYLIST_LINK.test(value);
+      this._view !== "search" || !PLAYLIST_LINK.test(value);
   }
 
   _syncPlaylistSubmit() {
