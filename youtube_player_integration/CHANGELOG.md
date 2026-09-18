@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.20.2 - 2026-09-18
+
+### Added — tua được bằng thanh tiến trình
+
+- Bấm hoặc kéo trên thanh tiến trình là **tua tới đúng chỗ đó**. Trước đây thanh chỉ để
+  nhìn: tính năng tua **chưa bao giờ được làm**, không phải hỏng.
+- Card có ba nguồn thời gian khác nhau — tiếng phát trên máy này, video xem trên thẻ, và
+  loa — nên lệnh tua được gửi đúng cho nguồn đang phát. Loa nào không hỗ trợ tua thì card
+  **nói thẳng** thay vì gửi rồi im lặng.
+
+### Fixed — tua trong khung YouTube không bị kéo ngược về nữa
+
+- Card vốn lấy loa làm đồng hồ chuẩn và liên tục ép video khớp theo, nên anh vừa kéo
+  xong là nhịp đồng bộ kế tiếp lôi về chỗ cũ.
+- Nay card **nhận ra anh tự tua**: thời gian trình phát báo về nhảy một quãng lớn so với
+  nhịp chạy đều. Gặp vậy thì card giữ nguyên chỗ anh chọn và **kéo loa chạy theo anh**,
+  thay vì làm ngược lại.
+
+### Fixed — âm lượng loa
+
+- **Thanh âm lượng nay ghi rõ TÊN LOA nó đang chỉnh**, thay cho chữ "Âm lượng" chung
+  chung. Loa đích chỉ đổi khi chạm vào **tên** loa, còn tích ô vuông thì không — hai thao
+  tác vốn độc lập theo đúng yêu cầu — nhưng trước đây màn hình không nói loa nào đang
+  được chỉnh, nên tích loa B mà thanh vẫn chỉnh loa A thì trông y như báo sai mức.
+- **Hết cảnh "kéo xong nhảy về mức cũ".** Bản cũ giữ mức vừa đặt đúng 5 giây rồi thả;
+  loa nào báo lại chậm hơn là bị ghi đè bằng giá trị cũ — nên lỗi chỉ xuất hiện *thi
+  thoảng*. Nay card chờ tới khi **chính loa đó lên tiếng** mới nhận giá trị mới.
+
+### Changed — dòng chữ mô tả nguồn ở đầu card đã bỏ
+
+- Bỏ theo yêu cầu: nó chiếm nguyên một dòng ngang đầu thẻ chỉ để nhắc lại thứ mà hàng nút
+  nguồn ngay bên dưới đã nói.
+
+### Changed — dòng đang phát ghi rõ nguồn
+
+- Dòng thông tin bài hát nay có thêm **"YouTube"** hoặc **"Zing MP3"**.
+- Lý do: hàng nút YouTube / Zing MP3 chỉ đổi **nơi tìm kiếm**, **không** đổi bài đang
+  phát. Nên đổi tab xong vẫn thấy bài cũ chạy tiếp là đúng, nhưng trước đây card không hề
+  nói bài ấy lấy từ đâu, không có cách nào biết.
+
 ## 0.20.1 - 2026-09-18
 
 ### Changed — ghim bài hát: chọn mục NGAY LÚC ghim, không phải chọn trước khi tìm

@@ -41,6 +41,12 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
 
+/* Tên nguồn để GHI RA dòng đang phát. Hàng nút YouTube / Zing MP3 chỉ đổi nơi TÌM
+   KIẾM, không đổi bài đang phát — nên đổi tab xong nhìn vẫn thấy bài cũ là đúng, chỉ
+   là card không hề nói bài ấy lấy từ đâu (chủ máy hỏi "có đang chạy đúng bài trên
+   zing không"). Ghi hẳn tên nguồn ra thì không phải đoán nữa. */
+const TEN_NGUON = { youtube: "YouTube", zing: "Zing MP3", http: "Link" };
+
 /** Song in a speaker's signed stream URL (the payload is plain base64 JSON); null = not the player's stream. */
 function streamTarget(mediaContentId) {
   const match = STREAM_TOKEN.exec(String(mediaContentId || ""));
@@ -812,8 +818,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            chỉ giữ lại cho JS gán textContent, không hiển thị để khỏi trùng chữ. */
         header .visually-hidden { display: none; }
         h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
-        .subtitle, .hint { color: rgba(255,255,255,.62); font-size: .86rem; }
-        .subtitle { margin: 3px 0 0; font-size: .8rem; }
+        .hint { color: rgba(255,255,255,.62); font-size: .86rem; }
         /* Khung chứa phải TỐI và trung tính hơn hẳn các nút bên trong. Trước đây
            khung dùng nền «màu nhấn 0.08» còn nút đang chọn dùng gradient cùng tông,
            chênh nhau quá ít nên nhìn không ra đâu là nền, đâu là lựa chọn. */
@@ -1212,6 +1217,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           height: 6px;
           overflow: hidden;
           border-radius: 4px;
+          /* Bấm/kéo để tua. touch-action: none để ngón tay kéo ngang trên thanh không
+             bị trình duyệt hiểu nhầm thành cuộn trang. */
+          cursor: pointer;
+          touch-action: none;
           background: rgba(0,0,0,.38);
           border: 1px solid rgba(var(--ad-c1,0,204,204),.45);
           box-shadow: inset 0 1px 3px rgba(0,0,0,.6);
@@ -1660,7 +1669,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              and shrink text so the card isn't a column of oversized boxes. */
           .wrap { padding: 12px; }
           h2 { font-size: 1.02rem; }
-          .subtitle { font-size: .72rem; }
           .source-switch { margin: 10px 0 8px; }
           .source-button { padding: 6px 4px; font-size: .8rem; }
           input[type="search"] { padding: 7px 10px; font-size: .9rem; }
@@ -1984,7 +1992,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           <header>
             <div>
               <h2 class="visually-hidden"></h2>
-              <p class="subtitle"></p>
             </div>
             <div class="header-tools">
               <div class="layout-switch" role="group" aria-label="Kiểu bố cục">
@@ -2139,6 +2146,37 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       event.preventDefault();
       this._search();
     });
+    /* Bấm hoặc kéo trên thanh tiến trình để TUA. Trước đây thanh chỉ để nhìn — chủ
+       máy hỏi "sao không tua được nhỉ", và đúng là chưa bao giờ làm chứ không phải
+       hỏng. Dùng nhóm sự kiện pointer nên chuột và cảm ứng chung một đường; bắt con
+       trỏ lại (setPointerCapture) để kéo ra ngoài thanh vẫn theo được. */
+    const thanh = this.shadowRoot.querySelector(".progress .bar");
+    if (thanh) {
+      const tiLeTai = (event) => {
+        const o = thanh.getBoundingClientRect();
+        if (!o.width) return 0;
+        return Math.max(0, Math.min(1, (event.clientX - o.left) / o.width));
+      };
+      const veTam = (ti) => {
+        const fill = thanh.querySelector(".fill");
+        if (fill) fill.style.width = `${Math.round(ti * 1000) / 10}%`;
+      };
+      let dangKeo = false;
+      thanh.addEventListener("pointerdown", (event) => {
+        dangKeo = true;
+        try { thanh.setPointerCapture(event.pointerId); } catch (_error) { /* trình duyệt cũ */ }
+        veTam(tiLeTai(event));
+      });
+      thanh.addEventListener("pointermove", (event) => {
+        if (dangKeo) veTam(tiLeTai(event));
+      });
+      thanh.addEventListener("pointerup", (event) => {
+        if (!dangKeo) return;
+        dangKeo = false;
+        this._seekFraction(tiLeTai(event));
+      });
+      thanh.addEventListener("pointercancel", () => { dangKeo = false; });
+    }
     const searchInput = this.shadowRoot.querySelector('input[type="search"]');
     searchInput.addEventListener("input", () => this._syncSavePlaylist());
     this.shadowRoot.querySelector(".save-playlist").addEventListener("click", () => this._importPlaylist(searchInput.value, true));
@@ -2699,26 +2737,76 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return position + (Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 1000) : 0);
   }
 
+  /* Card có BA nguồn thời gian: tiếng phát trên máy này, video xem trên thẻ, và loa.
+     Việc chọn nguồn nào vốn nằm trong _updateProgress; nay việc TUA cũng cần đúng lựa
+     chọn ấy, nên tách ra một chỗ dùng chung thay vì chép lại lần thứ hai — chép hai
+     bản là kiểu sai về sau, sửa một bên quên bên kia. */
+  _progressState() {
+    if (deviceAudio.item) {
+      const heard = deviceAudio.position();
+      return { kieu: "may", viTri: heard ? heard.time : null, tong: heard?.duration || 0 };
+    }
+    if (this._video.open && !this._video.withSpeakers) {
+      return {
+        kieu: "video",
+        viTri: this._video.state === -1 ? null : this._videoTimeNow(),
+        tong: Number(this._video.item?.duration || 0),
+      };
+    }
+    const session = this._focusedSession();
+    const lead = session?.output_entity_ids.find((id) => this._speakerPosition(id) !== null);
+    if (session && lead) {
+      return {
+        kieu: "loa",
+        viTri: this._speakerPosition(lead),
+        tong: Number(this._hass.states[lead].attributes.media_duration || session.duration || 0),
+        session,
+      };
+    }
+    return { kieu: "", viTri: null, tong: 0 };
+  }
+
+  /** Tua tới tỉ lệ 0..1 trên thanh, gửi đúng lệnh cho đúng nguồn đang phát. */
+  _seekFraction(tiLe) {
+    const trang = this._progressState();
+    const tong = Number(trang.tong || 0);
+    if (!tong || !Number.isFinite(tong)) {
+      this._setStatus("Bài này không cho tua.", true);
+      return;
+    }
+    const giay = Math.max(0, Math.min(tong, tiLe * tong));
+    if (trang.kieu === "may") {
+      const audio = deviceAudio.real();
+      if (audio) audio.currentTime = giay;
+      if (this._video.open) this._seekPicture(giay);
+      return;
+    }
+    if (trang.kieu === "video") {
+      this._seekPicture(giay);
+      return;
+    }
+    if (trang.kieu !== "loa") return;
+    // Bit 2 của supported_features là SEEK; loa không có thì nói thẳng, đừng gửi rồi im.
+    const dich = (trang.session.output_entity_ids || []).filter((id) => this._supportsFeature(id, 2));
+    if (!dich.length) {
+      this._setStatus("Loa đang phát không hỗ trợ tua.", true);
+      return;
+    }
+    /* Ngưng nhịp đồng bộ một lúc: Home Assistant còn đẩy vài bản trạng thái mang vị
+       trí CŨ trước khi loa kịp báo lại, mà nhịp đó sẽ lôi hình về chỗ cũ. */
+    this._mirrorHoldUntil = Date.now() + 6000;
+    this._lastVideoSeekAt = Date.now();
+    this._hass.callService("media_player", "media_seek", {
+      entity_id: dich,
+      seek_position: Math.round(giay),
+    }).catch((error) => this._setStatus(error?.message || "Không tua được.", true));
+    if (this._video.open) this._seekPicture(giay);
+  }
+
   _updateProgress() {
     if (!this.shadowRoot?.querySelector(".progress") || !this._hass) return;
     const bar = this.shadowRoot.querySelector(".progress");
-    let position = null;
-    let duration = 0;
-    if (deviceAudio.item) {
-      const heard = deviceAudio.position();
-      position = heard ? heard.time : null;
-      duration = heard?.duration || 0;
-    } else if (this._video.open && !this._video.withSpeakers) {
-      position = this._video.state === -1 ? null : this._videoTimeNow();
-      duration = Number(this._video.item?.duration || 0);
-    } else {
-      const session = this._focusedSession();
-      const lead = session?.output_entity_ids.find((id) => this._speakerPosition(id) !== null);
-      if (session && lead) {
-        position = this._speakerPosition(lead);
-        duration = Number(this._hass.states[lead].attributes.media_duration || session.duration || 0);
-      }
-    }
+    const { viTri: position, tong: duration } = this._progressState();
     bar.hidden = position === null;
     if (position === null) return;
     const clamped = duration ? Math.min(position, duration) : position;
@@ -2848,7 +2936,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       row.dataset.entity = entityId;
       const name = document.createElement("span");
       name.className = "svol-name";
-      name.textContent = "Âm lượng";
+      /* Ghi RÕ TÊN LOA đang chỉnh, không phải chữ "Âm lượng" chung chung. Loa đích
+         chỉ đổi khi chạm vào TÊN loa, còn tích ô vuông thì không — hai thao tác độc
+         lập theo đúng yêu cầu. Nhưng trước đây màn hình không nói loa nào đang được
+         chỉnh, nên tích loa B mà thanh vẫn đang chỉnh loa A thì trông y như thanh
+         trượt báo sai mức. */
+      name.textContent = state.attributes?.friendly_name || entityId;
       const range = document.createElement("input");
       range.type = "range";
       range.min = "0";
@@ -2870,7 +2963,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            đẩy tiếp vài bản trạng thái mang giá trị CŨ trước khi loa kịp báo lại, và
            thanh trượt bị ghi đè ngược — kéo về 0 thì nhảy về chỗ cũ. Giữ mức mong
            đợi cho tới khi trạng thái khớp, hoặc quá 5 giây thì thôi chờ. */
-        this._volumeMongDoi = { entityId, muc: mucDat, luc: Date.now() };
+        this._volumeMongDoi = {
+          entityId,
+          muc: mucDat,
+          luc: Date.now(),
+          // Mốc báo cáo của loa NGAY TRƯỚC khi gửi: chờ nó đổi là biết loa đã lên tiếng.
+          moc: this._hass?.states?.[entityId]?.last_updated || "",
+        };
         try {
           await this._hass.callService("media_player", "volume_set", {
             entity_id: entityId,
@@ -2894,11 +2993,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const range = row.querySelector(".svol-range");
     const pct = row.querySelector(".svol-pct");
     if (this.shadowRoot.activeElement === range) return;
-    // Đang chờ loa xác nhận mức vừa đặt thì bỏ qua mọi trạng thái còn mang giá trị cũ.
+    /* Chờ tới khi LOA THẬT SỰ LÊN TIẾNG, thay vì đếm ngược 5 giây rồi thả.
+       Bản cũ giữ mức vừa đặt đúng 5 giây; loa nào báo lại chậm hơn thế là thanh trượt
+       bị ghi đè bằng giá trị cũ — và vì sao chỉ "thi thoảng" mới thấy: loa nhanh hơn
+       5 giây thì không ai để ý.
+       Cách nhận biết loa đã lên tiếng: mốc «last_updated» của nó ĐỔI so với lúc gửi
+       lệnh. So hai mốc CỦA CÙNG MỘT NGUỒN nên không phụ thuộc đồng hồ; nếu đem mốc
+       của Home Assistant so với đồng hồ trình duyệt thì chỉ cần hai máy lệch giờ là
+       hỏng. Vẫn giữ một hạn chót 15 giây phòng khi lệnh rơi mất và loa không bao giờ
+       báo — hạn này tính trên cùng đồng hồ trình duyệt nên an toàn. */
     const cho = this._volumeMongDoi;
     if (cho && cho.entityId === entityId) {
+      const moc = state.last_updated || "";
       if (Math.abs(value - cho.muc) < 0.01) this._volumeMongDoi = null;
-      else if (Date.now() - cho.luc < 5000) return;
+      else if (moc === cho.moc && Date.now() - cho.luc < 15000) return;
       else this._volumeMongDoi = null;
     }
     range.value = String(value);
@@ -2970,6 +3078,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       const item = deviceAudio.item;
       titleNode.textContent = item.title || item.id;
       metaNode.textContent = [
+        TEN_NGUON[item.source] || "",
         item.channel || item.artist,
         this._formatDuration(item.duration),
         deviceAudio.queue.length > 1 ? `${deviceAudio.index + 1}/${deviceAudio.queue.length}` : "",
@@ -2992,7 +3101,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const stateText = state === "playing" ? "Đang phát" : state === "paused" ? "Tạm dừng" : title ? "Đã gửi" : "";
     titleNode.textContent = title || "Chưa phát bài nào";
     metaNode.textContent = title
-      ? [stateText, session.artist, this._formatDuration(session.duration), queuePosition,
+      ? [stateText, TEN_NGUON[session?.source] || "", session.artist,
+        this._formatDuration(session.duration), queuePosition,
         names(outputs).join(", ") + (deviceAudio.along ? " và máy này" : "")]
         .filter(Boolean).join(" · ")
       : this._selectedPlayers.size
@@ -3094,11 +3204,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     submit.setAttribute("aria-label", "Tìm kiếm");
     submit.title = "Tìm kiếm";
     submit.querySelector("ha-icon").setAttribute("icon", "mdi:magnify");
-    const hints = {
-      youtube: "YouTube · tivi mở ứng dụng, loa nhận tiếng · không chọn loa thì nghe/xem trên máy này",
-      zing: "Zing MP3 · bài công khai, không VIP · phát ra loa hoặc nghe trên máy này",
-    };
-    this.shadowRoot.querySelector(".subtitle").textContent = hints[this._source] || "";
+    /* Dòng mô tả nguồn ở đầu card đã BỎ theo yêu cầu chủ máy: nó chiếm nguyên một
+       dòng ngang đầu thẻ chỉ để nhắc lại thứ mà hàng nút nguồn ngay bên dưới đã nói. */
   }
 
   async _search() {
@@ -3904,6 +4011,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._lastVideoSeekAt = Date.now();
   }
 
+  /** Chủ máy TỰ tua trong khung YouTube: giữ đúng chỗ họ chọn, và kéo loa theo. */
+  _nguoiDungTuTua(giay) {
+    /* Ngưng mọi nhịp kéo hình về theo loa. Dùng lại đúng hai cái phanh sẵn có
+       (_mirrorHoldUntil và _lastVideoSeekAt) chứ không đẻ phanh thứ ba, vì ba chỗ
+       đồng bộ hiện thời đều chỉ biết hai biến này. */
+    this._mirrorHoldUntil = Date.now() + 8000;
+    this._lastVideoSeekAt = Date.now();
+    const audio = deviceAudio.real();
+    if (audio && deviceAudio.item && Math.abs(audio.currentTime - giay) > 2) audio.currentTime = giay;
+    const session = this._focusedSession();
+    const dich = (session?.output_entity_ids || []).filter((id) => this._supportsFeature(id, 2));
+    if (!dich.length || !this._hass) return;
+    this._hass.callService("media_player", "media_seek", {
+      entity_id: dich,
+      seek_position: Math.round(giay),
+    }).catch(() => {});
+  }
+
   _videoHandshake() {
     // The embed reports its state only after the page says it is listening.
     clearInterval(this._videoHandshakeTimer);
@@ -3963,8 +4088,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const info = data.info;
     if (["infoDelivery", "initialDelivery"].includes(data.event) && info && typeof info === "object") {
       if (Number.isFinite(info.currentTime)) {
+        /* Bắt lúc CHỦ MÁY TỰ TUA trong khung YouTube: thời gian báo về nhảy một quãng
+           lớn so với mức suy ra từ nhịp chạy đều. Không bắt được thì nhịp đồng bộ kế
+           tiếp thấy lệch và lôi hình về chỗ của loa — đúng cảnh "tua trên video lại
+           quay về vị trí đang chạy trên card".
+           Lệnh tua do chính card gửi cũng gây nhảy y hệt, nên loại trừ bằng dấu thời
+           gian _lastVideoSeekAt mà _seekPicture vừa đặt. */
+        const duKien = this._video.timeAt ? this._videoTimeNow() : null;
+        const tuTua = Number.isFinite(duKien)
+          && Math.abs(info.currentTime - duKien) > 2.5
+          && Date.now() >= this._lastVideoSeekAt + 1500;
         this._video.time = info.currentTime;
         this._video.timeAt = Date.now();
+        if (tuTua) this._nguoiDungTuTua(info.currentTime);
       }
       if (typeof info.muted === "boolean") this._video.muted = info.muted;
       if (Number.isFinite(info.playerState)) this._setVideoState(info.playerState);
