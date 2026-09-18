@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.20.9 - 2026-09-18
+
+### Fixed — hết cái khung rỗng dưới khu phát
+
+Đây là **lỗi tôi tự tạo ra ở bản 0.20.7**, không phải lỗi có sẵn.
+
+- Khi bỏ tên bài trùng lặp ở 0.20.7, tôi chỉ ẩn **dòng chữ** bên trong mà để lại **cái
+  khung bọc nó**. Khung ấy có viền và khoảng đệm riêng (`padding: 14px 16px`,
+  `border: 1px solid`), nên còn trơ một hộp có viền không chứa gì — thấy rõ trong ảnh
+  chủ máy gửi lúc 22:58.
+- Nay ẩn **cả khối**. An toàn vì đã đo trước: bên trong nó chỉ có ảnh bìa nhỏ, tên bài
+  và dòng thông tin — cả ba đều đã có mặt trên lớp chữ đè trên ảnh.
+- Điều kiện ẩn giữ nguyên là **"lớp chữ đang hiện"**, nên lúc chưa phát gì thì khối vẫn
+  hiện đủ câu "Chưa phát bài nào — chọn một bài trong kết quả".
+
+### Bài học tôi ghi lại cho chính mình
+
+- Ẩn phần ruột mà quên cái vỏ là kiểu sửa **đẻ ra lỗi mới**: người dùng báo "thừa tên
+  bài", tôi bỏ chữ đi và tạo ra một hộp rỗng còn khó hiểu hơn. Lần sau ẩn thứ gì thì
+  phải xem cái bọc nó có tự vẽ viền, đệm hay nền hay không.
+
 ## 0.20.8 - 2026-09-18
 
 ### Changed — vạch tiến độ xuống dưới cùng, không còn kẹp giữa

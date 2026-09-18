@@ -1296,7 +1296,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         /* Lớp chữ đang hiện thì BỎ hàng tên bài ở dưới: cùng một bài mà bày tên hai
            lần là thừa, và nó chiếm đúng phần chiều cao chủ máy muốn cắt bớt. */
-        .player.co-chu-nghe ~ .yt-zone-playlist .np-zone .now { display: none; }
+        .player.co-chu-nghe ~ .yt-zone-playlist .np-zone { display: none; }
         .nghe-dia {
           position: absolute;
           left: 12px;
