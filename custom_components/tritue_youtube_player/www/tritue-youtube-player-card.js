@@ -23,6 +23,16 @@
  *   entity: media_player.ten_entity_tritue_youtube_player   # bắt buộc
  *   title: 🎵 Xem YouTube                                    # tuỳ chọn
  *   waveStyle: bars                                          # tuỳ chọn: bars | simple | dots
+ *   layout: horizontal                                       # tuỳ chọn: horizontal | vertical
+ *   player_width: 50                                         # tuỳ chọn: 20-80, bề rộng cột video (%)
+ *   bg_style: gradient                                       # tuỳ chọn: gradient | solid | none
+ *   bg_color: "#0d1525"                                      # tuỳ chọn: màu nền
+ *   accent_color: "#00ffcc"                                  # tuỳ chọn: màu nhấn
+ *   opacity: 100                                             # tuỳ chọn: 0-100, độ đục của nền
+ *   zoom: 100                                                # tuỳ chọn: 50-150, thu phóng chữ và nút
+ *
+ * Không cần nhớ các khoá trên: bấm "Sửa thẻ" trên dashboard là có trình sửa
+ * bằng giao diện với ba tab Cấu hình / Hiển thị / Bố trí.
  */
 (() => {
   'use strict';
@@ -569,13 +579,43 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, followsDevice: false, soundHere: true, muted: null, picture: null, pictureEl: null };
   }
 
+  /* Hai hàm này là hợp đồng của Home Assistant: có chúng thì bấm "Sửa thẻ" trên
+     dashboard sẽ mở trình sửa bằng giao diện thay vì bắt gõ YAML, và khi thêm thẻ
+     mới HA lấy cấu hình mẫu từ getStubConfig. */
+  static getConfigElement() {
+    return document.createElement("tritue-youtube-player-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    const states = (hass && hass.states) || {};
+    // Ưu tiên chính entity ảo của tích hợp này; không có thì để trống cho người
+    // dùng tự chọn, KHÔNG đoán bừa một media_player bất kỳ.
+    const mine = Object.keys(states).find(
+      (id) => id.startsWith("media_player.") && id.includes("tritue_youtube_player"));
+    return { entity: mine || "", title: "Nhạc YouTube & Zing", waveStyle: "bars" };
+  }
+
   setConfig(config) {
     if (!config || typeof config.entity !== "string") {
       throw new Error("TriTue card requires a media_player entity");
     }
-    this._config = { title: "TriTue Music", waveStyle: "bars", layout: "horizontal", ...config };
-    // Sửa cấu hình ngay trên dashboard: áp lại bố cục, khỏi chờ lần vẽ sau.
-    if (this._rendered) this._applyLayout();
+    this._config = {
+      title: "TriTue Music",
+      waveStyle: "bars",
+      layout: "horizontal",
+      // Diện mạo: để trống là giữ đúng giao diện cũ, không ép màu nào.
+      bg_style: "gradient",   // gradient | solid | none (trong suốt, ăn theo dashboard)
+      bg_color: "",           // màu nền, dạng #rrggbb
+      accent_color: "",       // màu nhấn (nút, viền, sóng nhạc), dạng #rrggbb
+      opacity: 100,           // độ đục của nền, 0-100
+      zoom: 100,              // thu phóng chữ và nút, 50-150
+      ...config,
+    };
+    // Sửa cấu hình ngay trên dashboard: áp lại ngay, khỏi chờ lần vẽ sau.
+    if (this._rendered) {
+      this._applyTheme();
+      this._applyLayout();
+    }
   }
 
   set hass(hass) {
@@ -585,6 +625,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._render();
       this._bindEvents();
       this._rendered = true;
+      this._applyTheme();
       this._applyLayout();
       this._renderSuggestions();
     }
@@ -708,12 +749,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       <style>
         :host { display: block; }
         [hidden] { display: none !important; }
+        /* Nền do «bg_style» + «opacity» trong cấu hình điều khiển, qua hai biến
+           --ad-bg-alpha (độ đục) và --ad-bg-image (kiểu nền). Mặc định giữ đúng
+           diện mạo cũ, nên thẻ chưa cấu hình gì thì không đổi gì. */
         ha-card {
           overflow: hidden;
           color: #fff;
-          background:
+          background-color: rgba(var(--ad-c2,13,21,37), var(--ad-bg-alpha, 0.97));
+          background-image: var(--ad-bg-image,
             radial-gradient(circle at 94% 2%, rgba(var(--ad-c1,0,204,204), .22), transparent 34%),
-            linear-gradient(135deg, rgba(var(--ad-c1,0,204,204),0.22) 0%, rgba(var(--ad-c2,13,21,37),0.97) 55%);
+            linear-gradient(135deg, rgba(var(--ad-c1,0,204,204),0.22) 0%, rgba(var(--ad-c2,13,21,37),0.97) 55%));
           border: 1px solid rgba(var(--ad-c1,0,204,204),0.3);
         }
         .wrap { padding: 16px; }
@@ -2883,6 +2928,56 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       khoá này, nên cấu hình đang dùng sẽ âm thầm mất tác dụng nếu không nối vào.
       «horizontal» (mặc định) = lưới 2×2 của «.yt-layout»; «vertical» = một cột.
       «player_width» (20–80) đặt bề rộng cột video. */
+  /** Đổi «#rrggbb» thành bộ ba «r,g,b» — mọi màu trong card đều dùng dạng này
+      bên trong rgba(), để còn pha độ trong suốt. Màu hỏng thì trả về rỗng và
+      card giữ nguyên màu mặc định, không vỡ giao diện. */
+  _rgbTriplet(hex) {
+    const found = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+    if (!found) return "";
+    const n = parseInt(found[1], 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+  }
+
+  /** Diện mạo: màu nền, màu nhấn, độ trong suốt, thu phóng. Đặt biến CSS lên
+      chính thẻ card nên mọi chỗ trong giao diện đổi theo, khỏi sửa từng luật. */
+  _applyTheme() {
+    const host = this.shadowRoot && this.shadowRoot.querySelector("ha-card");
+    if (!host) return;
+    const config = this._config || {};
+
+    const nen = this._rgbTriplet(config.bg_color);
+    if (nen) host.style.setProperty("--ad-c2", nen);
+    else host.style.removeProperty("--ad-c2");
+
+    const nhan = this._rgbTriplet(config.accent_color);
+    if (nhan) {
+      host.style.setProperty("--ad-c1", nhan);
+      host.style.setProperty("--ad-accent", `rgb(${nhan})`);
+    } else {
+      host.style.removeProperty("--ad-c1");
+      host.style.removeProperty("--ad-accent");
+    }
+
+    // «none» = nền trong suốt, để lộ nền dashboard; «solid» = một màu phẳng.
+    const kieu = String(config.bg_style || "gradient");
+    if (kieu === "none") host.style.setProperty("--ad-bg-image", "none");
+    else if (kieu === "solid") host.style.setProperty("--ad-bg-image", "none");
+    else host.style.removeProperty("--ad-bg-image");
+
+    const doDuc = Number(config.opacity);
+    const alpha = kieu === "none"
+      ? 0
+      : (Number.isFinite(doDuc) ? Math.min(100, Math.max(0, doDuc)) / 100 : 0.97);
+    host.style.setProperty("--ad-bg-alpha", String(kieu === "none" ? 0 : alpha));
+
+    const phong = Number(config.zoom);
+    if (Number.isFinite(phong) && phong > 0 && phong !== 100) {
+      host.style.setProperty("font-size", `${Math.min(150, Math.max(50, phong))}%`);
+    } else {
+      host.style.removeProperty("font-size");
+    }
+  }
+
   _applyLayout() {
     const grid = this.shadowRoot && this.shadowRoot.querySelector(".yt-layout");
     if (!grid) return;
@@ -4467,6 +4562,265 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Trình sửa cấu hình bằng giao diện.
+
+   Dựng bằng DOM thuần thay vì ha-form: ha-form là thành phần nội bộ của Home
+   Assistant, tên và hình dạng lược đồ của nó đổi theo phiên bản, mà ở đây không
+   kiểm chứng được. Input thường thì phiên bản nào cũng chạy.
+
+   Hợp đồng với Home Assistant: HA gọi setConfig(config), gán .hass, rồi lắng
+   nghe sự kiện «config-changed». Nút Lưu/Huỷ là của HA, trình sửa không tự vẽ.
+   ════════════════════════════════════════════════════════════════════════════ */
+class TriTueYouTubePlayerCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._tab = "cau-hinh";
+    this._built = false;
+  }
+
+  setConfig(config) {
+    this._config = { ...(config || {}) };
+    this._build();
+    this._fill();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._built) this._fillEntities();
+  }
+
+  /** Gửi cấu hình mới cho Home Assistant. Bỏ các khoá rỗng để YAML khỏi đầy
+      những dòng thừa không đổi gì. */
+  _emit(key, value) {
+    const config = { ...this._config };
+    if (value === "" || value === null || value === undefined) delete config[key];
+    else config[key] = value;
+    this._config = config;
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  _build() {
+    if (this._built) return;
+    this._built = true;
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display: block; }
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--divider-color, #444); margin-bottom: 14px; }
+        .tab {
+          padding: 9px 14px; border: 0; background: transparent; cursor: pointer;
+          color: var(--secondary-text-color); font: inherit; font-size: .95rem;
+          border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        .tab.on { color: var(--primary-color, #03a9f4); border-bottom-color: var(--primary-color, #03a9f4); }
+        .group {
+          border: 1px solid var(--divider-color, #444); border-radius: 12px;
+          padding: 14px; margin-bottom: 14px;
+        }
+        .group h4 { margin: 0 0 12px; font-size: 1rem; font-weight: 600; }
+        .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 10px; align-items: center; margin-bottom: 12px; }
+        .row:last-child { margin-bottom: 0; }
+        label { font-size: .92rem; color: var(--primary-text-color); }
+        .hint { display: block; font-size: .78rem; color: var(--secondary-text-color); margin-top: 2px; }
+        input, select {
+          width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit;
+          border-radius: 8px; border: 1px solid var(--divider-color, #555);
+          background: var(--card-background-color, #1c1c1c); color: var(--primary-text-color, #fff);
+        }
+        input[type="color"] { padding: 2px; height: 38px; }
+        input[type="range"] { padding: 0; border: 0; background: transparent; }
+        .slider { display: flex; align-items: center; gap: 8px; }
+        .slider output { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+        @media (max-width: 480px) { .row { grid-template-columns: 1fr; gap: 4px; } }
+      </style>
+      <div class="tabs">
+        <button class="tab on" type="button" data-tab="cau-hinh">Cấu hình</button>
+        <button class="tab" type="button" data-tab="hien-thi">Hiển thị</button>
+        <button class="tab" type="button" data-tab="bo-tri">Bố trí</button>
+      </div>
+
+      <div class="page" data-page="cau-hinh">
+        <div class="group">
+          <h4>⚙️ Cài đặt chung</h4>
+          <div class="row">
+            <label for="ed-entity">Thiết bị phát <span class="hint">Bắt buộc — entity của tích hợp</span></label>
+            <select id="ed-entity"></select>
+          </div>
+          <div class="row">
+            <label for="ed-title">Tiêu đề thẻ <span class="hint">Để trống thì dùng tên mặc định</span></label>
+            <input id="ed-title" type="text" placeholder="VD: Nhạc YouTube &amp; Zing" />
+          </div>
+          <div class="row">
+            <label for="ed-wave">Kiểu sóng nhạc</label>
+            <select id="ed-wave">
+              <option value="bars">Cột (bars)</option>
+              <option value="simple">Đơn giản (simple)</option>
+              <option value="dots">Chấm (dots)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" data-page="hien-thi" hidden>
+        <div class="group">
+          <h4>🎨 Nền</h4>
+          <div class="row">
+            <label for="ed-bgstyle">Loại nền</label>
+            <select id="ed-bgstyle">
+              <option value="gradient">Chuyển sắc (gradient)</option>
+              <option value="solid">Một màu phẳng</option>
+              <option value="none">Trong suốt — ăn theo dashboard</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="ed-bgcolor">Màu nền</label>
+            <input id="ed-bgcolor" type="color" value="#0d1525" />
+          </div>
+          <div class="row">
+            <label for="ed-accent">Màu nhấn <span class="hint">Nút, viền, sóng nhạc</span></label>
+            <input id="ed-accent" type="color" value="#00ffcc" />
+          </div>
+          <div class="row">
+            <label for="ed-opacity">Độ đục của nền (%)</label>
+            <div class="slider">
+              <input id="ed-opacity" type="range" min="0" max="100" step="1" value="100" />
+              <output id="ed-opacity-out">100%</output>
+            </div>
+          </div>
+        </div>
+        <div class="group">
+          <h4>🔍 Thu phóng</h4>
+          <div class="row">
+            <label for="ed-zoom">Cỡ chữ và nút (%) <span class="hint">Card vốn tự co theo màn hình; kéo đây để ép to hơn hoặc nhỏ hơn</span></label>
+            <div class="slider">
+              <input id="ed-zoom" type="range" min="50" max="150" step="5" value="100" />
+              <output id="ed-zoom-out">100%</output>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" data-page="bo-tri" hidden>
+        <div class="group">
+          <h4>📐 Bố cục</h4>
+          <div class="row">
+            <label for="ed-layout">Kiểu xếp <span class="hint">Màn hình hẹp luôn xếp dọc, dù chọn gì</span></label>
+            <select id="ed-layout">
+              <option value="horizontal">Ngang — hai cột</option>
+              <option value="vertical">Dọc — một cột</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="ed-width">Bề rộng cột video (%) <span class="hint">Chỉ áp dụng khi xếp ngang</span></label>
+            <div class="slider">
+              <input id="ed-width" type="range" min="20" max="80" step="5" value="55" />
+              <output id="ed-width-out">55%</output>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    this.shadowRoot.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        this._tab = tab.dataset.tab;
+        this.shadowRoot.querySelectorAll(".tab").forEach((other) =>
+          other.classList.toggle("on", other.dataset.tab === this._tab));
+        this.shadowRoot.querySelectorAll(".page").forEach((page) => {
+          page.hidden = page.dataset.page !== this._tab;
+        });
+      });
+    });
+
+    const on = (id, khoa, doc) => {
+      const el = this.shadowRoot.getElementById(id);
+      el.addEventListener("change", () => this._emit(khoa, doc(el)));
+      return el;
+    };
+    on("ed-entity", "entity", (el) => el.value);
+    on("ed-title", "title", (el) => el.value.trim());
+    on("ed-wave", "waveStyle", (el) => el.value);
+    on("ed-bgstyle", "bg_style", (el) => el.value);
+    on("ed-bgcolor", "bg_color", (el) => el.value);
+    on("ed-accent", "accent_color", (el) => el.value);
+    on("ed-layout", "layout", (el) => el.value);
+    on("ed-opacity", "opacity", (el) => Number(el.value));
+    on("ed-zoom", "zoom", (el) => Number(el.value));
+    on("ed-width", "player_width", (el) => Number(el.value));
+
+    // Số bên cạnh thanh trượt chạy theo ngay khi kéo, chưa cần nhả chuột.
+    const keo = (id, hau) => {
+      const el = this.shadowRoot.getElementById(id);
+      const out = this.shadowRoot.getElementById(id + "-out");
+      el.addEventListener("input", () => { out.textContent = el.value + hau; });
+    };
+    keo("ed-opacity", "%");
+    keo("ed-zoom", "%");
+    keo("ed-width", "%");
+
+    this._fillEntities();
+  }
+
+  _fillEntities() {
+    const select = this.shadowRoot && this.shadowRoot.getElementById("ed-entity");
+    if (!select) return;
+    const states = (this._hass && this._hass.states) || {};
+    const ids = Object.keys(states).filter((id) => id.startsWith("media_player."));
+    // Entity của chính tích hợp này lên đầu — đó là thứ thẻ cần, loa thường không chạy.
+    ids.sort((a, b) => {
+      const ua = a.includes("tritue_youtube_player") ? 0 : 1;
+      const ub = b.includes("tritue_youtube_player") ? 0 : 1;
+      return ua - ub || a.localeCompare(b, "vi");
+    });
+    const dang = this._config.entity || "";
+    select.replaceChildren();
+    const trong = document.createElement("option");
+    trong.value = "";
+    trong.textContent = "— Chọn thiết bị —";
+    select.append(trong);
+    for (const id of ids) {
+      const option = document.createElement("option");
+      option.value = id;
+      const ten = states[id]?.attributes?.friendly_name || id;
+      option.textContent = id.includes("tritue_youtube_player") ? `★ ${ten}` : ten;
+      select.append(option);
+    }
+    select.value = dang;
+  }
+
+  _fill() {
+    if (!this._built) return;
+    const config = this._config || {};
+    const dat = (id, giatri) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el && giatri !== undefined && giatri !== null && giatri !== "") el.value = String(giatri);
+    };
+    dat("ed-title", config.title);
+    dat("ed-wave", config.waveStyle || "bars");
+    dat("ed-bgstyle", config.bg_style || "gradient");
+    dat("ed-bgcolor", config.bg_color);
+    dat("ed-accent", config.accent_color);
+    dat("ed-layout", config.layout || "horizontal");
+    dat("ed-opacity", config.opacity === undefined ? 100 : config.opacity);
+    dat("ed-zoom", config.zoom === undefined ? 100 : config.zoom);
+    dat("ed-width", config.player_width === undefined ? 55 : config.player_width);
+    const soDi = (id, hau) => {
+      const el = this.shadowRoot.getElementById(id);
+      const out = this.shadowRoot.getElementById(id + "-out");
+      if (el && out) out.textContent = el.value + hau;
+    };
+    soDi("ed-opacity", "%");
+    soDi("ed-zoom", "%");
+    soDi("ed-width", "%");
+    this._fillEntities();
+  }
+}
+
   /* Mỗi thẻ tự canh tên của CHÍNH nó. Trước đây cả hai lệnh define nằm chung một
      cổng hỏi về «youtube-player-card», nên chỉ cần tên đó đã bị chiếm (tệp card nạp
      hai lần, hoặc một card khác đăng ký trùng tên) là «tritue-youtube-player-card»
@@ -4474,6 +4828,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
      dashboard báo "Custom element doesn't exist". */
   if (!customElements.get("tritue-youtube-player-card")) {
     customElements.define("tritue-youtube-player-card", TriTueYouTubePlayerCard);
+  }
+  if (!customElements.get("tritue-youtube-player-card-editor")) {
+    customElements.define("tritue-youtube-player-card-editor", TriTueYouTubePlayerCardEditor);
   }
   if (!customElements.get("youtube-player-card")) {
     customElements.define("youtube-player-card", class extends TriTueYouTubePlayerCard {});

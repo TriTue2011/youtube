@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.0 - 2026-09-18
+
+### Added
+
+- **Sửa thẻ bằng giao diện, không phải gõ YAML nữa.** Bấm "Sửa thẻ" trên dashboard là
+  mở trình sửa có ba tab:
+  - **Cấu hình** — chọn thiết bị phát từ danh sách (entity của tích hợp được đánh dấu ★
+    và xếp lên đầu), đặt tiêu đề, chọn kiểu sóng nhạc.
+  - **Hiển thị** — loại nền (chuyển sắc / một màu / trong suốt ăn theo dashboard), màu
+    nền, màu nhấn, thanh độ đục, thanh thu phóng cỡ chữ và nút.
+  - **Bố trí** — kiểu xếp ngang hay dọc, bề rộng cột video.
+
+  Card cũng hiện trong danh sách "Thêm thẻ" với cấu hình mẫu điền sẵn.
+- **Khoá cấu hình mới**, đều tuỳ chọn: `bg_style`, `bg_color`, `accent_color`, `opacity`,
+  `zoom`. Không đặt gì thì giao diện giữ nguyên như cũ.
+
+### Changed
+
+- Nền thẻ nay vẽ qua hai biến `--ad-bg-alpha` và `--ad-bg-image` nên đổi được bằng cấu
+  hình; màu nhấn và màu nền đổ vào đúng ba biến mà toàn bộ giao diện đang dùng, nên chỉnh
+  một chỗ là cả thẻ đổi theo.
+- Phần hướng dẫn ở đầu tệp card liệt kê lại đủ các khoá (trước đây chỉ ghi ba khoá,
+  thiếu cả `layout` lẫn `player_width`).
+
 ## 0.11.7 - 2026-09-18
 
 ### Fixed
