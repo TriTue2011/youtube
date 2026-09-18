@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.20.7 - 2026-09-18
+
+### Changed — khung chỉ nghe gọn lại còn khoảng một nửa
+
+Bốn điểm chủ máy nêu sau khi xem bản 0.20.6 chạy thật.
+
+- **Bỏ hàng tên bài trùng lặp.** Cùng một bài mà tên hiện hai lần — một lần đè trên ảnh,
+  một lần ở hàng dưới. Nay hàng dưới tự ẩn **khi và chỉ khi** lớp chữ trên ảnh đang
+  hiện. Làm theo dấu hiệu đó chứ không theo "đang ở chế độ chỉ nghe", vì cách sau sẽ
+  nuốt luôn dòng "Chưa phát bài nào — chọn một bài trong kết quả" lúc chưa phát gì, tức
+  lấy mất câu chỉ đường đúng lúc cần nhất.
+- **Tên bài còn 2 dòng** thay vì 3, chữ nhỏ hơn một bậc. Ba dòng chữ đậm cỡ lớn là phần
+  chiếm chiều cao nhiều nhất; tên dài hơn thì cắt bằng dấu ba chấm.
+- **Đĩa nhỏ lại** và các khoảng đệm quanh sóng nhạc với hàng nút rút bớt.
+- **Nền bớt nhoè**: giảm độ mờ, nhấc sáng lên, và lớp phủ tối mỏng đi. Trước đây hai lớp
+  làm mờ chồng nhau nên ảnh bìa thành một mảng xám.
+
+### Fixed — đĩa che mất số phút giây
+
+- Thanh tiến trình chưa được chừa chỗ cho đĩa như sóng nhạc và hàng nút, nên đĩa đè lên
+  số thời gian bên trái. Nay cả ba dùng **chung một công thức** khoảng chừa, tính thẳng
+  từ cỡ đĩa — hai bên không thể lệch nhau khi màn hình đổi kích thước.
+
 ## 0.20.6 - 2026-09-18
 
 ### Fixed — bấm phát bài đầu bị nhảy về 0 giây hai ba lần

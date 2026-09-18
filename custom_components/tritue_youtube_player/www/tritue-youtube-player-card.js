@@ -1281,17 +1281,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           /* Mờ vừa đủ để chữ đọc được, KHÔNG làm mất hình. Bản đầu tôi đặt
              blur(18px) + brightness(.5) nên ảnh thành một vệt xám — chủ máy báo
              "chưa đúng như tôi gửi", và đúng là nhìn không ra ảnh bìa nữa. */
-          filter: blur(10px) saturate(1.25) brightness(.72);
-          transform: scale(1.12);
+          filter: blur(6px) saturate(1.3) brightness(.85);
+          transform: scale(1.08);
           pointer-events: none;
         }
-        /* Lớp tối mỏng phủ lên ảnh: giữ chữ và nút đọc được mà ảnh vẫn ra hình. */
+        /* Lớp tối mỏng phủ lên ảnh: giữ chữ và nút đọc được mà ảnh vẫn ra hình.
+           Mỏng hơn bản trước — chủ máy báo "background mờ", và đúng là hai lớp làm
+           mờ chồng lên nhau (blur + phủ tối) khiến ảnh bìa thành một mảng nhoè. */
         .nghe-anh::after {
           content: "";
           position: absolute;
           inset: 0;
-          background: linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.42));
+          background: linear-gradient(rgba(0,0,0,.12), rgba(0,0,0,.30));
         }
+        /* Lớp chữ đang hiện thì BỎ hàng tên bài ở dưới: cùng một bài mà bày tên hai
+           lần là thừa, và nó chiếm đúng phần chiều cao chủ máy muốn cắt bớt. */
+        .player.co-chu-nghe ~ .yt-zone-playlist .np-zone .now { display: none; }
         .nghe-dia {
           position: absolute;
           left: 12px;
@@ -1301,9 +1306,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              thêm luật ẩn hẳn đĩa khi card dưới 520px — mà điện thoại rơi đúng vào
              khoảng đó, nên đĩa KHÔNG BAO GIỜ hiện trên máy chủ máy đang dùng.
              Tự tay tắt mất phần quan trọng nhất trên thiết bị thật. */
-          width: clamp(64px, 26cqw, 112px);
-          height: clamp(64px, 26cqw, 112px);
-          margin-top: calc(clamp(64px, 26cqw, 112px) / -2);
+          /* Nhỏ lại so với bản trước (26cqw, tối đa 112px): khung chỉ nghe cao gần
+             bằng khung video, mà đĩa là thứ định chiều cao tối thiểu của nó. */
+          width: clamp(52px, 19cqw, 84px);
+          height: clamp(52px, 19cqw, 84px);
+          margin-top: calc(clamp(52px, 19cqw, 84px) / -2);
           border-radius: 50%;
           background: var(--ad-bia, none) center / cover no-repeat;
           border: 3px solid rgba(255,255,255,.28);
@@ -1339,16 +1346,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            Bản trước tôi để cứng 122px rồi thêm luật ẩn đĩa khi card dưới 520px — điện
            thoại rơi đúng vào khoảng đó nên đĩa KHÔNG BAO GIỜ hiện. Tự tay tắt mất phần
            chính trên thiết bị chủ máy dùng thật. */
-        .player:not(.video-on) > .stage > :is(.np-wave, .control-bar) {
-          margin-left: calc(clamp(64px, 26cqw, 112px) + 24px);
+        /* THANH TIẾN TRÌNH cũng phải chừa chỗ — thiếu nó thì đĩa che mất số phút
+           giây bên trái, đúng như ảnh chủ máy gửi 18/09/2026. */
+        .player:not(.video-on) > .stage > :is(.np-wave, .control-bar, .progress) {
+          margin-left: calc(clamp(52px, 19cqw, 84px) + 18px);
           margin-right: 6px;
         }
         /* Sóng nhạc và hàng nút gộp thành MỘT khung kính liền, như mẫu chủ máy gửi:
-           sóng ở nửa trên, nút ở nửa dưới, chung một nền mờ và một viền. */
+           sóng ở nửa trên, nút ở nửa dưới, chung một nền mờ và một viền.
+           Đệm rút bớt so với bản trước: chủ máy muốn khung chỉ nghe CHỈ CÒN NỬA
+           chiều cao, mà đệm là phần cắt được mà không mất thứ gì. */
         .player:not(.video-on) > .stage > .np-wave {
           margin-top: 0;
-          padding: 12px 14px 2px;
-          border-radius: 14px 14px 0 0;
+          padding: 6px 12px 0;
+          border-radius: 12px 12px 0 0;
           background: rgba(255,255,255,.10);
           border: 1px solid rgba(255,255,255,.16);
           border-bottom: 0;
@@ -1356,23 +1367,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         .player:not(.video-on) > .stage > .control-bar {
           margin-top: 0;
-          padding: 2px 14px 12px;
-          border-radius: 0 0 14px 14px;
+          padding: 0 12px 6px;
+          border-radius: 0 0 12px 12px;
           background: rgba(255,255,255,.10);
           border: 1px solid rgba(255,255,255,.16);
           border-top: 0;
           backdrop-filter: blur(10px);
         }
         /* Tên bài và tên kênh ĐÈ TRÊN ảnh nền. Chừa lề phải cho nhãn nguồn. */
-        .nghe-chu { padding: 12px 104px 8px 14px; }
+        .nghe-chu { padding: 8px 96px 4px 12px; }
         .nghe-ten {
-          font-size: clamp(.95rem, 3.2cqw, 1.35rem);
+          /* HAI dòng, không phải ba, và chữ nhỏ hơn một bậc. Ba dòng chữ đậm cỡ lớn
+             là phần chiếm chiều cao nhiều nhất của khung chỉ nghe — chủ máy muốn
+             khung ấy chỉ còn một nửa, nên đây là chỗ cắt được nhiều nhất mà vẫn đọc
+             được tên bài. Tên dài hơn thì cắt bằng dấu ba chấm. */
+          font-size: clamp(.86rem, 2.7cqw, 1.1rem);
           font-weight: 800;
-          line-height: 1.25;
+          line-height: 1.22;
           color: var(--ad-text,#fff);
           text-shadow: 0 2px 8px rgba(0,0,0,.7);
           display: -webkit-box;
-          -webkit-line-clamp: 3;
+          -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
@@ -3353,6 +3368,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const hien = Boolean(coAnh && tieuDe) && !this._video.open;
     chu.hidden = !hien;
     nhan.hidden = !hien || !nguon;
+    /* Báo cho CSS biết lớp chữ ĐANG hiện, để nó ẩn hàng tên bài trùng lặp ở dưới.
+       Phải theo dấu hiệu này chứ không theo «đang ở chế độ chỉ nghe»: cách sau sẽ
+       nuốt luôn dòng "Chưa phát bài nào — chọn một bài trong kết quả" lúc chưa phát
+       gì, tức lấy mất câu chỉ đường ngay khi người dùng cần nó nhất. */
+    this.shadowRoot.querySelector(".player")?.classList.toggle("co-chu-nghe", hien);
   }
 
   /** Other groups of speakers playing something else: tap one to control it. */
