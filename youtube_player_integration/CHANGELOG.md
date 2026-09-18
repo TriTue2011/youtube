@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.20.0 - 2026-09-18
+
+### Changed — sóng nhạc và nút điều khiển chuyển lên ngay dưới video
+
+- **Xem video:** nút điều khiển nằm **sát dưới khung hình**, và **sóng nhạc tự ẩn** — đã có
+  hình chạy rồi thì sóng trang trí chỉ tốn chỗ.
+- **Chỉ nghe nhạc:** khung video ẩn, nên **sóng nhạc chiếm đúng chỗ trống đó** — card gọn
+  hơn, không còn một mảng trống. Sóng **giữ nguyên kích thước**, không phóng to theo khung
+  video.
+- Về kỹ thuật: ba khối (sóng nhạc, thanh tiến trình, nút điều khiển) chuyển từ cột phải
+  sang trong khung phát ở cột trái. CSS thuần không làm được việc này vì hai khối nằm ở hai
+  nhánh khác nhau của cây.
+
+### Những thứ phải sửa kèm, nếu thiếu là hỏng âm thầm
+
+- **Hiệu ứng sóng nhạc khi đang phát:** lớp `is-playing` vốn đặt trên khối cũ, mà ba luật
+  CSS đòi sóng phải nằm **bên trong** khối đó. Chuyển đi là sóng hết sáng lúc đang phát —
+  và `node --check` **không bắt được** loại lỗi này. Nay lớp đó đặt lên khối bao chung.
+- **Định dạng lúc phóng to / toàn màn hình:** 5 bộ chọn vẫn trỏ vào vị trí cũ. Hai trong số
+  đó hoá ra đã **thừa** sau khi chuyển (các nút nay là con của khung phát nên luật sẵn có
+  đã bao trùm) nên xoá hẳn; số còn lại đổi sang đường mới.
+- Đây là lần chuyển khối **thứ hai** trong ngày, và lần trước đã âm thầm làm hỏng một luật.
+  Nên lần này tôi liệt kê trước **29 dòng** phụ thuộc rồi mới sửa, thay vì sửa xong mới dò.
+
+### Fixed — nút xoá gợi ý: hết lỗi hiển thị, và giờ xoá được thật
+
+- **Nút xoá nằm ngay cạnh từng mục.** Trước đây hai ô thả xuống dùng chung hai nút thùng
+  rác đặt cuối hàng; hàng hẹp thì một nút bị đẩy xuống dòng riêng, trông đúng như lỗi anh
+  chụp. Nay mỗi từ khoá và mỗi mục là một **thẻ nhỏ mang dấu × của riêng nó**, và các thẻ
+  **tự xuống dòng** chứ không cuộn ngang — chuột lẫn cảm ứng đều với tới mọi mục.
+- **Vì sao trước đây bấm mà không xoá được.** Ô thả xuống luôn mở ở dòng gợi ý "Tìm
+  nhanh…", tức giá trị rỗng, nên nút xoá bị khoá. Muốn mở khoá phải chọn một mục, mà vừa
+  chọn xong là cả khối gợi ý được vẽ lại và nút xoá biến mất theo. Tức là **không tồn tại
+  khoảnh khắc nào** vừa có mục đang chọn vừa còn nút xoá trên màn hình — nên lệnh xoá không
+  bao giờ gửi đi được. Dấu × gắn sẵn từng thẻ thì không cần chọn trước, vòng kín đó hết.
+- Sửa kèm **hai lỗi CSS phát hiện lúc đo**, cả hai đều sẽ gây lỗi hiển thị y như anh thấy:
+  hàng thẻ nhóm đã **mất luật `display: flex`** từ lần đổi giao diện trước (chỉ còn sót một
+  luật cuộn mồ côi), và dấu × lẽ ra đỏ thì sẽ ra **màu cam**, vì một luật cũ tô màu cho mọi
+  biểu tượng nằm trong thẻ — màu thừa kế luôn thua một khai báo đặt thẳng.
+
+### Cần anh xác nhận
+
+- Phần nhìn tôi **không kiểm được bằng máy**. Xin anh xem giúp ba cảnh: đang xem video
+  (nút điều khiển sát dưới hình, không còn sóng), đang nghe nhạc (sóng nằm ở chỗ khung
+  video, cỡ như cũ), và khu gợi ý (mỗi từ khoá, mỗi mục có dấu × riêng, bấm là mất hẳn).
+
 ## 0.19.1 - 2026-09-18
 
 ### Fixed — bản 0.19.0 làm MẤT từ khoá bạn đã tự thêm

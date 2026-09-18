@@ -1407,13 +1407,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: transparent;
           transition: opacity .3s;
         }
-        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .np-wave { display: none; }
+        /* Ba khối này nay là con của «.stage», nên bộ chọn anh-em cũ không còn với tới.
+           Đây đúng là chỗ lần trước phải viết lại theo chiều ngược — xem chú thích trên. */
+        .player:is(.expanded, :fullscreen) > .stage > .np-wave { display: none; }
+        /* Đang xem video thì ẩn sóng nhạc: đã có hình chạy rồi, thêm sóng trang trí chỉ
+           tốn chỗ. Sóng nhạc nay là CON của «.player» nên dùng đường «> .stage >»;
+           chú thích cũ nói «dùng bộ chọn anh-em» đã sai sau khi chuyển khối. */
+        .player.video-on > .stage > .np-wave { display: none; }
         .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .now {
           padding: max(12px, env(safe-area-inset-top)) 16px 8px;
           background: linear-gradient(rgba(0, 0, 0, .7), transparent);
         }
-        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .progress { padding: 0 16px; }
-        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone .control-bar {
+        .player:is(.expanded, :fullscreen) > .stage > .progress { padding: 0 16px; }
+        .player:is(.expanded, :fullscreen) > .stage > .control-bar {
           padding: 12px 10px max(6px, env(safe-area-inset-bottom));
           background: linear-gradient(transparent, rgba(0, 0, 0, .8));
         }
@@ -1443,14 +1449,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           }
           .player.rotated > .stage > .video-frame { width: min(100%, calc(100vw * 16 / 9)); }
         }
+        /* Hai nửa bộ chọn anh-em đã bỏ: các nút «.ctl» nay là CON của «.player», nên
+           hai dòng dưới đã bao trùm chúng. Giữ lại chỉ là luật chết. */
         .player.expanded .ctl:not(.main),
-        .player:fullscreen .ctl:not(.main),
-        .player.expanded ~ .yt-zone-playlist .np-zone .ctl:not(.main),
-        .player:fullscreen ~ .yt-zone-playlist .np-zone .ctl:not(.main) { color: #fff; }
+        .player:fullscreen .ctl:not(.main) { color: #fff; }
         .player.expanded .ctl.stop,
-        .player:fullscreen .ctl.stop,
-        .player.expanded ~ .yt-zone-playlist .np-zone .ctl.stop,
-        .player:fullscreen ~ .yt-zone-playlist .np-zone .ctl.stop { color: #ff8a80; }
+        .player:fullscreen .ctl.stop { color: #ff8a80; }
         .player.expanded ~ .yt-zone-playlist .np-zone .now-meta,
         .player:fullscreen ~ .yt-zone-playlist .np-zone .now-meta,
         .player.expanded .svol-name,
@@ -1580,7 +1584,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           opacity: .5;
           transition: opacity .2s, transform .2s ease-in-out;
         }
-        .np-zone.is-playing .np-wave--bars span { opacity: .95; }
+        .wrap.is-playing .np-wave--bars span { opacity: .95; }
 
         /* --- Kiểu 2: simple — ít thanh, đều nhau, không gradient/glow, chỉ nảy + mờ-tỏ nhẹ --- */
         .np-wave--simple { justify-content: space-between; }
@@ -1594,7 +1598,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           opacity: .35;
           transition: opacity .2s, transform .2s ease-in-out;
         }
-        .np-zone.is-playing .np-wave--simple span { opacity: .9; }
+        .wrap.is-playing .np-wave--simple span { opacity: .9; }
 
         /* --- Kiểu 3: dots — mỗi cột có 1 điểm "max" cố định ở đỉnh, chấm tròn đá đá nhảy lên chạm tới --- */
         .np-wave--dots { justify-content: space-between; }
@@ -1612,7 +1616,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           opacity: .55;
           transition: opacity .2s, transform .2s ease-in-out;
         }
-        .np-zone.is-playing .wv-dot { opacity: 1; }
+        .wrap.is-playing .wv-dot { opacity: 1; }
         @container ytcard (max-width: 639px) {
           .yt-layout {
             grid-template-columns: 1fr;
@@ -1765,38 +1769,42 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           transform: translateY(-1px);
         }
 
-        /* Hai ô thả xuống thay cho hai hàng nút cuộn ngang. Hàng cuộn chỉ vuốt được
-           bằng cảm ứng — chuột không kéo ngang được mà thanh cuộn lại bị ẩn, nên phần
-           lớn mục coi như không với tới. Thả xuống thì chuột, phím, cảm ứng đều dùng
-           được và không bao giờ tràn, ở mọi bề rộng card. */
-        .yt-pick {
-          width: 100%;
-          box-sizing: border-box;
-          margin: 2px 0 6px;
-          padding: 8px 10px;
-          font: inherit;
-          font-size: .88rem;
-          color: var(--primary-text-color, #fff);
-          /* Nền ăn theo MÀU NỀN CARD chứ không phải màu cứng: đặt cứng thì đổi màu
-             trong trình sửa xong hai ô này vẫn tông cũ, nhìn lạc hẳn ra. Dùng
-             color-mix để pha đúng sắc nền đang dùng, đậm hơn một chút cho nổi. */
-          background: color-mix(in srgb, rgba(var(--ad-c2,13,21,37),1) 82%, #fff 18%);
-          border: 1px solid rgba(var(--ad-c1,0,204,204),0.25);
-          border-radius: 10px;
+        /* Chip XUỐNG DÒNG, không cuộn ngang. Hàng cuộn chỉ vuốt được bằng cảm ứng:
+           chuột không kéo ngang được mà thanh cuộn lại bị ẩn, nên phần lớn mục coi
+           như không với tới.
+           Luật này đặt SAU luật gốc của .yt-quick-search-pills (dòng ~1726, nó khai
+           flex-wrap: nowrap và overflow-x: auto) nên đè được lên, cùng độ ưu tiên mà
+           đứng sau thì thắng. Còn .yt-category-tabs thì KHÔNG còn luật gốc nào khai
+           display nữa — đo bằng grep, chỉ sót mỗi ::-webkit-scrollbar mồ côi — nên
+           chỗ này phải khai đủ display và gap cho nó, không chỉ đè flex-wrap. */
+        .yt-quick-search-pills,
+        .yt-category-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          overflow-x: visible;
+          padding: 2px 0 6px;
         }
-        /* Danh sách bung ra do trình duyệt vẽ, không nhận màu của card — ép màu chữ
-           và nền cho từng dòng để nó không ra nền trắng chữ trắng trên máy tính. */
-        .yt-pick option { background: rgb(var(--ad-c2,13,21,37)); color: #fff; }
-        .yt-pick:focus { outline: none; border-color: var(--ad-accent,#00ffcc); }
-        .yt-pick-cat { font-weight: 600; }
-        /* Ô chọn co giãn, nút xoá giữ nguyên cỡ — cùng bài học với thanh «Loa phát
-           nhạc»: phần co được phải là phần chữ, không phải cái nút. */
-        /* Bốn phần tử trên MỘT hàng: ô từ khoá, nút xoá, ô nhóm, nút xoá. Card hẹp
-           thì tự xuống dòng thay vì bóp cả bốn cho vừa. */
-        .yt-pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-        .yt-pick-row .yt-pick { flex: 1 1 42%; min-width: 0; }
-        .yt-pick-del { flex: 0 0 auto; --mdc-icon-size: 18px; color: #ff8a80; }
-        .yt-pick-del:disabled { opacity: .35; cursor: default; }
+        /* Tên và dấu × là hai vùng bấm RIÊNG trong cùng một chip. */
+        .chip-ten {
+          display: inline-flex; align-items: center; gap: 5px;
+          border: 0; background: transparent; color: inherit; font: inherit;
+          padding: 0; cursor: pointer; min-width: 0;
+        }
+        .chip-x {
+          display: grid; place-items: center; flex: 0 0 auto;
+          width: 20px; height: 20px; margin-left: 2px;
+          border: 0; border-radius: 999px; cursor: pointer;
+          background: transparent; color: #ff8a80; --mdc-icon-size: 15px;
+        }
+        .chip-x:hover { background: rgba(255,82,82,.22); }
+        /* Màu đỏ phải đặt THẲNG lên ha-icon, không thể trông vào thừa kế từ .chip-x:
+           luật .yt-search-pill ha-icon ở trên đã tô cam mọi biểu tượng trong chip, mà
+           một khai báo trực tiếp thì luôn thắng giá trị thừa kế, bất kể độ ưu tiên.
+           Viết kèm tên chip cho thành (0,2,1) để hơn (0,1,1) của hai luật kia, nhờ vậy
+           không phụ thuộc vào việc luật này đứng trước hay sau chúng trong file. */
+        .yt-search-pill .chip-x ha-icon,
+        .yt-cat-btn .chip-x ha-icon { color: #ff8a80; --mdc-icon-size: 15px; }
         /* Nút gỡ ghim nằm đè góc ảnh bài hát đã gắn. */
         .yt-card-unpin {
           position: absolute; top: 4px; right: 4px; z-index: 2;
@@ -1979,6 +1987,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <div class="idle-shield" aria-hidden="true"></div>
               <div class="stage">
               <div class="video-frame" hidden></div>
+              <!-- Sóng nhạc, thanh tiến trình và nút điều khiển nằm NGAY DƯỚI khung video.
+                   Xem video thì điều khiển ở sát dưới hình (sóng nhạc tự ẩn); chỉ nghe nhạc
+                   thì khung video ẩn nên sóng nhạc chiếm đúng chỗ trống đó — không phóng to
+                   theo video, giữ nguyên cỡ. Kiểu sóng (bars/simple/dots) lấy từ cấu hình. -->
+              ${this._renderWave()}
+              <div class="progress" hidden>
+                <span class="elapsed">0:00</span>
+                <div class="bar"><div class="fill"></div></div>
+                <span class="total">0:00</span>
+              </div>
+              <div class="control-bar">
+                <div class="transport-group" role="group" aria-label="Điều khiển phát">
+                  <button class="ctl previous" type="button" aria-label="Bài trước" title="Bài trước"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
+                  <button class="ctl main play-pause" type="button" aria-label="Phát" title="Phát"><ha-icon icon="mdi:play"></ha-icon></button>
+                  <button class="ctl next" type="button" aria-label="Bài tiếp theo" title="Bài tiếp theo"><ha-icon icon="mdi:skip-next"></ha-icon></button>
+                  <button class="ctl stop" type="button" aria-label="Dừng" title="Dừng"><ha-icon icon="mdi:stop"></ha-icon></button>
+                </div>
+              </div>
               <div class="stage-controls">
                 <div class="view-group">
                   <button class="ctl watch" type="button" aria-label="Xem video trên thẻ" title="Xem video trên thẻ" hidden><ha-icon icon="mdi:television-play"></ha-icon></button>
@@ -2032,23 +2058,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                   <div class="now-copy">
                     <div class="now-title">Chưa phát bài nào</div>
                     <div class="now-meta">Chọn một bài trong kết quả để bắt đầu.</div>
-                  </div>
-                </div>
-                <!-- Sóng nhạc trang trí — chỉ "đá đá" khi nút play-pause đang ở icon mdi:pause
-                     (đang phát thật), thuần CSS, không cần thêm state JS. Kiểu hiển thị
-                     (bars/simple/dots) lấy từ config wave_style, chọn 1 lần lúc render. -->
-                ${this._renderWave()}
-                <div class="progress" hidden>
-                  <span class="elapsed">0:00</span>
-                  <div class="bar"><div class="fill"></div></div>
-                  <span class="total">0:00</span>
-                </div>
-                <div class="control-bar">
-                  <div class="transport-group" role="group" aria-label="Điều khiển phát">
-                    <button class="ctl previous" type="button" aria-label="Bài trước" title="Bài trước"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
-                    <button class="ctl main play-pause" type="button" aria-label="Phát" title="Phát"><ha-icon icon="mdi:play"></ha-icon></button>
-                    <button class="ctl next" type="button" aria-label="Bài tiếp theo" title="Bài tiếp theo"><ha-icon icon="mdi:skip-next"></ha-icon></button>
-                    <button class="ctl stop" type="button" aria-label="Dừng" title="Dừng"><ha-icon icon="mdi:stop"></ha-icon></button>
                   </div>
                 </div>
               </div>
@@ -2752,8 +2761,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // chạy dù mọi thứ khác đúng. Để chắc chắn "nhảy" được ở mọi nơi, JS tự đổi
     // transform theo một interval riêng — không phụ thuộc animation/transition
     // CSS nào cả.
-    const npZone = this.shadowRoot.querySelector(".np-zone");
-    if (npZone) npZone.classList.toggle("is-playing", playing);
+    /* «is-playing» đặt lên «.wrap» — tổ tiên chung của cả «.player» lẫn «.np-zone».
+       Trước đây đặt trên «.np-zone», nhưng sóng nhạc nay nằm trong «.player» nên các
+       luật «.np-zone.is-playing .np-wave…» sẽ không còn với tới: sóng hết sáng khi
+       đang phát, mà node --check không bắt được loại lỗi này. */
+    const wrap = this.shadowRoot.querySelector(".wrap");
+    if (wrap) wrap.classList.toggle("is-playing", playing);
     this._toggleWaveAnimation(playing);
     playPause.disabled = !listening && !this._video.open && !this._targetsForService("media_play_pause").length;
     const canSkip = (step) => {
@@ -3308,111 +3321,74 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     header.append(congCu);
     box.append(header);
 
-    /* Danh sách thả xuống thay cho hàng cuộn ngang. Hàng cuộn chỉ vuốt được bằng
-       cảm ứng: trên máy tính chuột không kéo ngang được, mà thanh cuộn lại bị ẩn —
-       nên phần lớn từ khoá coi như không với tới. Thả xuống thì chuột, phím và cảm
-       ứng đều dùng được, và không còn tràn ở mọi bề rộng. */
-    const oTuKhoa = document.createElement("select");
-    oTuKhoa.className = "yt-pick yt-pick-tag";
-    oTuKhoa.setAttribute("aria-label", "Tìm nhanh theo từ khoá");
-    const dauTien = document.createElement("option");
-    dauTien.value = "";
-    dauTien.textContent = "🔍 Tìm nhanh…";
-    oTuKhoa.append(dauTien);
-    tuKhoa.forEach((tag) => {
-      const chon = document.createElement("option");
-      chon.value = tag;
-      chon.textContent = tag;
-      oTuKhoa.append(chon);
-    });
-    /* Nút xoá đi kèm, và CHỈ bật cho từ khoá của nhà. Từ khoá dựng sẵn không nằm
-       trong kho nên gọi xoá sẽ không làm gì — bấm mà không thấy gì xảy ra còn khó
-       hiểu hơn là nút mờ đi. */
-    const xoaTuKhoa = document.createElement("button");
-    xoaTuKhoa.type = "button";
-    xoaTuKhoa.className = "icon-button yt-pick-del";
-    const xoaTuKhoaIcon = document.createElement("ha-icon");
-    xoaTuKhoaIcon.setAttribute("icon", "mdi:trash-can-outline");
-    xoaTuKhoa.append(xoaTuKhoaIcon);
-    /* Xoá được MỌI từ khoá, kể cả loại dựng sẵn — bản trước tôi chỉ cho xoá của nhà
-       nên gần như lúc nào nút cũng mờ, và chủ máy báo "không xoá được". Từ khoá dựng
-       sẵn không bỏ khỏi kho được, nhưng máy chủ ghi tên vào danh sách ẩn nên nó biến
-       khỏi danh sách y như bị xoá. */
-    const canhXoaTuKhoa = () => {
-      const co = Boolean(oTuKhoa.value);
-      xoaTuKhoa.disabled = !co;
-      xoaTuKhoa.title = co
-        ? `Xoá từ khoá “${oTuKhoa.value}”`
-        : "Chọn một từ khoá rồi bấm để xoá";
-      xoaTuKhoa.setAttribute("aria-label", xoaTuKhoa.title);
+    /* DANH SÁCH CHIP, mỗi mục có dấu × NGAY BÊN CẠNH — thay cho ô thả xuống kèm một
+       nút xoá dùng chung. Hai lý do, đều là lỗi thật đã gặp:
+       1. Ô thả xuống mở ra ở dòng gợi ý (giá trị rỗng) nên nút xoá bị khoá; muốn bật
+          phải chọn, mà chọn xong thì khối này bị xoá sạch — không bao giờ bấm được.
+          Dấu × gắn sẵn từng mục thì bấm được ngay, không cần chọn trước.
+       2. Hàng cuộn ngang thì chuột không kéo được. Chip ở đây **xuống dòng**, không
+          cuộn, nên mọi mục đều với tới bằng chuột lẫn cảm ứng. */
+    const themX = (nhan, chay) => {
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "chip-x";
+      x.title = nhan;
+      x.setAttribute("aria-label", nhan);
+      x.append(icon("mdi:close"));
+      x.addEventListener("click", (ev) => {
+        // Nút nằm trong chip mà chip cũng bấm được — phải chặn nổi bọt.
+        ev.preventDefault();
+        ev.stopPropagation();
+        chay();
+      });
+      return x;
     };
-    xoaTuKhoa.addEventListener("click", () => {
-      const tag = oTuKhoa.value;
-      if (!tag) return;
-      this._saveSuggestion({ action: "remove_tag", text: tag }, `Đã xoá từ khoá “${tag}”.`);
-    });
-    /* KHÔNG tìm ngay khi chọn. Trước đây chọn xong là gọi _search(), mà có kết quả
-       thì khối gợi ý này bị xoá sạch (xem chỗ thoát sớm ở đầu hàm) — cùng với nút
-       xoá vừa mới được bật. Nghĩa là KHÔNG tồn tại trạng thái nào từ khoá đang chọn
-       mà nút xoá còn trên màn hình, nên lệnh xoá không bao giờ gửi được: đo trên máy
-       chủ nhà thấy hidden_tags rỗng hoàn toàn. Nay chọn chỉ điền vào ô tìm và bật nút
-       xoá; bấm kính lúp mới tìm. */
-    oTuKhoa.addEventListener("change", () => {
-      canhXoaTuKhoa();
-      const tag = oTuKhoa.value;
-      if (!tag) return;
-      const input = this.shadowRoot.querySelector('input[type="search"]');
-      input.value = tag;
-      this._syncSavePlaylist();
-      this._setStatus(`Đã điền “${tag}”. Bấm kính lúp để tìm, hoặc thùng rác để xoá từ khoá này.`);
-    });
-    canhXoaTuKhoa();
-    // Cả hai ô nằm CHUNG một hàng theo yêu cầu, thay vì xếp thành hai hàng.
-    const hangChon = el("div", "yt-pick-row");
-    hangChon.append(oTuKhoa, xoaTuKhoa);
 
-    // Cùng lý do: thả xuống thay hàng nút cuộn ngang.
-    const oMuc = document.createElement("select");
-    oMuc.className = "yt-pick yt-pick-cat";
-    oMuc.setAttribute("aria-label", "Chọn nhóm bài gợi ý");
-    mucGoiY.forEach((cat) => {
-      const chon = document.createElement("option");
-      chon.value = cat.id;
-      chon.textContent = cat.name;
-      if (cat.id === this._ytSuggestedCategory) chon.selected = true;
-      oMuc.append(chon);
+    const hangTuKhoa = el("div", "yt-quick-search-pills");
+    tuKhoa.forEach((tag) => {
+      const chip = el("div", "yt-search-pill");
+      const ten = document.createElement("button");
+      ten.type = "button";
+      ten.className = "chip-ten";
+      ten.title = `Tìm “${tag}”`;
+      ten.append(icon("mdi:magnify"), el("span", "", tag));
+      ten.addEventListener("click", () => {
+        const input = this.shadowRoot.querySelector('input[type="search"]');
+        input.value = tag;
+        this._syncSavePlaylist();
+        this._search();
+      });
+      chip.append(ten, themX(`Xoá từ khoá “${tag}”`, () =>
+        this._saveSuggestion({ action: "remove_tag", text: tag }, `Đã xoá từ khoá “${tag}”.`)));
+      hangTuKhoa.append(chip);
     });
-    oMuc.addEventListener("change", () => {
-      if (this._ytSuggestedCategory === oMuc.value) return;
-      this._ytSuggestedCategory = oMuc.value;
-      this._renderSuggestions();
-    });
-    // Xoá mục — cũng chỉ bật cho mục của nhà, mục dựng sẵn không xoá được.
-    const xoaMuc = document.createElement("button");
-    xoaMuc.type = "button";
-    xoaMuc.className = "icon-button yt-pick-del";
-    const xoaMucIcon = document.createElement("ha-icon");
-    xoaMucIcon.setAttribute("icon", "mdi:trash-can-outline");
-    xoaMuc.append(xoaMucIcon);
-    // Cũng cho xoá mọi mục, kể cả dựng sẵn — mục dựng sẵn thì máy chủ ghi vào danh
-    // sách ẩn. «mucCuaNha» vẫn dùng riêng cho nút gỡ ghim, vì chỉ mục của nhà mới
-    // sửa được danh sách bài bên trong.
+    if (tuKhoa.length) box.append(hangTuKhoa);
+    // «mucCuaNha» dùng riêng cho nút gỡ ghim phía dưới: chỉ mục của nhà mới sửa
+    // được danh sách bài bên trong.
     const mucCuaNha = (this._goiY?.groups || []).find((g) => g.id === this._ytSuggestedCategory);
-    const mucDangXem = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
-    xoaMuc.disabled = !mucDangXem;
-    xoaMuc.title = mucDangXem
-      ? `Xoá mục “${mucDangXem.name}”`
-      : "Chọn một mục rồi bấm để xoá";
-    xoaMuc.setAttribute("aria-label", xoaMuc.title);
-    xoaMuc.addEventListener("click", () => {
-      if (!mucDangXem) return;
-      if (!window.confirm(`Xoá mục “${mucDangXem.name}” khỏi danh sách gợi ý?`)) return;
-      this._ytSuggestedCategory = "";
-      this._saveSuggestion({ action: "remove_group", id: mucDangXem.id },
-        `Đã xoá mục “${mucDangXem.name}”.`);
+
+    const hangMuc = el("div", "yt-category-tabs");
+    mucGoiY.forEach((cat) => {
+      const chip = el("div", cat.id === this._ytSuggestedCategory ? "yt-cat-btn active" : "yt-cat-btn");
+      const ten = document.createElement("button");
+      ten.type = "button";
+      ten.className = "chip-ten";
+      ten.title = `Xem mục “${cat.name}”`;
+      ten.append(icon(cat.icon || "mdi:music"), el("span", "", cat.name));
+      ten.addEventListener("click", () => {
+        if (this._ytSuggestedCategory === cat.id) return;
+        this._ytSuggestedCategory = cat.id;
+        this._renderSuggestions();
+      });
+      chip.append(ten, themX(`Xoá mục “${cat.name}”`, () => {
+        if (!window.confirm(`Xoá mục “${cat.name}” khỏi danh sách gợi ý?`)) return;
+        if (this._ytSuggestedCategory === cat.id) this._ytSuggestedCategory = "";
+        this._saveSuggestion({ action: "remove_group", id: cat.id },
+          `Đã xoá mục “${cat.name}”.`);
+      }));
+      hangMuc.append(chip);
     });
-    hangChon.append(oMuc, xoaMuc);
-    box.append(hangChon);
+    if (mucGoiY.length) box.append(hangMuc);
 
     const found = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
     // Xoá hết mục thì không còn gì để lấy — cho một mục rỗng để khỏi nổ ở current.songs.
