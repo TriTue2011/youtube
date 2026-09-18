@@ -770,14 +770,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
         .subtitle, .hint { color: rgba(255,255,255,.62); font-size: .86rem; }
         .subtitle { margin: 3px 0 0; font-size: .8rem; }
+        /* Khung chứa phải TỐI và trung tính hơn hẳn các nút bên trong. Trước đây
+           khung dùng nền «màu nhấn 0.08» còn nút đang chọn dùng gradient cùng tông,
+           chênh nhau quá ít nên nhìn không ra đâu là nền, đâu là lựa chọn. */
         .source-switch {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           padding: 4px;
           margin: 12px 0 10px;
           border-radius: 12px;
-          background: rgba(var(--ad-c1,0,204,204),0.08);
-          border: 1px solid rgba(var(--ad-c1,0,204,204),0.15);
+          background: rgba(var(--ad-c2,13,21,37),0.55);
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.18);
         }
         button, input { font: inherit; }
         button { cursor: pointer; }
@@ -797,11 +800,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           text-overflow: ellipsis;
         }
         .source-button ha-icon { --mdc-icon-size: 18px; flex: none; color: #ff0000; }
+        /* Nút đang chọn: TÔ ĐẶC màu nhấn, chữ lấy màu tương phản đã tính theo độ
+           sáng của chính màu nhấn — không còn gradient mờ lẫn vào nền. */
         .source-button[aria-pressed="true"] {
-          color: #fff;
-          background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.18));
-          box-shadow: 0 0 14px 1px rgba(var(--ad-c1,0,204,204),0.4);
+          color: var(--ad-on-accent, #0b0f17);
+          background: var(--ad-accent, #00ffcc);
+          box-shadow: 0 0 14px 1px rgba(var(--ad-c1,0,204,204),0.45);
         }
+        .source-button[aria-pressed="true"] ha-icon { color: inherit; }
         form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
         input[type="search"] {
           min-width: 0;
@@ -893,10 +899,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .spk-list { margin-top: 10px; }
         /* Loa đang được chỉnh âm lượng: TÔ NỀN chứ không viền — nhìn ra ngay.
            Phải thêm «.players» phía trước mới thắng được luật
-           «.player-chip:has(input:checked)» ở trên: luật đó có độ ưu tiên (0,2,1)
-           vì :has() tính theo phần tử cụ thể nhất bên trong, nên một mình
-           «.player-chip.is-volume-target» (0,2,0) sẽ THUA và chữ vẫn giữ màu nhấn
-           — tức trùng đúng màu nền vừa tô. Thêm một lớp nữa thành (0,3,0) mới đè được.
+           «.player-chip:has(input:checked)» — luật đó nằm phía DƯỚI trong tệp này
+           nhưng có độ ưu tiên (0,2,1), vì :has() tính theo phần tử cụ thể nhất bên
+           trong. Một mình «.player-chip.is-volume-target» (0,2,0) sẽ THUA dù viết
+           trước hay sau: ở đây thứ tự không cứu được, chỉ độ ưu tiên mới quyết định.
+           Thêm một lớp nữa thành (0,3,0) mới đè được cả nền lẫn màu chữ.
            Màu chữ lấy từ --ad-on-accent, do độ sáng của màu nhấn quyết định. */
         .players .player-chip.is-volume-target {
           background: var(--ad-accent, #00ffcc);
@@ -929,7 +936,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: rgba(var(--ad-c1,0,204,204),0.08);
           cursor: pointer;
         }
-        .player-chip:has(input:checked) { border-color: var(--ad-accent,#00ffcc); color: var(--ad-accent,#00ffcc); box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35); }
+        /* Loa ĐÃ TÍCH (sẽ phát): tô nền mờ của màu nhấn, không chỉ viền — trước đây
+           chỉ đổi viền nên nhìn lướt không thấy loa nào đang được chọn. Vẫn khác
+           với loa ĐANG CHỈNH ÂM LƯỢNG bên dưới: chỗ đó tô đặc và có viền ngoài. */
+        .player-chip:has(input:checked) {
+          border-color: var(--ad-accent,#00ffcc);
+          background: rgba(var(--ad-c1,0,204,204),0.30);
+          color: #fff;
+          box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35);
+        }
         .player-chip.source-incompatible { opacity: .62; }
         .player-chip input { accent-color: var(--ad-accent,#00ffcc); }
         .player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2611,12 +2626,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         pct.textContent = `${Math.round(Number(range.value) * 100)}%`;
       });
       range.addEventListener("change", async () => {
+        const mucDat = Number(range.value);
+        /* Nhớ mức VỪA ĐẶT. Bỏ chốt ngay khi lệnh trả về là sai: Home Assistant còn
+           đẩy tiếp vài bản trạng thái mang giá trị CŨ trước khi loa kịp báo lại, và
+           thanh trượt bị ghi đè ngược — kéo về 0 thì nhảy về chỗ cũ. Giữ mức mong
+           đợi cho tới khi trạng thái khớp, hoặc quá 5 giây thì thôi chờ. */
+        this._volumeMongDoi = { entityId, muc: mucDat, luc: Date.now() };
         try {
           await this._hass.callService("media_player", "volume_set", {
             entity_id: entityId,
-            volume_level: Number(range.value),
+            volume_level: mucDat,
           });
         } catch (error) {
+          this._volumeMongDoi = null;
           this._setStatus(error?.message || "Không đổi được âm lượng.", true);
         } finally {
           this._activeVolumeEntity = null;
@@ -2633,6 +2655,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const range = row.querySelector(".svol-range");
     const pct = row.querySelector(".svol-pct");
     if (this.shadowRoot.activeElement === range) return;
+    // Đang chờ loa xác nhận mức vừa đặt thì bỏ qua mọi trạng thái còn mang giá trị cũ.
+    const cho = this._volumeMongDoi;
+    if (cho && cho.entityId === entityId) {
+      if (Math.abs(value - cho.muc) < 0.01) this._volumeMongDoi = null;
+      else if (Date.now() - cho.luc < 5000) return;
+      else this._volumeMongDoi = null;
+    }
     range.value = String(value);
     pct.textContent = `${Math.round(value * 100)}%`;
   }
