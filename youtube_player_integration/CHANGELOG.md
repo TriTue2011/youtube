@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.20.6 - 2026-09-18
+
+### Fixed — bấm phát bài đầu bị nhảy về 0 giây hai ba lần
+
+Đây là **lỗi tôi tự gây ra ở bản 0.20.2**, không phải lỗi có sẵn.
+
+- Ở 0.20.2 tôi thêm bộ nhận biết "chủ máy tự tua trong khung YouTube": thấy thời gian
+  trình phát báo về lệch quá 2,5 giây so với nhịp chạy đều thì coi là anh vừa kéo thanh,
+  rồi **kéo loa và tiếng trên máy chạy theo mốc đó**.
+- Nhưng lúc mới bấm phát, mọi bước nhảy đều là bình thường chứ không phải anh tua:
+  - **Mốc của bài trước không được xoá.** `_openVideo` đặt lại tên bài, loa, chế độ
+    tiếng — nhưng không đụng tới đồng hồ. Bài mới thừa hưởng mốc bài cũ, nên card suy ra
+    một con số lớn trong khi trình phát mới báo về gần 0.
+  - **Mở video từ giây đang nghe** cũng làm trình phát nhảy một quãng lớn và hợp lệ.
+- Hậu quả: card hiểu nhầm thành "vừa tua về 0" và **tự gửi lệnh nhảy về 0** cho loa lẫn
+  tiếng trên máy, lặp lại theo mỗi bản tin trình phát gửi trong lúc khởi động — đúng
+  "hai, ba lần" rồi mới yên.
+
+### Sửa theo nguyên tắc, không vá triệu chứng
+
+- **Xoá đồng hồ khi mở bài mới**, diệt tận gốc việc thừa hưởng mốc cũ.
+- **Chỉ tin bước nhảy khi trình phát chạy ổn định**: trạng thái phải là "đang chạy", và
+  phải qua 5 giây kể từ lúc mở. Lúc đang nạp hoặc chưa khởi động thì thời gian báo về
+  không đáng tin, nên không được dùng nó để ra lệnh cho loa.
+- Tính năng tua trong khung YouTube vẫn giữ nguyên: kéo thanh của YouTube khi bài đã
+  chạy ổn định thì loa vẫn đi theo anh như ở 0.20.2.
+
 ## 0.20.5 - 2026-09-18
 
 ### Fixed — chế độ chỉ nghe ở 0.20.4 gần như không hiện gì trên điện thoại

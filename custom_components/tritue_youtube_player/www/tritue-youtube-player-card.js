@@ -588,7 +588,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _idleVideo() {
-    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, withSpeakers: false, followsDevice: false, soundHere: true, muted: null, picture: null, pictureEl: null };
+    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, moUL: 0, withSpeakers: false, followsDevice: false, soundHere: true, muted: null, picture: null, pictureEl: null };
   }
 
   /* Hai hàm này là hợp đồng của Home Assistant: có chúng thì bấm "Sửa thẻ" trên
@@ -3948,6 +3948,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const frame = this.shadowRoot.querySelector(".video-frame");
     // A picture shown for a refused video: try the embed again for this one.
     if (this._video.picture) this._leavePicture();
+    /* XOÁ MỐC THỜI GIAN CỦA BÀI TRƯỚC. Thiếu dòng này là sinh ra đúng lỗi chủ máy
+       báo 18/09/2026: "Lần đầu phát bị về 0s mất 2, 3 lần" — bài mới thừa hưởng mốc
+       của bài cũ, «_videoTimeNow()» suy ra một con số lớn, trong khi trình phát mới
+       báo về gần 0; bộ dò tự-tua thấy lệch quá ngưỡng liền hiểu nhầm là người dùng
+       vừa tua về 0 rồi gửi lệnh nhảy về 0 cho cả loa lẫn tiếng trên máy.
+       «moUL» ghi lúc mở để biết trình phát còn đang khởi động hay đã chạy ổn định. */
+    this._video.time = 0;
+    this._video.timeAt = 0;
+    this._video.moUL = Date.now();
     let iframe = frame.querySelector("iframe");
     this._video.item = {
       id,
@@ -4350,7 +4359,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            quay về vị trí đang chạy trên card".
            Lệnh tua do chính card gửi cũng gây nhảy y hệt, nên loại trừ bằng dấu thời
            gian _lastVideoSeekAt mà _seekPicture vừa đặt. */
-        const duKien = this._video.timeAt ? this._videoTimeNow() : null;
+        /* CHỈ tin một bước nhảy khi trình phát đang chạy ỔN ĐỊNH trên cùng một video.
+           Bản 0.20.2 thiếu hai hàng rào dưới nên lúc mới bấm phát, mọi bước nhảy bình
+           thường của trình phát đều bị chấm là "người dùng vừa tua":
+           - trạng thái phải là 1 (đang chạy); lúc đang nạp (3) hay chưa khởi động
+             (-1, 5) thì thời gian báo về không đáng tin;
+           - phải qua 5 giây kể từ lúc mở, vì mở video từ giây đang nghe
+             («startSeconds») cũng làm trình phát nhảy một quãng lớn và hợp lệ. */
+        const onDinh = this._video.state === 1
+          && this._video.moUL
+          && Date.now() - this._video.moUL > 5000;
+        const duKien = onDinh && this._video.timeAt ? this._videoTimeNow() : null;
         const tuTua = Number.isFinite(duKien)
           && Math.abs(info.currentTime - duKien) > 2.5
           && Date.now() >= this._lastVideoSeekAt + 1500;
