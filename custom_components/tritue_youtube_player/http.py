@@ -26,6 +26,15 @@ from .hidden_players import (
     apply_hidden_change,
     normalize_hidden,
 )
+# Both storage modules export STORAGE_KEY/STORAGE_VERSION, so alias this one —
+# importing it plainly would silently shadow the hidden-players store and write
+# both features into the same file.
+from .suggestions import (
+    STORAGE_KEY as SUGGESTIONS_STORAGE_KEY,
+    STORAGE_VERSION as SUGGESTIONS_STORAGE_VERSION,
+    apply_suggestion_change,
+    normalize_suggestions,
+)
 from .playback import build_target_capabilities
 
 
@@ -323,3 +332,50 @@ class TriTueHiddenPlayersView(HomeAssistantView):
             await self._store.async_save({"entity_ids": hidden})
             self._hidden = hidden
         return self.json({"entity_ids": hidden})
+
+
+class TriTueSuggestionsView(HomeAssistantView):
+    """Household search keywords and pinned videos, persisted in storage."""
+
+    url = "/api/tritue_youtube_player/suggestions"
+    name = "api:tritue_youtube_player:suggestions"
+    requires_auth = True
+
+    def __init__(self) -> None:
+        self._store: Store | None = None
+        self._doc: dict | None = None
+        self._lock = asyncio.Lock()
+
+    async def _load(self, hass) -> dict:
+        if self._store is None:
+            self._store = Store(
+                hass, SUGGESTIONS_STORAGE_VERSION, SUGGESTIONS_STORAGE_KEY
+            )
+        if self._doc is None:
+            self._doc = normalize_suggestions(await self._store.async_load())
+        return self._doc
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return the keywords and pinned videos (same list for everyone)."""
+        async with self._lock:
+            document = await self._load(request.app["hass"])
+        return self.json(document)
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Add or remove a keyword, group or pinned video; admin only."""
+        user = request.get("hass_user")
+        if user is None or not user.is_admin:
+            return self.json({"error": "admin_required"}, HTTPStatus.FORBIDDEN)
+        try:
+            payload = await request.json()
+        except ValueError:
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        async with self._lock:
+            current = await self._load(request.app["hass"])
+            try:
+                document = apply_suggestion_change(current, payload)
+            except ValueError as error:
+                return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            await self._store.async_save(document)
+            self._doc = document
+        return self.json(document)

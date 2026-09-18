@@ -537,6 +537,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._capabilities = new Map();
     this._capabilityEntryId = "";
     this._capabilitiesLoading = false;
+    // Từ khoá và video gắn sẵn của cả nhà, lấy từ tích hợp nên mọi bảng điều khiển
+    // và mọi máy đều thấy như nhau. null = chưa tải xong.
+    this._goiY = null;
+    this._goiYLoading = false;
     this._sharedSessionMarker = "";
     // Queue of the video playing alone on the card. Speakers use the server
     // session's own queue, and the integration advances it (no browser needed).
@@ -634,6 +638,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._updateSourceButtons();
     this._loadCapabilities();
     this._loadHiddenPlayers();
+    this._loadSuggestions();
     if (this._playlists === null && !this._playlistsRequested && this._entryId()) {
       this._playlistsRequested = true;
       this._loadPlaylists();
@@ -1642,6 +1647,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           flex-wrap: wrap;
           gap: 6px;
         }
+        /* Hai nút tự tạo từ khoá / mục. Không cho co để nhãn bên trái nhường chỗ
+           trước — cùng bài học với thanh «Loa phát nhạc» bị đè chữ. */
+        .yt-suggest-tools { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+        .yt-suggest-add { --mdc-icon-size: 18px; color: var(--ad-accent,#00ffcc); }
 
         .yt-suggested-title {
           display: flex;
@@ -2147,6 +2156,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
     const audioContainer = this.shadowRoot.querySelector(".players-audio");
     const videoContainer = this.shadowRoot.querySelector(".players-video");
+    /* Danh sách chip loa gần như KHÔNG đổi giữa hai lần đổi trạng thái thường, nhưng
+       hàm này chạy mỗi lần «set hass» — nhiều lần mỗi giây trong nhà đang chạy. Dựng
+       lại vô điều kiện là xoá rồi tạo lại từng chip cùng listener của nó, làm mất cú
+       cuộn đang dở và cả ô tích người dùng vừa chạm. Chỉ dựng lại khi CHỮ KÝ đổi.
+       Phần đuôi (âm lượng, nút điều khiển, đang phát) vẫn chạy mỗi lượt vì nó phản
+       ánh trạng thái sống — nên cổng canh chỉ bọc đúng phần dựng chip. */
+    const chuKyLoa = JSON.stringify([
+      players.map(([id, st]) => [
+        id,
+        st.attributes.friendly_name || id,
+        this._isAudioOnly(id, st) ? "a" : "v",
+        this._capabilities.get(id)?.transport || "",
+        this._supportsSource(id, this._source) ? 1 : 0,
+      ]),
+      [...this._selectedPlayers].sort(),
+      [...this._hiddenPlayers].sort(),
+      connected.length,
+      allPlayers.length,
+    ]);
+    if (chuKyLoa !== this._dsLoaChuKy) {
+    this._dsLoaChuKy = chuKyLoa;
     audioContainer.replaceChildren();
     videoContainer.replaceChildren();
     if (!players.length) {
@@ -2251,6 +2281,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       empty.textContent = "Không có màn hình nào.";
       videoContainer.append(empty);
     }
+    }
     this._renderHiddenPlayers(connected.filter(([entityId]) => this._hiddenPlayers.has(entityId)));
     this._updateSelectedCount();
     this._updateTransportState();
@@ -2300,6 +2331,54 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       list.append(restoreButton("Khôi phục tất cả", hiddenPlayers.map(([entityId]) => entityId)));
     }
     container.append(list);
+  }
+
+  /** Tải từ khoá và video gắn sẵn. Theo đúng nếp _loadHiddenPlayers: có cờ canh để
+      không gọi chồng, và nuốt lỗi CÓ LÝ DO — tích hợp bản cũ chưa có đường này thì
+      card vẫn chạy với danh sách dựng sẵn. */
+  async _loadSuggestions() {
+    if (this._goiY || this._goiYLoading || !this._hass) return;
+    this._goiYLoading = true;
+    try {
+      const payload = await this._hass.callApi("GET", "tritue_youtube_player/suggestions");
+      this._goiY = {
+        tags: Array.isArray(payload?.tags) ? payload.tags : [],
+        groups: Array.isArray(payload?.groups) ? payload.groups : [],
+      };
+      this._renderSuggestions();
+    } catch (_error) {
+      // Tích hợp đang khởi động, hoặc bản cũ chưa có đường này: dùng danh sách dựng sẵn.
+      this._goiY = { tags: [], groups: [] };
+    } finally {
+      this._goiYLoading = false;
+    }
+  }
+
+  /** Gửi một thay đổi (thêm từ khoá, tạo mục, gắn/gỡ video) rồi vẽ lại. Máy chủ trả
+      về toàn bộ tài liệu mới nên card không phải tự đoán kết quả. */
+  async _saveSuggestion(payload, thanhCong) {
+    try {
+      const doc = await this._hass.callApi("POST", "tritue_youtube_player/suggestions", payload);
+      this._goiY = {
+        tags: Array.isArray(doc?.tags) ? doc.tags : [],
+        groups: Array.isArray(doc?.groups) ? doc.groups : [],
+      };
+      this._renderSuggestions();
+      if (thanhCong) this._setStatus(thanhCong);
+    } catch (error) {
+      const ma = String(error?.body?.error || error?.error || error?.message || "");
+      const loi = {
+        admin_required: "Chỉ tài khoản quản trị mới sửa được mục gợi ý.",
+        too_many_tags: "Đã đủ số từ khoá tối đa.",
+        too_many_groups: "Đã đủ số mục tối đa.",
+        too_many_songs: "Mục này đã đủ số bài tối đa.",
+        group_exists: "Mục này đã có rồi.",
+        invalid_text: "Tên từ khoá không hợp lệ.",
+        invalid_group: "Tên mục không hợp lệ.",
+        unknown_group: "Không tìm thấy mục này.",
+      }[ma];
+      this._setStatus(loi || "Không lưu được mục gợi ý.", true);
+    }
   }
 
   async _loadHiddenPlayers() {
@@ -3037,7 +3116,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _renderSuggestions() {
     const box = this.shadowRoot && this.shadowRoot.querySelector(".yt-suggested-section");
     if (!box) return;
-    this._ytSuggestedCategory = this._ytSuggestedCategory || YOUTUBE_SUGGESTED_CATEGORIES[0].id;
+    // Mục dựng sẵn cộng mục của nhà. Mục nhà đứng sau nhưng tìm theo id nên bấm vào
+    // đâu cũng đúng; trùng id thì mục nhà thắng vì nó cụ thể hơn.
+    const mucGoiY = [
+      ...YOUTUBE_SUGGESTED_CATEGORIES.filter(
+        (c) => !(this._goiY?.groups || []).some((g) => g.id === c.id)),
+      ...(this._goiY?.groups || []),
+    ];
+    const tuKhoa = [...QUICK_SEARCH_TAGS, ...(this._goiY?.tags || [])];
+    this._ytSuggestedCategory = this._ytSuggestedCategory || mucGoiY[0].id;
     /* Khối này KHÔNG đọc gì từ trạng thái nhà — nội dung chỉ phụ thuộc bốn thứ dưới
        đây, còn bài hát thì lấy từ hằng số. Nhưng nó được gọi từ «set hass», tức mỗi
        lần bất kỳ thực thể nào đổi trạng thái: dựng lại vô điều kiện là xoá rồi dựng
@@ -3048,6 +3135,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._results.length ? "1" : "0",
       this._source,
       this._view,
+      // BẮT BUỘC có phần này: dữ liệu của nhà về sau lần vẽ đầu, nếu chữ ký không
+      // đổi theo thì đúng lúc nhận được từ khoá mới lại là lúc bỏ qua việc vẽ lại.
+      this._goiY ? JSON.stringify(this._goiY) : "",
     ].join("|");
     if (chuKy === this._goiYChuKy) return;
     this._goiYChuKy = chuKy;
@@ -3071,10 +3161,38 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const title = el("div", "yt-suggested-title");
     title.append(icon("mdi:youtube"), el("span", "", "BÀI HÁT GỢI Ý YOUTUBE"));
     header.append(title, el("span", "yt-suggested-subtitle", "Chạm để phát ngay trên loa đã chọn"));
+
+    /* Tự tạo từ khoá và mục của nhà. Dùng window.prompt cho gọn — card này đã dùng
+       nó sẵn ở chỗ chia sẻ playlist, nên không đẻ thêm lối nhập liệu thứ hai. Máy
+       chủ mới là nơi kiểm dữ liệu; ở đây chỉ chặn chuỗi rỗng. */
+    const themNut = (bieuTuong, nhan, chay) => {
+      const nut = document.createElement("button");
+      nut.type = "button";
+      nut.className = "icon-button yt-suggest-add";
+      nut.title = nhan;
+      nut.setAttribute("aria-label", nhan);
+      const bt = document.createElement("ha-icon");
+      bt.setAttribute("icon", bieuTuong);
+      nut.append(bt);
+      nut.addEventListener("click", chay);
+      return nut;
+    };
+    const congCu = el("div", "yt-suggest-tools");
+    congCu.append(
+      themNut("mdi:tag-plus-outline", "Thêm từ khoá tìm nhanh", () => {
+        const text = (window.prompt("Từ khoá mới (ví dụ: Bolero trữ tình):") || "").trim();
+        if (text) this._saveSuggestion({ action: "add_tag", text }, `Đã thêm từ khoá “${text}”.`);
+      }),
+      themNut("mdi:folder-plus-outline", "Thêm mục gợi ý để gắn video", () => {
+        const name = (window.prompt("Tên mục mới (ví dụ: Nhạc tối):") || "").trim();
+        if (name) this._saveSuggestion({ action: "add_group", name }, `Đã tạo mục “${name}”.`);
+      }),
+    );
+    header.append(congCu);
     box.append(header);
 
     const pills = el("div", "yt-quick-search-pills");
-    QUICK_SEARCH_TAGS.forEach((tag) => {
+    tuKhoa.forEach((tag) => {
       const pill = el("div", "yt-search-pill");
       pill.setAttribute("role", "button");
       pill.tabIndex = 0;
@@ -3094,7 +3212,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     box.append(pills);
 
     const tabs = el("div", "yt-category-tabs");
-    YOUTUBE_SUGGESTED_CATEGORIES.forEach((cat) => {
+    mucGoiY.forEach((cat) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = cat.id === this._ytSuggestedCategory ? "yt-cat-btn active" : "yt-cat-btn";
@@ -3108,8 +3226,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     box.append(tabs);
 
-    const found = YOUTUBE_SUGGESTED_CATEGORIES.find((c) => c.id === this._ytSuggestedCategory);
-    const current = found || YOUTUBE_SUGGESTED_CATEGORIES[0];
+    const found = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
+    const current = found || mucGoiY[0];
     const grid = el("div", "yt-song-grid");
     (current.songs || []).forEach((song) => {
       const card = el("div", "yt-song-card");
@@ -3190,6 +3308,32 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         add.append(addIcon);
         add.addEventListener("click", () => this._toggleAddMenu(row, { ...item, source: item.source || this._source }));
         actions.append(add);
+        /* Gắn bài đang xem vào mục gợi ý của nhà — chỉ hiện khi nhà ĐÃ tạo mục,
+           vì gắn vào chỗ chưa có sẽ bị máy chủ từ chối với unknown_group. */
+        const mucNha = this._goiY?.groups || [];
+        if (mucNha.length && (item.source || this._source) === "youtube") {
+          const ghim = document.createElement("button");
+          ghim.type = "button";
+          ghim.className = "icon-button pin-suggestion";
+          const much = mucNha.find((g) => g.id === this._ytSuggestedCategory) || mucNha[0];
+          ghim.title = `Gắn “${title.textContent}” vào mục “${much.name}”`;
+          ghim.setAttribute("aria-label", ghim.title);
+          const ghimIcon = document.createElement("ha-icon");
+          ghimIcon.setAttribute("icon", "mdi:pin-outline");
+          ghim.append(ghimIcon);
+          ghim.addEventListener("click", () => this._saveSuggestion({
+            action: "pin_song",
+            id: much.id,
+            item: {
+              video_id: item.id,
+              title: item.title,
+              artist: item.channel,
+              thumbnail_url: item.thumbnail,
+              duration_seconds: item.duration,
+            },
+          }, `Đã gắn “${title.textContent}” vào mục “${much.name}”.`));
+          actions.append(ghim);
+        }
       }
       if (this._isVideoItem(item, item.source || this._source)) action("mdi:television-play", "Xem video", true);
       action("mdi:headphones", "Nghe (chỉ tiếng)", false);

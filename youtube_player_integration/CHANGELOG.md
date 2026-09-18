@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.15.0 - 2026-09-18
+
+### Added
+
+- **Từ khoá tìm nhanh và video gắn sẵn do nhà tự tạo.** Đây là việc cuối trong danh sách,
+  làm theo đúng phương án đã chốt: **lưu ở tích hợp, không nằm trong YAML của từng thẻ**,
+  nên mọi bảng điều khiển và mọi máy đều thấy như nhau, và thêm hay bớt card không làm mất
+  dữ liệu.
+  - Nút **thêm từ khoá** và **thêm mục** ngay trên đầu dải gợi ý.
+  - Nút **ghim** trên mỗi kết quả tìm, gắn bài đang xem vào mục của nhà. Nút chỉ hiện khi
+    nhà đã tạo ít nhất một mục, vì gắn vào chỗ chưa có sẽ bị từ chối.
+  - Mục dựng sẵn và mục của nhà hiện chung một dải; trùng tên thì mục của nhà thắng.
+- **Đường API mới** `/api/tritue_youtube_player/suggestions`, kho lưu riêng
+  (`tritue_youtube_player.suggestions`). Đọc thì ai đăng nhập cũng được, **ghi thì chỉ tài
+  khoản quản trị** — cùng mức với việc sửa dashboard.
+
+### Changed
+
+- **`_syncPlayers` nay cũng canh bằng chữ ký trước khi dựng lại danh sách loa.** Đây là
+  chỗ cuối cùng cùng lớp lỗi với hai chỗ đã sửa ở 0.12.2, lúc đó tôi ghi rõ là để làm
+  riêng cho cẩn thận. Phần đuôi (âm lượng, nút điều khiển, đang phát) vẫn chạy mỗi lượt vì
+  nó phản ánh trạng thái sống — cổng canh chỉ bọc đúng phần dựng lại chip loa.
+
+### Ghi chú về kiểm chứng
+
+- Phần lưu trữ viết dạng hàm thuần, không nhập gì của Home Assistant, nên chạy thẳng được
+  để thử. Lần chạy thử đầu tiên bắt được **hai lỗi thật trong chính mã vừa viết**, sửa
+  trước khi đẩy: chuỗi đặt nhầm chỗ danh sách bị tách thành từng ký tự
+  (`{"tags": "abc"}` → `["a","b","c"]`), và tên tiếng Việt sinh mã mục hỏng
+  ("Nhạc tối" → `nh-c-t-i`) khiến hai tên khác nhau có thể đụng nhau. Nay bỏ dấu đúng cách
+  nên ra `nhac-toi`.
+
 ## 0.14.0 - 2026-09-18
 
 ### Added

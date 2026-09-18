@@ -86,6 +86,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._syncNowPlaying()", script)
         # Hidden players: loaded from and saved to the integration's HA storage.
         self.assertIn('callApi("GET", "tritue_youtube_player/hidden_players")', script)
+        # 0.15: từ khoá và video gắn sẵn lấy từ tích hợp, không nằm trong YAML của
+        # từng thẻ — thêm hay bớt card đều không mất dữ liệu.
+        self.assertIn('callApi("GET", "tritue_youtube_player/suggestions")', script)
+        self.assertIn('callApi("POST", "tritue_youtube_player/suggestions"', script)
+        self.assertIn('action: "add_tag"', script)
+        self.assertIn('action: "add_group"', script)
+        self.assertIn('action: "pin_song"', script)
+        # Chữ ký vẽ lại PHẢI gồm dữ liệu của nhà, nếu không thì đúng lúc nhận được
+        # từ khoá mới lại là lúc bỏ qua việc vẽ lại.
+        self.assertIn("this._goiY ? JSON.stringify(this._goiY)", script)
         self.assertIn('callApi("POST", "tritue_youtube_player/hidden_players"', script)
         self.assertIn("this._loadHiddenPlayers()", script)
         self.assertIn("!this._hiddenPlayers.has(entityId)", script)
@@ -177,6 +187,13 @@ class LovelaceCardContractTests(unittest.TestCase):
 
         self.assertIn("hass.http.register_view(TriTueHiddenPlayersView())", frontend)
         self.assertIn('url = "/api/tritue_youtube_player/hidden_players"', http)
+        # 0.15: từ khoá và video gắn sẵn của cả nhà — lưu ở tích hợp nên mọi bảng
+        # điều khiển và mọi máy dùng chung, thêm hay bớt card không mất dữ liệu.
+        self.assertIn("hass.http.register_view(TriTueSuggestionsView())", frontend)
+        self.assertIn('url = "/api/tritue_youtube_player/suggestions"', http)
+        # Hai kho lưu trữ PHẢI khác khoá, nếu không tính năng này ghi đè danh sách
+        # thiết bị đã ẩn.
+        self.assertIn("STORAGE_KEY as SUGGESTIONS_STORAGE_KEY", http)
         self.assertIn("Store(hass, STORAGE_VERSION, STORAGE_KEY)", http)
         self.assertIn("await self._store.async_save(", http)
         self.assertIn("if user is None or not user.is_admin:", http)

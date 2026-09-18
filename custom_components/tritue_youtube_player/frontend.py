@@ -19,6 +19,7 @@ from .http import (
     TriTueProxyView,
     TriTueSearchView,
     TriTueStreamView,
+    TriTueSuggestionsView,
 )
 
 
@@ -37,6 +38,10 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     hass.http.register_view(TriTueProxyView)
     hass.http.register_view(TriTuePlaylistsView)
     hass.http.register_view(TriTueHiddenPlayersView())
+    # Khởi tạo sẵn (có ngoặc) vì view này giữ store và khoá riêng cho mỗi lần chạy,
+    # giống TriTueHiddenPlayersView — các view còn lại không giữ trạng thái nên HA
+    # tự dựng lấy.
+    hass.http.register_view(TriTueSuggestionsView())
 
     integration = await async_get_integration(hass, DOMAIN)
     versioned_url = f"{CARD_URL}?v={integration.version}"
