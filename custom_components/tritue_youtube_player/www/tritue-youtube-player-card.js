@@ -649,6 +649,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return 8;
   }
 
+  /** Bề rộng card. Ở dashboard kiểu "Sections", Home Assistant chia lưới 12 cột và
+      card nào KHÔNG khai gì thì bị cấp mặc định hẹp — đó là lý do card này trông
+      chật trên máy tính. Khai ở đây là xin trọn 12 cột; người dùng vẫn chỉnh lại
+      được trong phần Bố cục của từng thẻ. min_columns giữ card còn dùng được khi
+      bị kéo hẹp. */
+  getGridOptions() {
+    return { columns: 12, min_columns: 6, rows: "auto" };
+  }
+
   connectedCallback() {
     if (!this._progressTimer) {
       this._progressTimer = setInterval(() => {
@@ -866,9 +875,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .spk-bar-main { display: flex; align-items: center; gap: 9px; min-width: 0; }
         .spk-bar-icon { --mdc-icon-size: 20px; color: var(--ad-accent,#00ffcc); }
         .spk-bar-copy { min-width: 0; }
+        /* Nhãn PHẢI có luật chống xuống dòng. Thiếu nó thì ở khung hẹp «LOA PHÁT
+           NHẠC» rơi xuống ba dòng, đội khung cao lên và đè vào nút «Đổi loa» —
+           đúng chỗ vỡ trong ảnh chụp. Nút thì flex:none nên không co được, vậy
+           phần phải nhường là nhãn. */
         .spk-bar-label {
           font-size: .68rem; font-weight: 700; letter-spacing: .04em;
           text-transform: uppercase; color: var(--secondary-text-color);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .spk-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; font-weight: 600; }
         .spk-toggle {
@@ -1413,6 +1427,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           align-items: start;
           margin-top: 12px;
         }
+        /* Hai cột đọc như HAI THẺ liền nhau chứ không phải một khối lớn: mỗi cột có
+           nền, viền và bo góc riêng. Chỉ áp từ 901px trở lên — màn hình hẹp xếp dọc
+           một cột thì viền lồng trong viền trông rối. */
+        @media (min-width: 901px) {
+          .yt-layout > .player,
+          .yt-layout > .yt-zone-playlist {
+            background: rgba(var(--ad-c2,13,21,37),0.38);
+            border: 1px solid rgba(var(--ad-c1,0,204,204),0.16);
+            border-radius: 16px;
+            padding: 10px;
+          }
+        }
         .yt-layout > .player { grid-area: video; margin-top: 0; }
         /* Video lấp đầy toàn bộ chiều rộng của khung .player (trước đây bị bó hẹp
            theo --yt-video-max-h nên 2 bên thừa viền đen/rỗng) — chiều cao tự theo
@@ -1728,9 +1754,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           box-shadow: 0 2px 8px rgba(255, 85, 51, 0.25);
         }
 
+        /* Ô nhỏ lại: 150px trên cột rộng của máy tính cho ra ảnh rất to. 118px thì
+           máy tính xếp được nhiều bài hơn mà điện thoại vẫn đủ 2 cột. */
         .yt-song-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
           gap: 10px;
         }
 

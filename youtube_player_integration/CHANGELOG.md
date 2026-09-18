@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.14.0 - 2026-09-18
+
+### Added
+
+- **Card tự xin bề rộng của dashboard.** Đây là lời giải cho câu "có cách nào tăng độ
+  rộng của card không": ở dashboard kiểu **Sections**, Home Assistant chia lưới 12 cột và
+  card nào **không khai gì** thì bị cấp mặc định hẹp — card này trước đây không khai gì
+  cả. Nay nó xin trọn 12 cột (tối thiểu 6), và anh vẫn chỉnh lại được trong phần Bố cục
+  của từng thẻ.
+
+### Changed
+
+- **Hai cột trông như hai thẻ liền nhau**, mỗi cột có nền, viền và bo góc riêng thay vì
+  nằm chung một khối lớn. Chỉ áp dụng từ 901px trở lên; màn hình hẹp vẫn xếp dọc một cột
+  vì viền lồng trong viền trông rối.
+- **Ảnh bài hát gợi ý nhỏ lại** — ô tối thiểu từ 150px xuống 118px, nên máy tính xếp được
+  nhiều bài hơn trên một hàng mà điện thoại vẫn đủ hai cột.
+
+### Fixed
+
+- **Thanh "Loa phát nhạc" bị vỡ ở khung hẹp.** Nhãn không có luật chống xuống dòng, trong
+  khi nút "Đổi loa" đặt `flex: none` nên không co được — khung hẹp lại thì nhãn rơi xuống
+  ba dòng, đội khung cao lên và **đè vào nút**. Thấy rõ trong ô xem trước của trình sửa.
+  Nay nhãn cắt gọn bằng dấu ba chấm.
+
+### Ghi chú về việc thêm card thứ hai
+
+- Đo bằng `grep`: chỉ có **hai** chỗ dùng `position: fixed` (z-index 10 và 11), và cả hai
+  đều thuộc lớp phủ video lúc phóng to / toàn màn hình. Ở trạng thái thường **không có gì
+  tràn ra ngoài card**, nên thêm card thứ hai không bị đè. Riêng lúc phóng to, mã đã có
+  sẵn phần nhận biết dashboard "nhốt" lớp phủ và tự chuyển sang chế độ toàn màn hình của
+  trình duyệt.
+
 ## 0.13.1 - 2026-09-18
 
 ### Fixed
