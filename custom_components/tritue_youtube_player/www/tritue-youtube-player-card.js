@@ -2215,11 +2215,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                    thì khung video ẩn nên sóng nhạc chiếm đúng chỗ trống đó — không phóng to
                    theo video, giữ nguyên cỡ. Kiểu sóng (bars/simple/dots) lấy từ cấu hình. -->
               ${this._renderWave()}
-              <div class="progress" hidden>
-                <span class="elapsed">0:00</span>
-                <div class="bar"><div class="fill"></div></div>
-                <span class="total">0:00</span>
-              </div>
               <div class="control-bar">
                 <div class="transport-group" role="group" aria-label="Điều khiển phát">
                   <button class="ctl previous" type="button" aria-label="Bài trước" title="Bài trước"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
@@ -2227,6 +2222,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                   <button class="ctl next" type="button" aria-label="Bài tiếp theo" title="Bài tiếp theo"><ha-icon icon="mdi:skip-next"></ha-icon></button>
                   <button class="ctl stop" type="button" aria-label="Dừng" title="Dừng"><ha-icon icon="mdi:stop"></ha-icon></button>
                 </div>
+              </div>
+              <!-- Thanh tiến trình đặt DƯỚI hàng nút, không kẹp giữa sóng nhạc và nút.
+                   Chủ máy chốt 18/09/2026: "vạch tiến độ bài hát đang ở giữa", và ảnh mẫu
+                   anh gửi cũng để nó dưới cùng, chạy hết bề ngang.
+                   Đổi thứ tự NGAY TRONG BẢN DỰNG THẺ chứ không dùng thuộc tính «order»
+                   của CSS: «.stage» là display: contents còn «.player» là khối thường,
+                   không phải khung linh hoạt, nên «order» sẽ không có tác dụng gì cả. -->
+              <div class="progress" hidden>
+                <span class="elapsed">0:00</span>
+                <div class="bar"><div class="fill"></div></div>
+                <span class="total">0:00</span>
               </div>
               <div class="stage-controls">
                 <div class="view-group">

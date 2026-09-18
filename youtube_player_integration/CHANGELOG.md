@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.20.8 - 2026-09-18
+
+### Changed — vạch tiến độ xuống dưới cùng, không còn kẹp giữa
+
+- Thanh tiến trình vốn nằm **giữa** sóng nhạc và hàng nút. Chủ máy chốt: *"vạch tiến độ
+  bài hát đang ở giữa"*, và ảnh mẫu cũng để nó **dưới cùng**. Nay thứ tự là sóng nhạc →
+  hàng nút → thanh tiến trình.
+- Khung kính bọc sóng nhạc và hàng nút vẫn liền mạch, vì hai khối đó vẫn cạnh nhau —
+  thanh tiến trình xuống dưới cả khung chứ không chen vào giữa.
+
+### Vì sao đổi trong bản dựng thẻ chứ không dùng CSS
+
+- Cách gọn nhất trông có vẻ là thuộc tính `order` của CSS. Nhưng `.stage` khai
+  `display: contents` và `.player` là khối thường, **không phải khung linh hoạt** — nên
+  `order` sẽ **không có tác dụng gì cả**, và đó là kiểu hỏng lặng lẽ: viết xong thấy
+  không đổi gì mà chẳng có lỗi nào báo.
+- Đây là lần thứ hai `display: contents` của `.stage` suýt làm tôi mất công: lần trước
+  là khi định vẽ lớp nền mờ lên chính nó.
+
 ## 0.20.7 - 2026-09-18
 
 ### Changed — khung chỉ nghe gọn lại còn khoảng một nửa
