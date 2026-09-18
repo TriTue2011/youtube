@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.20.3 - 2026-09-18
+
+### Added — chỉnh được cả bảng màu, và có bộ màu dựng sẵn
+
+- Thêm **bảy màu chỉnh riêng** bên cạnh hai màu cũ (nền, nhấn): màu nhấn phụ, màu mặt
+  thẻ con, màu chữ chính, màu chữ phụ, màu cảnh báo, màu viền.
+- Thêm ô **"Bộ màu dựng sẵn"** để chọn một phát ra cả bảng, kèm mục **"Trả về mặc định"**
+  xoá sạch màu đã chọn. Mọi ô màu bên dưới **vẫn chỉnh riêng được** như cũ.
+- Bộ dựng sẵn đầu tiên — *Than chì · Cam san hô + Xanh cyan*: nền `#202120`, mặt thẻ
+  `#303130`, nhấn `#FF7045`, nhấn phụ `#12A8CC`, cảnh báo `#FF4F62`, chữ `#F2F2F2`,
+  chữ phụ `#A5A5A5`, viền `#8A642F`.
+
+### Những thứ phải làm kèm, nếu thiếu thì ô chọn màu chỉ là nút bấm giả
+
+- Màu chữ trắng trước đây **ghi cứng ở 16 chỗ** và màu cảnh báo ở 7 chỗ với ba sắc đỏ
+  khác nhau. Nay tất cả đi qua biến, **giá trị dự phòng đúng bằng màu cũ** — nên chưa
+  chọn màu nào thì card không đổi một chút nào.
+- Card gọi các biến giao diện chuẩn của Home Assistant rất nhiều: `--secondary-text-color`
+  24 lần, `--divider-color` 14 lần, `--primary-text-color` 9 lần. Nên màu chữ và màu viền
+  được đặt đè lên **chính các biến đó**, một chỗ là hơn năm mươi nơi đổi theo.
+- Việc đặt đè ấy **chỉ xảy ra khi có màu hợp lệ**. Khai sẵn trong CSS thì lúc chưa chọn,
+  giá trị dự phòng sẽ thay giá trị của giao diện đang dùng và làm đổi diện mạo ngoài ý
+  muốn — đúng kiểu hỏng âm thầm mà không ai truy ra.
+- Bộ màu dựng sẵn ghi **chín khoá trong một lần phát**. Gọi lần lượt thì Home Assistant
+  nhận chín sự kiện liên tiếp, mỗi sự kiện mang một bản cấu hình dở dang.
+
 ## 0.20.2 - 2026-09-18
 
 ### Added — tua được bằng thanh tiến trình

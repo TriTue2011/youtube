@@ -619,6 +619,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       bg_style: "gradient",   // gradient | solid | none (trong suốt, ăn theo dashboard)
       bg_color: "",           // màu nền, dạng #rrggbb
       accent_color: "",       // màu nhấn (nút, viền, sóng nhạc), dạng #rrggbb
+      /* Bộ màu mở rộng. ĐỂ TRỐNG là giữ nguyên diện mạo cũ — _applyTheme chỉ đặt
+         biến khi có màu hợp lệ, nên thẻ chưa cấu hình gì thì không đổi gì. */
+      accent2_color: "",      // màu nhấn phụ, dạng #rrggbb
+      text_color: "",         // màu chữ chính
+      text_dim_color: "",     // màu chữ phụ
+      surface_color: "",      // màu mặt thẻ con (bảng chọn, ô nổi)
+      danger_color: "",       // màu cảnh báo / nút xoá
+      line_color: "",         // màu viền, đường kẻ
       opacity: 100,           // độ đục của nền, 0-100
       zoom: 100,              // thu phóng chữ và nút, 50-150
       ...config,
@@ -805,7 +813,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            diện mạo cũ, nên thẻ chưa cấu hình gì thì không đổi gì. */
         ha-card {
           overflow: hidden;
-          color: #fff;
+          color: var(--ad-text,#fff);
           background-color: rgba(var(--ad-c2,13,21,37), var(--ad-bg-alpha, 0.97));
           background-image: var(--ad-bg-image,
             radial-gradient(circle at 94% 2%, rgba(var(--ad-c1,0,204,204), .22), transparent 34%),
@@ -863,7 +871,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           border: 1px solid rgba(var(--ad-c1,0,204,204),0.25);
           border-radius: 11px;
           padding: 9px 12px;
-          color: #fff;
+          color: var(--ad-text,#fff);
           background: rgba(0,0,0,0.25);
           outline: none;
         }
@@ -874,11 +882,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           padding: 10px 15px;
           font-weight: 650;
         }
-        .primary { color: #fff; background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.65), rgba(var(--ad-c1,0,204,204),0.28)); box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35); }
+        .primary { color: var(--ad-text,#fff); background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.65), rgba(var(--ad-c1,0,204,204),0.28)); box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35); }
         .search-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; --mdc-icon-size: 19px; }
         button:disabled { cursor: not-allowed; opacity: .45; }
         .status { min-height: 18px; margin: 6px 1px 0; color: var(--secondary-text-color); font-size: .84rem; }
-        .status.error { color: #ff6b81; }
+        .status.error { color: var(--ad-danger,#ff6b81); }
         .section { margin-top: 8px; }
         .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
         .section-title h3 { margin: 0; font-size: .88rem; display: flex; align-items: center; gap: 6px; }
@@ -996,7 +1004,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .player-chip:has(input:checked) {
           border-color: var(--ad-accent,#00ffcc);
           background: rgba(var(--ad-c1,0,204,204),0.30);
-          color: #fff;
+          color: var(--ad-text,#fff);
           box-shadow: 0 0 10px 1px rgba(var(--ad-c1,0,204,204),0.35);
         }
         .player-chip.source-incompatible { opacity: .62; }
@@ -1016,7 +1024,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           background: transparent;
           --mdc-icon-size: 15px;
         }
-        .hide-player:hover { color: #ff6b81; background: rgba(var(--ad-c1,0,204,204),0.15); }
+        .hide-player:hover { color: var(--ad-danger,#ff6b81); background: rgba(var(--ad-c1,0,204,204),0.15); }
         .move-player {
           display: grid;
           place-items: center;
@@ -1094,7 +1102,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           gap: 6px 10px;
           padding: 6px 10px;
           border-radius: 9px;
-          color: #fff;
+          color: var(--ad-text,#fff);
           background: rgba(0, 0, 0, .75);
           font-size: 12px;
         }
@@ -1107,7 +1115,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           padding: 4px 10px;
           border-radius: 999px;
           background: rgba(0, 0, 0, 0.72);
-          color: #fff;
+          color: var(--ad-text,#fff);
           font-size: 12px;
           white-space: nowrap;
           pointer-events: none;
@@ -1168,7 +1176,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           width: 42px;
           height: 42px;
           margin: 0 2px;
-          color: #fff;
+          color: var(--ad-text,#fff);
           background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.2));
           box-shadow: 0 0 14px 2px rgba(var(--ad-c1,0,204,204),0.4);
           --mdc-icon-size: 26px;
@@ -1206,7 +1214,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             inset 0 -2px 3px rgba(0,0,0,.4),
             0 0 9px 1px rgba(255,107,129,.55);
         }
-        .ctl.stop { color: #ff6b81; }
+        .ctl.stop { color: var(--ad-danger,#ff6b81); }
         .view-group .ctl { width: 32px; height: 32px; color: var(--secondary-text-color); --mdc-icon-size: 19px; }
         input[type="range"] { width: 100%; accent-color: var(--ad-accent,#00ffcc); }
         .progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-top: 6px; font-size: .74rem; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
@@ -1280,7 +1288,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           padding: 0;
           border: 0;
           border-radius: 50%;
-          color: #fff;
+          color: var(--ad-text,#fff);
           background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.6), rgba(var(--ad-c1,0,204,204),0.22));
           box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.4);
           --mdc-icon-size: 20px;
@@ -1299,7 +1307,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           --mdc-icon-size: 18px;
         }
         .icon-button:hover:not(:disabled) { color: var(--primary-text-color); background: var(--divider-color); }
-        .icon-button.danger:hover:not(:disabled) { color: #ff6b81; }
+        .icon-button.danger:hover:not(:disabled) { color: var(--ad-danger,#ff6b81); }
         .save-playlist {
           display: flex;
           align-items: center;
@@ -1365,7 +1373,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           white-space: nowrap;
           --mdc-icon-size: 15px;
         }
-        .pill[aria-pressed="true"] { border-color: var(--ad-accent,#00ffcc); color: #fff; background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.2)); box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.35); }
+        .pill[aria-pressed="true"] { border-color: var(--ad-accent,#00ffcc); color: var(--ad-text,#fff); background: linear-gradient(145deg, rgba(var(--ad-c1,0,204,204),0.55), rgba(var(--ad-c1,0,204,204),0.2)); box-shadow: 0 0 8px 0 rgba(var(--ad-c1,0,204,204),0.35); }
         .empty { padding: 14px 8px; text-align: center; color: var(--secondary-text-color); font-size: .88rem; }
         /* Phóng to / toàn màn hình: cả khối phát (video + nút + âm lượng) phủ màn hình. */
         /* Expanded or fullscreen: the picture fills the screen like YouTube's own player
@@ -1384,7 +1392,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           flex-direction: column;
           justify-content: center;
           padding: 0;
-          color: #fff;
+          color: var(--ad-text,#fff);
           background: #000;
         }
         /* The stage only groups the player's parts so they can be turned together. */
@@ -1473,9 +1481,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Hai nửa bộ chọn anh-em đã bỏ: các nút «.ctl» nay là CON của «.player», nên
            hai dòng dưới đã bao trùm chúng. Giữ lại chỉ là luật chết. */
         .player.expanded .ctl:not(.main),
-        .player:fullscreen .ctl:not(.main) { color: #fff; }
+        .player:fullscreen .ctl:not(.main) { color: var(--ad-text,#fff); }
         .player.expanded .ctl.stop,
-        .player:fullscreen .ctl.stop { color: #ff8a80; }
+        .player:fullscreen .ctl.stop { color: var(--ad-danger,#ff8a80); }
         .player.expanded ~ .yt-zone-playlist .np-zone .now-meta,
         .player:fullscreen ~ .yt-zone-playlist .np-zone .now-meta,
         .player.expanded .svol-name,
@@ -1785,7 +1793,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .yt-search-pill:hover {
           background: rgba(255, 159, 9, 0.2);
           border-color: var(--primary-color, #ff9f09);
-          color: #fff;
+          color: var(--ad-text,#fff);
           transform: translateY(-1px);
         }
 
@@ -1815,7 +1823,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           display: grid; place-items: center; flex: 0 0 auto;
           width: 20px; height: 20px; margin-left: 2px;
           border: 0; border-radius: 999px; cursor: pointer;
-          background: transparent; color: #ff8a80; --mdc-icon-size: 15px;
+          background: transparent; color: var(--ad-danger,#ff8a80); --mdc-icon-size: 15px;
         }
         .chip-x:hover { background: rgba(255,82,82,.22); }
         /* Màu đỏ phải đặt THẲNG lên ha-icon, không thể trông vào thừa kế từ .chip-x:
@@ -1824,13 +1832,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            Viết kèm tên chip cho thành (0,2,1) để hơn (0,1,1) của hai luật kia, nhờ vậy
            không phụ thuộc vào việc luật này đứng trước hay sau chúng trong file. */
         .yt-search-pill .chip-x ha-icon,
-        .yt-cat-btn .chip-x ha-icon { color: #ff8a80; --mdc-icon-size: 15px; }
+        .yt-cat-btn .chip-x ha-icon { color: var(--ad-danger,#ff8a80); --mdc-icon-size: 15px; }
         /* Nút gỡ ghim nằm đè góc ảnh bài hát đã gắn. */
         .yt-card-unpin {
           position: absolute; top: 4px; right: 4px; z-index: 2;
           display: grid; place-items: center; width: 24px; height: 24px;
           border: 0; border-radius: 999px; cursor: pointer;
-          color: #fff; background: rgba(0,0,0,.6);
+          color: var(--ad-text,#fff); background: rgba(0,0,0,.6);
           --mdc-icon-size: 16px;
         }
         .yt-card-unpin:hover { background: rgba(255,82,82,.85); }
@@ -1865,14 +1873,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
 
         .yt-cat-btn:hover {
-          color: #fff;
+          color: var(--ad-text,#fff);
           border-color: rgba(255, 159, 9, 0.4);
         }
 
         .yt-cat-btn.active {
           background: linear-gradient(135deg, rgba(255, 159, 9, 0.35) 0%, rgba(255, 107, 53, 0.25) 100%);
           border-color: var(--primary-color, #ff9f09);
-          color: #fff;
+          color: var(--ad-text,#fff);
           box-shadow: 0 2px 8px rgba(255, 85, 51, 0.25);
         }
 
@@ -1940,7 +1948,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
         .yt-play-overlay ha-icon {
           --mdc-icon-size: 28px;
-          color: #fff;
+          color: var(--ad-text,#fff);
           filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
         }
 
@@ -3296,6 +3304,32 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const [r, g, b] = (nhan || "0,204,204").split(",").map(Number);
     const doSang = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     host.style.setProperty("--ad-on-accent", doSang > 0.6 ? "#0b0f17" : "#ffffff");
+
+    /* BỘ MÀU MỞ RỘNG. Nguyên tắc: CHƯA CHỌN thì KHÔNG ĐỤNG GÌ.
+       Mỗi màu vừa đặt biến riêng của card (--ad-text…, để các luật CSS đã đổi sang
+       biến dùng tới), vừa đặt đè biến giao diện chuẩn của Home Assistant tương ứng.
+       Đặt đè như vậy là cách rẻ nhất: card gọi --secondary-text-color 24 lần,
+       --divider-color 14 lần, --primary-text-color 9 lần — gán một chỗ là hơn năm
+       mươi chỗ đổi theo, khỏi sửa tay từng luật rồi bỏ sót.
+       Nhưng CHỈ đặt khi người dùng thật sự chọn màu: khai sẵn trong CSS thì lúc chưa
+       chọn, giá trị dự phòng sẽ THAY giá trị của giao diện đang dùng và làm đổi diện
+       mạo ngoài ý muốn. */
+    const dat = (bien, mau, ...dongBo) => {
+      const hex = String(mau || "").trim();
+      if (/^#[0-9a-f]{6}$/i.test(hex)) {
+        host.style.setProperty(bien, hex);
+        for (const ten of dongBo) host.style.setProperty(ten, hex);
+      } else {
+        host.style.removeProperty(bien);
+        for (const ten of dongBo) host.style.removeProperty(ten);
+      }
+    };
+    dat("--ad-text", config.text_color, "--primary-text-color");
+    dat("--ad-text-dim", config.text_dim_color, "--secondary-text-color", "--text-muted");
+    dat("--ad-danger", config.danger_color);
+    dat("--ad-accent2", config.accent2_color);
+    dat("--ad-surface", config.surface_color, "--card-background-color", "--secondary-background-color");
+    dat("--ad-line", config.line_color, "--divider-color");
 
     /* Độ đục phải áp cho CẢ lớp chuyển sắc, không riêng lớp màu phẳng. Lớp chuyển
        sắc vẽ ĐÈ lên màu nền và các mốc màu của nó có độ đục cố định sẵn trong CSS
@@ -5231,6 +5265,23 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     }));
   }
 
+  /** Ghi NHIỀU khoá trong MỘT lần phát, cho bộ màu dựng sẵn.
+      Gọi _emit bảy lần thì Home Assistant nhận bảy sự kiện liên tiếp, mỗi sự kiện
+      mang một bản cấu hình dở dang — vừa chớp giật, vừa dễ lưu nhầm bản giữa chừng. */
+  _emitNhieu(doi) {
+    const config = { ...this._config };
+    for (const [khoa, gia] of Object.entries(doi)) {
+      if (gia === "" || gia === null || gia === undefined) delete config[khoa];
+      else config[khoa] = gia;
+    }
+    this._config = config;
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
   _build() {
     if (this._built) return;
     this._built = true;
@@ -5296,6 +5347,14 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
         <div class="group">
           <h4>🎨 Nền</h4>
           <div class="row">
+            <label for="ed-preset">Bộ màu dựng sẵn <span class="hint">Chọn một phát ra cả bảng; mọi ô màu bên dưới vẫn chỉnh riêng được</span></label>
+            <select id="ed-preset">
+              <option value="">— Chọn bộ màu —</option>
+              <option value="than-chi-cam">Than chì · Cam san hô + Xanh cyan</option>
+              <option value="mac-dinh">Trả về mặc định</option>
+            </select>
+          </div>
+          <div class="row">
             <label for="ed-bgstyle">Loại nền</label>
             <select id="ed-bgstyle">
               <option value="gradient">Chuyển sắc (gradient)</option>
@@ -5310,6 +5369,30 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
           <div class="row">
             <label for="ed-accent">Màu nhấn <span class="hint">Nút, viền, sóng nhạc</span></label>
             <input id="ed-accent" type="color" value="#00ffcc" />
+          </div>
+          <div class="row">
+            <label for="ed-accent2">Màu nhấn phụ <span class="hint">Điểm xuyết bên cạnh màu nhấn chính</span></label>
+            <input id="ed-accent2" type="color" value="#12a8cc" />
+          </div>
+          <div class="row">
+            <label for="ed-surface">Màu mặt thẻ con <span class="hint">Bảng chọn, ô nổi bên trong card</span></label>
+            <input id="ed-surface" type="color" value="#303130" />
+          </div>
+          <div class="row">
+            <label for="ed-text">Màu chữ chính</label>
+            <input id="ed-text" type="color" value="#f2f2f2" />
+          </div>
+          <div class="row">
+            <label for="ed-textdim">Màu chữ phụ <span class="hint">Tên ca sĩ, chú thích</span></label>
+            <input id="ed-textdim" type="color" value="#a5a5a5" />
+          </div>
+          <div class="row">
+            <label for="ed-danger">Màu cảnh báo <span class="hint">Nút xoá, nút dừng</span></label>
+            <input id="ed-danger" type="color" value="#ff4f62" />
+          </div>
+          <div class="row">
+            <label for="ed-line">Màu viền và đường kẻ</label>
+            <input id="ed-line" type="color" value="#8a642f" />
           </div>
           <div class="row">
             <label for="ed-opacity">Độ đục của nền (%)</label>
@@ -5373,6 +5456,49 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     on("ed-bgstyle", "bg_style", (el) => el.value);
     on("ed-bgcolor", "bg_color", (el) => el.value);
     on("ed-accent", "accent_color", (el) => el.value);
+    on("ed-accent2", "accent2_color", (el) => el.value);
+    on("ed-surface", "surface_color", (el) => el.value);
+    on("ed-text", "text_color", (el) => el.value);
+    on("ed-textdim", "text_dim_color", (el) => el.value);
+    on("ed-danger", "danger_color", (el) => el.value);
+    on("ed-line", "line_color", (el) => el.value);
+
+    /* Bộ màu dựng sẵn. Chủ máy chốt: "có thêm màu cố định nhưng vẫn nên để cả bảng
+       RGB như hiện tại để chọn cho từng mục" — nên đây chỉ là lối tắt điền sẵn cả
+       bảng, mọi ô màu bên dưới vẫn sửa riêng được như cũ. */
+    const O_MAU = {
+      "ed-bgcolor": "bg_color", "ed-surface": "surface_color",
+      "ed-accent": "accent_color", "ed-accent2": "accent2_color",
+      "ed-danger": "danger_color", "ed-text": "text_color",
+      "ed-textdim": "text_dim_color", "ed-line": "line_color",
+    };
+    const BO_MAU = {
+      // Bảng chủ máy đưa 18/09/2026: nền than chì, nhấn cam san hô, phụ xanh cyan.
+      "than-chi-cam": {
+        bg_style: "gradient", bg_color: "#202120", surface_color: "#303130",
+        accent_color: "#ff7045", accent2_color: "#12a8cc", danger_color: "#ff4f62",
+        text_color: "#f2f2f2", text_dim_color: "#a5a5a5", line_color: "#8a642f",
+      },
+      // Xoá hết màu đã chọn: _applyTheme không đặt biến nào nữa, card về diện mạo gốc.
+      "mac-dinh": Object.fromEntries(Object.values(O_MAU).map((khoa) => [khoa, ""])),
+    };
+    const oBoMau = this.shadowRoot.getElementById("ed-preset");
+    if (oBoMau) {
+      oBoMau.addEventListener("change", () => {
+        const bo = BO_MAU[oBoMau.value];
+        oBoMau.value = "";  // luôn về dòng gợi ý, để chọn lại cùng bộ vẫn ăn.
+        if (!bo) return;
+        this._emitNhieu(bo);
+        /* Vẽ lại các ô cho khớp. «dat» bỏ qua giá trị rỗng nên khi trả về mặc định
+           phải tự đưa ô về màu gốc trong HTML, nếu không ô vẫn hiện màu cũ trong khi
+           cấu hình đã sạch — nhìn như lệnh không ăn. */
+        this._fill();
+        for (const [id, khoa] of Object.entries(O_MAU)) {
+          const el = this.shadowRoot.getElementById(id);
+          if (el && !bo[khoa]) el.value = el.defaultValue;
+        }
+      });
+    }
     on("ed-layout", "layout", (el) => el.value);
     on("ed-opacity", "opacity", (el) => Number(el.value));
     on("ed-zoom", "zoom", (el) => Number(el.value));
@@ -5442,6 +5568,12 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     dat("ed-bgstyle", config.bg_style || "gradient");
     dat("ed-bgcolor", config.bg_color);
     dat("ed-accent", config.accent_color);
+    dat("ed-accent2", config.accent2_color);
+    dat("ed-surface", config.surface_color);
+    dat("ed-text", config.text_color);
+    dat("ed-textdim", config.text_dim_color);
+    dat("ed-danger", config.danger_color);
+    dat("ed-line", config.line_color);
     dat("ed-layout", config.layout || "horizontal");
     dat("ed-opacity", config.opacity === undefined ? 100 : config.opacity);
     dat("ed-zoom", config.zoom === undefined ? 100 : config.zoom);
