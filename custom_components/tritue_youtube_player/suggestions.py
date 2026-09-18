@@ -95,10 +95,22 @@ def normalize_group(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _hidden_list(value: Any, limit: int) -> list[str]:
+    """Names of built-in entries the household chose to hide."""
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for candidate in value:
+        text = _text(candidate)
+        if text and text not in out:
+            out.append(text)
+    return out[:limit]
+
+
 def normalize_suggestions(value: Any) -> dict[str, Any]:
     """Return the stored document with anything malformed dropped."""
     if not isinstance(value, dict):
-        return {"tags": [], "groups": []}
+        return {"tags": [], "groups": [], "hidden_tags": [], "hidden_groups": []}
     # Phải đúng là list. Nhận bừa rồi lặp qua một chuỗi sẽ tách nó thành TỪNG KÝ TỰ:
     # {"tags": "abc"} biến thành ["a", "b", "c"] chứ không bị loại.
     raw_tags = value.get("tags")
@@ -119,7 +131,14 @@ def normalize_suggestions(value: Any) -> dict[str, Any]:
         if group and group["id"] not in ids:
             ids.add(group["id"])
             groups.append(group)
-    return {"tags": tags[:MAX_TAGS], "groups": groups[:MAX_GROUPS]}
+    return {
+        "tags": tags[:MAX_TAGS],
+        "groups": groups[:MAX_GROUPS],
+        # Từ khoá/mục DỰNG SẴN mà nhà không muốn thấy. Chúng nằm trong mã của card
+        # nên không xoá khỏi kho được — chỉ ghi lại tên để card lọc đi.
+        "hidden_tags": _hidden_list(value.get("hidden_tags"), MAX_TAGS),
+        "hidden_groups": _hidden_list(value.get("hidden_groups"), MAX_GROUPS),
+    }
 
 
 def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, Any]:
@@ -145,11 +164,19 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
             if len(tags) >= MAX_TAGS:
                 raise ValueError("too_many_tags")
             tags.append(tag)
-        return {"tags": tags, "groups": groups}
+        return {**document, "tags": tags, "groups": groups}
 
     if action == "remove_tag":
         tag = _text(payload.get("text"))
-        return {"tags": [item for item in tags if item != tag], "groups": groups}
+        if not tag:
+            raise ValueError("invalid_text")
+        con_lai = [item for item in tags if item != tag]
+        # Xoá đúng cái của nhà thì bỏ khỏi danh sách; còn cái DỰNG SẴN thì không có
+        # trong kho để mà bỏ, nên ghi tên vào danh sách ẩn để card lọc đi.
+        an = document["hidden_tags"]
+        if len(con_lai) == len(tags) and tag not in an:
+            an.append(tag)
+        return {**document, "tags": con_lai, "hidden_tags": an}
 
     if action == "add_group":
         group = normalize_group(
@@ -167,14 +194,18 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
         if len(groups) >= MAX_GROUPS:
             raise ValueError("too_many_groups")
         groups.append(group)
-        return {"tags": tags, "groups": groups}
+        return {**document, "tags": tags, "groups": groups}
 
     if action == "remove_group":
         group_id = _text(payload.get("id"), 32)
-        return {
-            "tags": tags,
-            "groups": [item for item in groups if item["id"] != group_id],
-        }
+        if not group_id:
+            raise ValueError("invalid_group")
+        con_lai = [item for item in groups if item["id"] != group_id]
+        # Cùng cách với từ khoá: mục dựng sẵn thì ghi id vào danh sách ẩn.
+        an = document["hidden_groups"]
+        if len(con_lai) == len(groups) and group_id not in an:
+            an.append(group_id)
+        return {**document, "groups": con_lai, "hidden_groups": an}
 
     if action in ("pin_song", "unpin_song"):
         group_id = _text(payload.get("id"), 32)
@@ -184,16 +215,16 @@ def apply_suggestion_change(current: dict[str, Any], payload: Any) -> dict[str, 
         if action == "unpin_song":
             video_id = _text(payload.get("video_id"), 32)
             target["songs"] = [s for s in target["songs"] if s["id"] != video_id]
-            return {"tags": tags, "groups": groups}
+            return {**document, "tags": tags, "groups": groups}
         song = normalize_song(payload.get("item"))
         if song is None:
             raise ValueError("invalid_song")
         if any(existing["id"] == song["id"] for existing in target["songs"]):
-            return {"tags": tags, "groups": groups}
+            return {**document, "tags": tags, "groups": groups}
         if len(target["songs"]) >= MAX_SONGS_PER_GROUP:
             raise ValueError("too_many_songs")
         target["songs"].append(song)
-        return {"tags": tags, "groups": groups}
+        return {**document, "tags": tags, "groups": groups}
 
     raise ValueError("unknown_action")
 

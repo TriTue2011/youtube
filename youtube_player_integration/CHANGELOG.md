@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.18.0 - 2026-09-18
+
+### Fixed
+
+- **Xoá được từ khoá và mục dựng sẵn.** Bản trước tôi chỉ cho xoá thứ nhà tự thêm, mà
+  gần như mọi thứ trên màn hình đều là danh sách dựng sẵn — nên nút xoá lúc nào cũng mờ và
+  đúng là **"không xoá được"**. Nay xoá được tất cả: thứ của nhà thì bỏ khỏi kho, thứ dựng
+  sẵn nằm trong mã nên máy chủ ghi tên vào **danh sách ẩn** và card lọc đi — nhìn từ phía
+  người dùng thì y như đã xoá.
+- **Hai ô chọn về chung MỘT hàng** thay vì xếp thành hai hàng; card hẹp thì tự xuống dòng.
+- **Nền ô chọn ăn theo màu nền card** thay vì màu cứng — đổi màu trong trình sửa xong hai
+  ô này không còn lạc tông. Danh sách bung ra cũng được ép màu chữ/nền để khỏi trắng trên
+  trắng.
+- **Chế độ ngang dùng được ở card hẹp hơn:** ngưỡng hai cột hạ từ **901px xuống 640px**,
+  cột phải tối thiểu từ 300px xuống 240px. Con số 901 trước đây là tôi tự đặt, quá cao nên
+  card nửa màn hình không bao giờ xếp ngang được dù chọn "Ngang".
+- **Gỡ logo YouTube trên đầu card** (biểu tượng của chính card).
+
+### Không làm được — đã tra tài liệu Google
+
+- **Watermark YouTube bên trong khung video không gỡ được.** Tài liệu chính thức:
+  *"The `modestbranding` parameter is deprecated and will have no effect… the player now
+  determines the appropriate branding treatment based on… player size, other API
+  parameters, and additional signals."* CSS cũng không chạm được vào nội dung bên trong
+  khung nhúng của bên khác. Phát ra loa hoặc tivi thì không có watermark này.
+
+### Ghi chú về kiểm chứng
+
+- Khi thêm hai danh sách ẩn, tôi **tự tạo ra một lỗi mất dữ liệu**: bốn nhánh ghi còn lại
+  vẫn trả về tài liệu thiếu hai khoá mới, nghĩa là thêm một từ khoá sẽ **xoá sạch danh
+  sách đã ẩn**. Phép thử chạy thẳng trên hàm thuần bắt được trước khi đẩy; nay cả 5 đường
+  trả về đều giữ đủ, và có phép thử đầu-cuối chứng minh.
+
 ## 0.17.0 - 2026-09-18
 
 ### Đính chính một điều tôi đã nói sai ở 0.14.0

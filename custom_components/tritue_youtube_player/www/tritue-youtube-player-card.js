@@ -805,7 +805,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Popup ngoài (announce-center-card) đã có tiêu đề + nút đóng riêng, nên h2 ở đây
            chỉ giữ lại cho JS gán textContent, không hiển thị để khỏi trùng chữ. */
         header .visually-hidden { display: none; }
-        header .brand-logo { color: #ff0000; --mdc-icon-size: 26px; flex: none; }
         h2 { margin: 0; font-size: 1.2rem; line-height: 1.2; }
         .subtitle, .hint { color: rgba(255,255,255,.62); font-size: .86rem; }
         .subtitle { margin: 3px 0 0; font-size: .8rem; }
@@ -936,7 +935,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .layout-pick ha-icon { --mdc-icon-size: 18px; }
         .layout-pick.on { background: rgba(var(--ad-c1,0,204,204),0.18); color: var(--ad-accent,#00ffcc); }
         /* Màn hình hẹp luôn xếp một cột, nên nút chọn bố cục không còn ý nghĩa. */
-        @container ytcard (max-width: 900px) { .layout-switch { display: none; } }
+        @container ytcard (max-width: 639px) { .layout-switch { display: none; } }
         .spk-toggle.open ha-icon { transform: rotate(180deg); }
         .spk-volume { margin-top: 8px; }
         .spk-volume:empty { display: none; }
@@ -1463,9 +1462,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           margin-top: 12px;
         }
         /* Hai cột đọc như HAI THẺ liền nhau chứ không phải một khối lớn: mỗi cột có
-           nền, viền và bo góc riêng. Chỉ áp khi CHÍNH CARD rộng từ 901px — card hẹp
+           nền, viền và bo góc riêng. Chỉ áp khi CHÍNH CARD rộng từ 640px — card hẹp
            xếp dọc một cột thì viền lồng trong viền trông rối. */
-        @container ytcard (min-width: 901px) {
+        @container ytcard (min-width: 640px) {
           .yt-layout > .player,
           .yt-layout > .yt-zone-playlist {
             background: rgba(var(--ad-c2,13,21,37),0.38);
@@ -1604,7 +1603,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           transition: opacity .2s, transform .2s ease-in-out;
         }
         .np-zone.is-playing .wv-dot { opacity: 1; }
-        @container ytcard (max-width: 900px) {
+        @container ytcard (max-width: 639px) {
           .yt-layout {
             grid-template-columns: 1fr;
             grid-template-areas:
@@ -1652,12 +1651,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .np-wave { height: 20px; }
         }
         /* Bề rộng cột video theo «player_width». BẮT BUỘC bọc trong @media min-width:
-           901px. Luật này viết SAU khối điểm ngắt hẹp và cùng độ ưu tiên (0,1,0), nên
+           640px. Luật này viết SAU khối điểm ngắt hẹp và cùng độ ưu tiên (0,1,0), nên
            để trần thì nó đè mất «grid-template-columns: 1fr» của card hẹp: card nhận
            lưới 2 cột trong khi grid-template-areas đã xếp dọc một cột — đó chính là
            lúc bố cục vỡ. */
-        @container ytcard (min-width: 901px) {
-          .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(300px, 1fr); }
+        @container ytcard (min-width: 640px) {
+          .yt-layout { grid-template-columns: var(--yt-video-col, minmax(0, 1.4fr)) minmax(240px, 1fr); }
         }
         /* «layout: vertical» — xếp dọc một cột, cho dashboard cột hẹp. */
         .yt-layout.yt-layout--doc {
@@ -1759,16 +1758,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           font: inherit;
           font-size: .88rem;
           color: var(--primary-text-color, #fff);
-          background: rgba(var(--ad-c2,13,21,37),0.55);
+          /* Nền ăn theo MÀU NỀN CARD chứ không phải màu cứng: đặt cứng thì đổi màu
+             trong trình sửa xong hai ô này vẫn tông cũ, nhìn lạc hẳn ra. Dùng
+             color-mix để pha đúng sắc nền đang dùng, đậm hơn một chút cho nổi. */
+          background: color-mix(in srgb, rgba(var(--ad-c2,13,21,37),1) 82%, #fff 18%);
           border: 1px solid rgba(var(--ad-c1,0,204,204),0.25);
           border-radius: 10px;
         }
+        /* Danh sách bung ra do trình duyệt vẽ, không nhận màu của card — ép màu chữ
+           và nền cho từng dòng để nó không ra nền trắng chữ trắng trên máy tính. */
+        .yt-pick option { background: rgb(var(--ad-c2,13,21,37)); color: #fff; }
         .yt-pick:focus { outline: none; border-color: var(--ad-accent,#00ffcc); }
         .yt-pick-cat { font-weight: 600; }
         /* Ô chọn co giãn, nút xoá giữ nguyên cỡ — cùng bài học với thanh «Loa phát
            nhạc»: phần co được phải là phần chữ, không phải cái nút. */
-        .yt-pick-row { display: flex; align-items: center; gap: 6px; }
-        .yt-pick-row .yt-pick { flex: 1 1 auto; min-width: 0; }
+        /* Bốn phần tử trên MỘT hàng: ô từ khoá, nút xoá, ô nhóm, nút xoá. Card hẹp
+           thì tự xuống dòng thay vì bóp cả bốn cho vừa. */
+        .yt-pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .yt-pick-row .yt-pick { flex: 1 1 42%; min-width: 0; }
         .yt-pick-del { flex: 0 0 auto; --mdc-icon-size: 18px; color: #ff8a80; }
         .yt-pick-del:disabled { opacity: .35; cursor: default; }
         /* Nút gỡ ghim nằm đè góc ảnh bài hát đã gắn. */
@@ -1945,7 +1952,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                 <button class="layout-pick" type="button" data-layout="horizontal" aria-pressed="false" title="Xếp ngang" aria-label="Xếp ngang"><ha-icon icon="mdi:view-split-vertical"></ha-icon></button>
                 <button class="layout-pick" type="button" data-layout="vertical" aria-pressed="false" title="Xếp dọc" aria-label="Xếp dọc"><ha-icon icon="mdi:view-agenda"></ha-icon></button>
               </div>
-              <ha-icon class="brand-logo" icon="mdi:youtube"></ha-icon>
             </div>
           </header>
 
@@ -3177,12 +3183,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!box) return;
     // Mục dựng sẵn cộng mục của nhà. Mục nhà đứng sau nhưng tìm theo id nên bấm vào
     // đâu cũng đúng; trùng id thì mục nhà thắng vì nó cụ thể hơn.
+    // Mục/từ khoá dựng sẵn mà nhà đã xoá thì lọc đi. Chúng nằm trong mã nên không
+    // xoá khỏi kho được — máy chủ ghi tên vào danh sách ẩn, card lọc theo đó.
+    const anMuc = new Set(this._goiY?.hidden_groups || []);
+    const anTuKhoa = new Set(this._goiY?.hidden_tags || []);
     const mucGoiY = [
       ...YOUTUBE_SUGGESTED_CATEGORIES.filter(
-        (c) => !(this._goiY?.groups || []).some((g) => g.id === c.id)),
+        (c) => !anMuc.has(c.id) && !(this._goiY?.groups || []).some((g) => g.id === c.id)),
       ...(this._goiY?.groups || []),
     ];
-    const tuKhoa = [...QUICK_SEARCH_TAGS, ...(this._goiY?.tags || [])];
+    const tuKhoa = [
+      ...QUICK_SEARCH_TAGS.filter((t) => !anTuKhoa.has(t)),
+      ...(this._goiY?.tags || []),
+    ];
     this._ytSuggestedCategory = this._ytSuggestedCategory || mucGoiY[0].id;
     /* Khối này KHÔNG đọc gì từ trạng thái nhà — nội dung chỉ phụ thuộc bốn thứ dưới
        đây, còn bài hát thì lấy từ hằng số. Nhưng nó được gọi từ «set hass», tức mỗi
@@ -3276,12 +3289,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const xoaTuKhoaIcon = document.createElement("ha-icon");
     xoaTuKhoaIcon.setAttribute("icon", "mdi:trash-can-outline");
     xoaTuKhoa.append(xoaTuKhoaIcon);
+    /* Xoá được MỌI từ khoá, kể cả loại dựng sẵn — bản trước tôi chỉ cho xoá của nhà
+       nên gần như lúc nào nút cũng mờ, và chủ máy báo "không xoá được". Từ khoá dựng
+       sẵn không bỏ khỏi kho được, nhưng máy chủ ghi tên vào danh sách ẩn nên nó biến
+       khỏi danh sách y như bị xoá. */
     const canhXoaTuKhoa = () => {
-      const cuaNha = (this._goiY?.tags || []).includes(oTuKhoa.value);
-      xoaTuKhoa.disabled = !cuaNha;
-      xoaTuKhoa.title = cuaNha
+      const co = Boolean(oTuKhoa.value);
+      xoaTuKhoa.disabled = !co;
+      xoaTuKhoa.title = co
         ? `Xoá từ khoá “${oTuKhoa.value}”`
-        : "Chọn một từ khoá do nhà tự thêm để xoá";
+        : "Chọn một từ khoá rồi bấm để xoá";
       xoaTuKhoa.setAttribute("aria-label", xoaTuKhoa.title);
     };
     xoaTuKhoa.addEventListener("click", () => {
@@ -3299,9 +3316,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._search();
     });
     canhXoaTuKhoa();
-    const hangTuKhoa = el("div", "yt-pick-row");
-    hangTuKhoa.append(oTuKhoa, xoaTuKhoa);
-    box.append(hangTuKhoa);
+    // Cả hai ô nằm CHUNG một hàng theo yêu cầu, thay vì xếp thành hai hàng.
+    const hangChon = el("div", "yt-pick-row");
+    hangChon.append(oTuKhoa, xoaTuKhoa);
 
     // Cùng lý do: thả xuống thay hàng nút cuộn ngang.
     const oMuc = document.createElement("select");
@@ -3326,22 +3343,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const xoaMucIcon = document.createElement("ha-icon");
     xoaMucIcon.setAttribute("icon", "mdi:trash-can-outline");
     xoaMuc.append(xoaMucIcon);
+    // Cũng cho xoá mọi mục, kể cả dựng sẵn — mục dựng sẵn thì máy chủ ghi vào danh
+    // sách ẩn. «mucCuaNha» vẫn dùng riêng cho nút gỡ ghim, vì chỉ mục của nhà mới
+    // sửa được danh sách bài bên trong.
     const mucCuaNha = (this._goiY?.groups || []).find((g) => g.id === this._ytSuggestedCategory);
-    xoaMuc.disabled = !mucCuaNha;
-    xoaMuc.title = mucCuaNha
-      ? `Xoá mục “${mucCuaNha.name}” và các video đã gắn`
-      : "Mục dựng sẵn không xoá được";
+    const mucDangXem = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
+    xoaMuc.disabled = !mucDangXem;
+    xoaMuc.title = mucDangXem
+      ? `Xoá mục “${mucDangXem.name}”`
+      : "Chọn một mục rồi bấm để xoá";
     xoaMuc.setAttribute("aria-label", xoaMuc.title);
     xoaMuc.addEventListener("click", () => {
-      if (!mucCuaNha) return;
-      if (!window.confirm(`Xoá mục “${mucCuaNha.name}” và mọi video đã gắn trong đó?`)) return;
+      if (!mucDangXem) return;
+      if (!window.confirm(`Xoá mục “${mucDangXem.name}” khỏi danh sách gợi ý?`)) return;
       this._ytSuggestedCategory = "";
-      this._saveSuggestion({ action: "remove_group", id: mucCuaNha.id },
-        `Đã xoá mục “${mucCuaNha.name}”.`);
+      this._saveSuggestion({ action: "remove_group", id: mucDangXem.id },
+        `Đã xoá mục “${mucDangXem.name}”.`);
     });
-    const hangMuc = el("div", "yt-pick-row");
-    hangMuc.append(oMuc, xoaMuc);
-    box.append(hangMuc);
+    hangChon.append(oMuc, xoaMuc);
+    box.append(hangChon);
 
     const found = mucGoiY.find((c) => c.id === this._ytSuggestedCategory);
     const current = found || mucGoiY[0];
