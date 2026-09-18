@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.20.12 - 2026-09-18
+
+### Fixed — nút của card không còn che nút cài đặt của YouTube
+
+- Hàng nút của card đặt ở **cạnh phải**, mà YouTube cũng đặt cụm bánh răng, phụ đề và
+  phóng to ở đúng cạnh đó. Khi xoay ngang thì cả khung phát quay 90° nên hàng nút của
+  card quay theo và rơi thẳng vào cụm ấy.
+- Nay hàng nút chuyển sang **cạnh trái**, không còn tranh chỗ.
+
+### Chưa sửa được — video mở ra nhưng đứng im
+
+Nói thẳng: tôi **chưa tìm ra**, và không vá mò vào một chuỗi đang đúng.
+
+- Đã lần hết đường đi khi **không chọn loa**: bước mở khoá bộ phát **có** chạy ngay
+  trong cú chạm (trước khi mở video), hẹn giờ dự phòng 2,5 giây **có** được đặt, hàm
+  kiểm tra kết luận "bị chặn" đúng khi trình phát còn ở trạng thái chưa khởi động, và
+  nhánh chuyển tiếng sang máy **không** có chỗ thoát sớm sai.
+- Đọc trên giấy thì chuỗi này phải chạy. Nghĩa là lỗi nằm ở thứ không nhìn thấy được
+  từ mã — cần bằng chứng lúc chạy thật.
+- **Cách lấy bằng chứng:** mở card trên trình duyệt máy tính, bật bảng điều khiển dành
+  cho nhà phát triển (phím F12), chuyển sang tab Console, rồi bấm xem một video. Chụp
+  lại những dòng báo lỗi hiện ra — nhất là dòng nào có chữ `play()` hoặc `NotAllowed`.
+  Một ảnh chụp đó sẽ chỉ đúng chỗ hỏng nhanh hơn tôi đọc mã cả buổi.
+
 ## 0.20.11 - 2026-09-18
 
 ### Fixed — nút xoay ngang chưa từng hiện

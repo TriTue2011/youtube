@@ -1600,8 +1600,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Nhóm nút màn hình (view-group) vẫn ở trong .stage — nổi ở góc trên-phải video. */
         .player:is(.expanded, :fullscreen) > .stage > .stage-controls {
           position: absolute;
+          /* Nút của card nằm bên TRÁI, không phải bên phải. YouTube đặt cụm bánh răng,
+             phụ đề và phóng to ở cạnh phải; mà khi xoay ngang thì cả khung phát quay
+             90° nên hàng nút của card quay theo và rơi đúng vào cụm ấy — chủ máy báo
+             18/09/2026: "nút trên card che nút setting trên youtube". */
           top: 0;
-          right: 0;
+          left: 0;
           z-index: 2;
           margin: 0;
           padding: max(10px, env(safe-area-inset-top)) 12px;
