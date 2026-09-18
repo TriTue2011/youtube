@@ -891,8 +891,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .spk-volume { margin-top: 8px; }
         .spk-volume:empty { display: none; }
         .spk-list { margin-top: 10px; }
-        /* Loa đang được chỉnh âm lượng: viền ngoài, KHÁC với viền sáng của loa đã tích phát. */
-        .player-chip.is-volume-target { outline: 2px solid var(--ad-accent,#00ffcc); outline-offset: 1px; }
+        /* Loa đang được chỉnh âm lượng: TÔ NỀN chứ không viền — nhìn ra ngay.
+           Phải thêm «.players» phía trước mới thắng được luật
+           «.player-chip:has(input:checked)» ở trên: luật đó có độ ưu tiên (0,2,1)
+           vì :has() tính theo phần tử cụ thể nhất bên trong, nên một mình
+           «.player-chip.is-volume-target» (0,2,0) sẽ THUA và chữ vẫn giữ màu nhấn
+           — tức trùng đúng màu nền vừa tô. Thêm một lớp nữa thành (0,3,0) mới đè được.
+           Màu chữ lấy từ --ad-on-accent, do độ sáng của màu nhấn quyết định. */
+        .players .player-chip.is-volume-target {
+          background: var(--ad-accent, #00ffcc);
+          border-color: var(--ad-accent, #00ffcc);
+          color: var(--ad-on-accent, #0b0f17);
+          box-shadow: 0 0 12px 1px rgba(var(--ad-c1,0,204,204),0.45);
+        }
+        .players .player-chip.is-volume-target .player-name,
+        .players .player-chip.is-volume-target .device-icon,
+        .players .player-chip.is-volume-target .hide-player,
+        .players .player-chip.is-volume-target .move-player { color: inherit; }
         .player-name {
           border: 0; background: transparent; color: inherit; font: inherit;
           padding: 0; cursor: pointer; text-align: left;
@@ -1632,6 +1647,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
 
         .yt-search-pill {
+          /* Cùng lý do như .yt-cat-btn: không co thì hàng mới tràn và cuộn được. */
+          flex: 0 0 auto;
           display: inline-flex;
           align-items: center;
           gap: 5px;
@@ -1665,6 +1682,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           display: flex;
           gap: 6px;
           overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
           padding: 2px 0;
         }
@@ -1674,6 +1692,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
 
         .yt-cat-btn {
+          /* Không cho co lại. Con của flex mặc định CO được (flex-shrink: 1), nên
+             chúng bị bóp cho vừa khung thay vì tràn ra — khung có overflow-x: auto
+             mà chẳng có gì để cuộn, chữ thì bị cắt cụt. Đây là lý do dải gợi ý
+             không vuốt ngang được. */
+          flex: 0 0 auto;
           display: inline-flex;
           align-items: center;
           gap: 6px;
@@ -2958,17 +2981,37 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       host.style.removeProperty("--ad-accent");
     }
 
-    // «none» = nền trong suốt, để lộ nền dashboard; «solid» = một màu phẳng.
-    const kieu = String(config.bg_style || "gradient");
-    if (kieu === "none") host.style.setProperty("--ad-bg-image", "none");
-    else if (kieu === "solid") host.style.setProperty("--ad-bg-image", "none");
-    else host.style.removeProperty("--ad-bg-image");
+    /* Chữ nằm TRÊN nền màu nhấn (loa đang chỉnh âm lượng) phải tương phản với
+       chính màu đó, nếu không sẽ chìm nghỉm. Màu nhấn sáng thì chữ tối, và
+       ngược lại — tính theo độ sáng cảm nhận, không đoán theo mắt. */
+    const [r, g, b] = (nhan || "0,204,204").split(",").map(Number);
+    const doSang = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    host.style.setProperty("--ad-on-accent", doSang > 0.6 ? "#0b0f17" : "#ffffff");
 
+    /* Độ đục phải áp cho CẢ lớp chuyển sắc, không riêng lớp màu phẳng. Lớp chuyển
+       sắc vẽ ĐÈ lên màu nền và các mốc màu của nó có độ đục cố định sẵn trong CSS
+       (0.22 và 0.97); hạ độ đục mà chỉ sửa lớp dưới thì nền dashboard lẫn qua lớp
+       trên và cho ra một màu KHÁC HẲN thay vì mờ đi — đó chính là lúc nền chuyển
+       thành tím/đỏ. Nên khi ở kiểu chuyển sắc, dựng lại luôn ảnh nền với các mốc
+       đã nhân theo mức người dùng chọn. */
+    const kieu = String(config.bg_style || "gradient");
     const doDuc = Number(config.opacity);
-    const alpha = kieu === "none"
-      ? 0
-      : (Number.isFinite(doDuc) ? Math.min(100, Math.max(0, doDuc)) / 100 : 0.97);
-    host.style.setProperty("--ad-bg-alpha", String(kieu === "none" ? 0 : alpha));
+    const muc = Number.isFinite(doDuc) ? Math.min(100, Math.max(0, doDuc)) / 100 : 1;
+
+    if (kieu === "none") {
+      host.style.setProperty("--ad-bg-image", "none");
+      host.style.setProperty("--ad-bg-alpha", "0");
+    } else if (kieu === "solid") {
+      host.style.setProperty("--ad-bg-image", "none");
+      host.style.setProperty("--ad-bg-alpha", String((0.97 * muc).toFixed(3)));
+    } else {
+      const mo = (goc) => (goc * muc).toFixed(3);
+      host.style.setProperty(
+        "--ad-bg-image",
+        `radial-gradient(circle at 94% 2%, rgba(var(--ad-c1,0,204,204), ${mo(0.22)}), transparent 34%), ` +
+        `linear-gradient(135deg, rgba(var(--ad-c1,0,204,204), ${mo(0.22)}) 0%, rgba(var(--ad-c2,13,21,37), ${mo(0.97)}) 55%)`);
+      host.style.setProperty("--ad-bg-alpha", String((0.97 * muc).toFixed(3)));
+    }
 
     const phong = Number(config.zoom);
     if (Number.isFinite(phong) && phong > 0 && phong !== 100) {
