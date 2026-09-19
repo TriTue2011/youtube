@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.26.0 - 2026-09-19
+
+### Fixed — tích hợp còn NĂM chỗ chặn nguồn Facebook, nay đã mở hết
+
+Bản 0.24.0–0.25.1 thêm nút Facebook vào thẻ nhưng **chính tích hợp vẫn chặn**. Tôi chỉ
+sửa cửa chặn của đường luồng rồi tưởng xong; thực tế còn năm chỗ nữa, mỗi chỗ hỏng một
+kiểu và **không chỗ nào báo đúng nguyên nhân**:
+
+- `http.py` — cửa chặn của **đường tìm kiếm** (khác cửa của đường luồng). Đây là chỗ
+  chặn thẳng thao tác dán link: yêu cầu không bao giờ tới được máy phát.
+- `playback.py` — danh sách nguồn mỗi loa quảng bá. Thiếu Facebook thì khi phát ra loa,
+  bộ lọc loại **sạch mọi loa** rồi báo "loa không hỗ trợ nguồn" — sai hẳn nguyên nhân.
+- `services.py` — lược đồ của dịch vụ phát ra loa, thẻ gọi chính dịch vụ này.
+- `actions.py` — cửa chặn nguồn, **và** một nhánh gửi tới loa. Nhánh cuối của hàm là
+  đường YouTube gốc chạy theo danh sách lời gọi dựng sẵn cho từng thiết bị; Facebook
+  rơi vào đó thì danh sách rỗng nên **không gửi gì và cũng không báo lỗi**. Nay Facebook
+  đi chung nhánh với Zing — cùng hình dạng "luồng chuyển tiếp đã ký".
+
+**Bài học ghi lại:** thêm một nguồn phát không phải sửa một chỗ. Lần sau phải `grep`
+toàn bộ tích hợp tìm mọi danh sách nguồn **trước** khi tuyên bố xong, thay vì chỉ dò
+trong những tệp mình đang mở.
+
+Riêng công cụ tìm nhạc của trợ lý (`llm_api.py`) **cố ý chưa mở** cho Facebook: công cụ
+đó nhận *từ khoá*, còn Facebook chỉ nhận link dán vào — mở ra chỉ sinh lỗi mơ hồ.
+
+### Changed — add-on lên 0.9.0
+
+Mã Facebook đã nằm trong add-on từ mấy bản trước, **nhưng tôi quên tăng số phiên bản**
+trong `youtube_player/config.yaml`. Supervisor chỉ mời cập nhật khi số đó đổi, nên máy
+nào dùng add-on vẫn chạy bản cũ dù kho đã có mã mới. Nay 0.9.0, và dòng mô tả add-on đã
+kể cả Facebook.
+
 ## 0.25.1 - 2026-09-19
 
 ### Fixed — ô tìm kiếm nay nói rõ vì sao hỏng

@@ -169,7 +169,10 @@ def build_target_capabilities(
     # TVs and Android boxes run the native YouTube app (with video); every other
     # play_media-capable speaker (Cast audio, DLNA, ESPHome, generic) receives
     # YouTube as a relayed audio stream, exactly like Zing.
-    sources = ["youtube", "zing", "http"] if supports_play_media else []
+    # Facebook đi cùng nhóm với Zing: một luồng chuyển tiếp, không có ứng dụng gốc trên
+    # thiết bị. Thiếu nó ở đây thì `actions.py` lọc loa theo danh sách này sẽ loại SẠCH
+    # mọi loa rồi báo "loa không hỗ trợ nguồn" — sai hẳn về nguyên nhân.
+    sources = ["youtube", "zing", "facebook", "http"] if supports_play_media else []
     return {
         "transport": transport,
         "sources": sources,

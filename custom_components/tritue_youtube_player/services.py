@@ -46,7 +46,7 @@ STOP_FEATURE = 4096
 PLAY_ON_PLAYERS_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTRY_ID): cv.string,
-        vol.Required(CONF_SOURCE): vol.In({"youtube", "zing", "http"}),
+        vol.Required(CONF_SOURCE): vol.In({"youtube", "zing", "facebook", "http"}),
         vol.Required(CONF_TARGET): cv.string,
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
         vol.Optional(CONF_MEDIA_CONTENT_TYPE): cv.string,

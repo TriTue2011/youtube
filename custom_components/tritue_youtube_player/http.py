@@ -97,7 +97,10 @@ class TriTueSearchView(HomeAssistantView):
             return self.json(
                 {"error": "entry_unavailable"}, HTTPStatus.NOT_FOUND
             )
-        if source not in {"youtube", "zing"}:
+        # Cửa chặn của đường TÌM KIẾM — khác với cửa chặn của đường luồng bên dưới.
+        # Thiếu "facebook" ở đây thì tích hợp chặn ngay, yêu cầu không bao giờ tới máy
+        # phát, và người dùng chỉ thấy "không tìm kiếm được" mà không rõ vì sao.
+        if source not in {"youtube", "zing", "facebook"}:
             return self.json(
                 {"error": "invalid_search_source"}, HTTPStatus.BAD_REQUEST
             )

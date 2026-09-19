@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.9.0 - 2026-09-19
+
+### Added
+
+- **Nguồn Facebook — nghe và xem là hai đường riêng**, đối xứng với cặp `youtube` /
+  `youtube_video` sẵn có: `facebook` trả luồng tiếng cho loa, `facebook_video` trả luồng
+  hình cho thẻ `<video>` của trình duyệt. Đo được trên video thật: Facebook phục vụ tệp
+  mp4 **gộp sẵn** (hình h.264 kèm tiếng AAC, tới 1920×1080), và có cả luồng chỉ-có-tiếng
+  `m4a` ~73 kbps để phát ra loa.
+- **Tra cứu bằng link dán vào**: `/reel/<mã>`, `/watch/?v=<mã>`, `/<trang>/videos/<tên
+  bài>/<mã>/`, **và cả link chia sẻ** `/share/v/<mã>`. Cố ý **không** nhận tìm theo từ
+  khoá: Facebook không có đường tìm kiếm công khai để gọi, hứa suông chỉ sinh lỗi mơ hồ.
+
+### Ghi rõ giới hạn
+
+- **Đường đọc link chia sẻ không bền.** Mã trong `/share/v/…` là mã **bài viết**
+  (`1135095972510953`), không phải mã video (`1807802260572674`), và không suy ra được —
+  phải tải trang rồi đọc một trường **nội bộ không có tài liệu** của Facebook. Facebook
+  đổi trang là hỏng, và khi hỏng nó **báo rõ** (`facebook_share_unreadable`) chứ không
+  lặng lẽ thành "không tìm thấy bài nào". Link `/reel/…` và `/watch/?v=…` thì đi thẳng,
+  không phụ thuộc phép đọc này.
+- Lấy trang chia sẻ **phải gửi kèm đầy đủ đầu đề giống trình duyệt**. Gọi trần bị
+  Facebook đá sang trang đăng nhập và trả 400; gọi đủ đầu đề thì 200.
+- Thông báo *"This video is only available for registered users"* của Facebook là lời từ
+  chối cho **dạng địa chỉ không đọc được**, **không** phải lời nói về quyền xem — cùng
+  một mã video, dạng `/watch/?v=` chạy còn dạng `/video.php?v=` thì báo câu đó.
+
 ## 0.8.3 - 2026-09-18
 
 ### Fixed

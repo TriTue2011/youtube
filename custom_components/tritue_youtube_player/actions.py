@@ -102,7 +102,7 @@ async def async_play_on_players(
         entity_id for entity_id in targets if entity_id not in playable_targets
     ]
 
-    if source not in {"youtube", "zing", "http"}:
+    if source not in {"youtube", "zing", "facebook", "http"}:
         raise ValueError("unsupported_source")
     if not playable_targets:
         raise UnsupportedTargetMediaError("target_source_unsupported")
@@ -177,9 +177,15 @@ async def async_play_on_players(
                     target={"entity_id": volume_targets},
                 )
 
-        if source == "zing":
+        # Zing và Facebook CÙNG một hình dạng: một luồng chuyển tiếp đã ký, gửi tới loa
+        # bằng `play_media`. Gộp chung một nhánh và truyền thẳng tên nguồn, thay vì chép
+        # thêm một nhánh y hệt.
+        # PHẢI có nhánh này: nhánh `else` cuối hàm là đường YouTube gốc, chạy theo danh
+        # sách lời gọi dựng sẵn cho từng thiết bị. Facebook rơi vào đó thì danh sách rỗng
+        # nên KHÔNG gửi gì tới loa và cũng KHÔNG báo lỗi — im lặng, khó truy nhất.
+        if source in {"zing", "facebook"}:
             stream = await client.async_create_stream(
-                "zing", target, public_base_url=speaker_base_url(hass, client)
+                source, target, public_base_url=speaker_base_url(hass, client)
             )
             service_data = build_stream_request(stream)
             session_media_content_type = service_data["media_content_type"]
