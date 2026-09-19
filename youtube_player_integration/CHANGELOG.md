@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.22.0 - 2026-09-19
+
+### Changed — khung sóng nhạc trong suốt, bỏ viền
+
+Khung nghe bên ngoài đã có viền và nền riêng; lồng thêm một khung nữa bên trong là
+viền trong viền. Nay sóng nhạc và bốn nút nằm thẳng trên nền ảnh bài hát.
+
+### Added — dán link video để gắn thẳng vào mục gợi ý
+
+Nút thứ ba trong hàng công cụ của khối gợi ý (biểu tượng mắt xích). Dán link, thẻ đọc
+link rồi gắn bài vào mục đang mở — hoặc mục đầu tiên nếu mục đang mở là mục dựng sẵn.
+
+Thẻ **không tự bóc link**: nó gửi nguyên văn vào đúng đường tìm kiếm sẵn có, vì máy
+chủ đã biết đọc link YouTube. Đo được các dạng nhận đúng: `watch`, `youtu.be`,
+`shorts`, `embed`, và `watch` kèm tham số playlist (lấy đúng một bài, không kéo cả
+playlist). Chép logic bóc link sang thẻ sẽ thành hai chỗ phải sửa mỗi lần YouTube đổi
+dạng link.
+
+### Không làm được — link Facebook
+
+Đo trên link chủ máy gửi. Facebook trả lời thẳng: *"This video is only available for
+registered users"* — video đòi tài khoản đã đăng nhập, không phải nội dung công khai.
+Bộ bóc luồng chạm được tới video rồi bị chặn, nên đây không phải chuyện thiếu hỗ trợ
+Facebook.
+
+Muốn phát được thì phải nạp **cookie phiên đăng nhập Facebook** vào máy chủ, tức cất
+giữ phiên đăng nhập ở đó — ai đọc được tệp ấy là vào được tài khoản. Đó là quyết định
+của chủ máy, nên chưa làm. Ngoài ra máy phát khoá cứng theo nguồn (mỗi nguồn một danh
+sách máy chủ hợp lệ riêng), nên thêm Facebook còn kéo theo một nguồn mới và một danh
+sách CDN mới, chứ không phải một dòng.
+
+Link Zing dán vào ô này cũng chưa nhận — đường tìm kiếm hiện chỉ đọc link YouTube.
+
 ## 0.21.0 - 2026-09-19
 
 ### Changed — khối "chỉ nghe nhạc" dựng lại theo thẻ phicomm-r1

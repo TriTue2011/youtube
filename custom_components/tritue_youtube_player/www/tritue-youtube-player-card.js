@@ -1333,9 +1333,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           justify-content: space-between;
           height: clamp(96px, 26cqw, 120px);
           padding: 10px 12px;
-          border: 1px solid var(--divider-color);
+          /* Trong suốt, không viền — chủ máy chốt 19/09/2026. Khung nghe bên ngoài đã
+             có viền và nền riêng rồi; lồng thêm một khung nữa bên trong là viền trong
+             viền, đúng thứ làm bố cục rối. */
+          border: 0;
           border-radius: 14px;
-          background: var(--ad-surface, rgba(255,255,255,.04));
+          background: none;
         }
         .nghe-khung > .control-bar { margin-top: 0; }
         /* Xem video: hàng này rút về đúng hàng nút — đĩa ẩn, khung hết viền và nền, để
@@ -3729,6 +3732,58 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
+  /** Dán link video rồi gắn thẳng vào một mục gợi ý.
+      KHÔNG tự bóc link ở đây: gửi nguyên văn vào ĐÚNG đường tìm kiếm sẵn có. Máy chủ
+      đã biết đọc link YouTube ở mọi dạng người ta hay dán — đo 19/09/2026: nhận được
+      `watch`, `youtu.be`, `shorts`, `embed`, và `watch` kèm tham số playlist (lúc đó
+      lấy đúng một bài, không lấy cả playlist). Chép logic bóc link sang thẻ là cùng
+      một việc nằm hai nơi, tức hai chỗ phải sửa mỗi lần YouTube đổi dạng link.
+      Cùng phép đo đó: link Zing và link Facebook KHÔNG được nhận, nên báo thẳng thay
+      vì để người dùng ngồi đoán vì sao không có gì xảy ra. */
+  async _ghimTuLink() {
+    const link = (window.prompt("Dán link video YouTube để gắn vào mục gợi ý:") || "").trim();
+    if (!link) return;
+    /* Chỉ mục CỦA NHÀ mới gắn thêm bài được; mục dựng sẵn nằm trong mã nguồn. Ưu tiên
+       mục đang mở, không phải mục của nhà thì lấy mục đầu. */
+    const mucNha = this._goiY?.groups || [];
+    if (!mucNha.length) {
+      this._setStatus("Chưa có mục nào để gắn vào — bấm nút hình thư mục để tạo một mục trước.", true);
+      return;
+    }
+    const muc = mucNha.find((nhom) => nhom.id === this._ytSuggestedCategory) || mucNha[0];
+    this._setStatus("Đang đọc link…");
+    try {
+      const entryId = this._entryId();
+      if (!entryId) throw new Error("Không tìm thấy config entry. Hãy tải lại integration.");
+      const payload = await this._hass.callApi("GET",
+        `tritue_youtube_player/search?entry_id=${encodeURIComponent(entryId)}`
+        + `&source=youtube&q=${encodeURIComponent(link)}&limit=1`);
+      const bai = Array.isArray(payload.items) ? payload.items[0] : null;
+      if (!bai) {
+        this._setStatus("Không đọc được link này. Hiện chỉ gắn được link YouTube —"
+          + " link Facebook đòi đăng nhập nên không phát được, link Zing thì chưa nhận.", true);
+        return;
+      }
+      if ((muc.songs || []).some((daCo) => daCo.id === bai.id)) {
+        this._setStatus(`“${bai.title}” đã có sẵn trong mục “${muc.name}”.`);
+        return;
+      }
+      await this._saveSuggestion({
+        action: "pin_song",
+        id: muc.id,
+        item: {
+          video_id: bai.id,
+          title: bai.title,
+          artist: bai.channel,
+          thumbnail_url: bai.thumbnail,
+          duration_seconds: bai.duration,
+        },
+      }, `Đã gắn “${bai.title}” vào mục “${muc.name}”.`);
+    } catch (error) {
+      this._setStatus(error?.message || "Không đọc được link lúc này.", true);
+    }
+  }
+
   _renderSuggestions() {
     const box = this.shadowRoot && this.shadowRoot.querySelector(".yt-suggested-section");
     if (!box) return;
@@ -3806,6 +3861,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         const name = (window.prompt("Tên mục mới (ví dụ: Nhạc tối):") || "").trim();
         if (name) this._saveSuggestion({ action: "add_group", name }, `Đã tạo mục “${name}”.`);
       }),
+      themNut("mdi:link-plus", "Dán link video để gắn thẳng vào mục", () => this._ghimTuLink()),
     );
     /* Nút thu gọn. Viết thẳng chứ không mượn «themNut» vì còn phải đổi biểu tượng
        mũi tên ngay trong lúc bấm, mà «themNut» giấu phần tử biểu tượng bên trong.
