@@ -42,6 +42,26 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertNotIn('data-source="http"', script)
         self.assertNotIn("_prepareHttpResult", script)
         self.assertIn('data-view="playlists"', script)
+        # 0.26.2: ẩn từng mục của hàng nguồn qua cấu hình, và SỐ CỘT bám theo số mục
+        # còn hiện — ẩn bớt mà giữ nguyên số cột thì hàng thừa ô trống.
+        self.assertIn("show_youtube: true,", script)
+        self.assertIn("show_playlist: true,", script)
+        self.assertIn("this._applySourceVisibility()", script)
+        self.assertIn("hang.classList.add(`so-${dem}`)", script)
+        self.assertIn(".source-switch.so-1 { grid-template-columns: minmax(0, 1fr); }", script)
+        self.assertIn(".source-switch.so-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }", script)
+        # Ba tình huống hỏng mà chính tính năng này sinh ra, mỗi cái một chốt chặn:
+        # ẩn nguồn đang mở, ẩn Playlist khi đang đứng trong khung Playlist (chặn tại
+        # MỘT cửa vào vì còn đường tự nhảy vào đó sau khi lưu), và khôi phục lần tìm
+        # cũ thuộc nguồn vừa bị ẩn.
+        self.assertIn("if (conLai.length && !conLai.includes(this._source)) {", script)
+        self.assertIn('const moPlaylist = view === "playlists" && this._config.show_playlist !== false;', script)
+        self.assertIn("this._nguonHienThi().includes(nguonNho)", script)
+        self.assertIn("this._config.show_playlist === false ||", script)
+        # Trình sửa: bốn ô tích, và ô tích đọc/ghi bằng .checked chứ không phải .value.
+        self.assertIn('id="ed-show-youtube"', script)
+        self.assertIn('batTat("ed-show-facebook", "show_facebook");', script)
+        self.assertIn('tich("ed-show-playlist", config.show_playlist);', script)
         self.assertIn('media_content_type: item.media_content_type', script)
         self.assertIn('callService("media_player", "volume_set"', script)
         self.assertIn('this._skip(-1)', script)

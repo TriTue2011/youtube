@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.26.2 - 2026-09-19
+
+### Added — tự chọn hiện hay ẩn YouTube, Zing MP3, Facebook và Playlist
+
+Tab **Hiển thị** của trình sửa thẻ có thêm nhóm "Hiện / ẩn mục" với bốn ô tích. Bốn
+khoá cấu hình mới — `show_youtube`, `show_zing`, `show_facebook`, `show_playlist` —
+đều **mặc định bật**, nên thẻ đang chạy không đổi gì. Ẩn ở đây là ẩn khỏi giao diện
+chứ không khoá nguồn phía máy phát: bài thuộc nguồn bị ẩn vẫn nghe lại được từ hàng
+đợi hay playlist.
+
+**Số cột bám theo số mục còn hiện**, vì ẩn bớt mà giữ nguyên số cột thì hàng thừa ô
+trống lệch hẳn sang một bên. Đo thật trong trình duyệt, đọc số cột trình duyệt tính
+ra chứ không tin luật CSS vừa viết:
+
+| Số mục | Cột chứa hẹp (376px) | Cột chứa rộng (565px) |
+|---|---|---|
+| 4 | 2 | **4** |
+| 3 | 2 | **3** |
+| 2 | 2 | **2** |
+| 1 | **1** | **1** |
+| 0 | ẩn cả khung | ẩn cả khung |
+
+Chỗ hẹp giữ hai cột là **cố ý**, giữ nguyên hành vi cũ: bốn cột ở cột chứa hẹp làm
+nhãn "YouTube" bị chính nút cắt cụt (đo 19/09). Lưu ý khi đọc bảng: thứ quyết định
+là bề rộng **cột chứa thẻ**, không phải bề rộng thẻ — thẻ 900px trong bố cục hai cột
+chỉ cho cột chứa 357px.
+
+**Ba tình huống hỏng do chính tính năng này sinh ra, mỗi cái một chốt chặn** (nếu
+không thì cho ẩn xong là thẻ tự mâu thuẫn với chính nó):
+
+1. **Ẩn đúng nguồn đang mở** → tự dời sang nguồn còn hiện và xoá kết quả cũ. Để
+   nguyên thì ô tìm kiếm vẫn gửi đi cái nguồn người dùng vừa bảo là không muốn thấy.
+2. **Ẩn Playlist khi đang đứng trong khung Playlist** → chặn tại `_showView`, **một**
+   cửa vào duy nhất, vì còn một đường tự nhảy vào khung đó sau khi lưu playlist; vá
+   từng chỗ gọi là kiểu sót đã cắn nhiều lần. Nút "lưu cả playlist" cũng ẩn theo.
+3. **Nhớ lần tìm cũ thuộc nguồn vừa bị ẩn** → không khôi phục nữa, nếu không màn hình
+   hiện một danh sách kết quả mà hàng nút không còn mục nào ứng với nó.
+
+Ô tích là loại điều khiển **đầu tiên** trong trình sửa dùng `.checked` thay vì
+`.value`, nên cả hai chiều đọc và ghi đều phải thêm riêng; bật là mặc định nên khi
+bật thì xoá hẳn khoá khỏi YAML, chỉ ghi lại đúng những mục bị ẩn.
+
 ## 0.26.1 - 2026-09-19
 
 ### Fixed — xem video Facebook trên iPhone: câm tiếng và tự mở lại bài từ giây 0

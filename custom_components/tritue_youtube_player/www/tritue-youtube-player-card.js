@@ -650,6 +650,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       line_color: "",         // màu viền, đường kẻ
       opacity: 100,           // độ đục của nền, 0-100
       zoom: 100,              // thu phóng chữ và nút, 50-150
+      /* Hiện/ẩn từng mục của hàng nguồn. MẶC ĐỊNH BẬT HẾT, nên thẻ đang chạy không
+         đổi gì. Ẩn ở đây là ẩn khỏi giao diện chứ không khoá nguồn phía máy phát:
+         bài thuộc nguồn bị ẩn vẫn nghe lại được từ hàng đợi hay từ playlist. */
+      show_youtube: true,
+      show_zing: true,
+      show_facebook: true,
+      show_playlist: true,
       ...config,
     };
     /* Đổi «layout» trong trình sửa PHẢI thắng nút bấm trên card. Trước đây nút bấm
@@ -670,6 +677,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (this._rendered) {
       this._applyTheme();
       this._applyLayout();
+      this._applySourceVisibility();
     }
   }
 
@@ -682,6 +690,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._rendered = true;
       this._applyTheme();
       this._applyLayout();
+      this._applySourceVisibility();
       this._renderSuggestions();
     }
     this._applySharedOutputs();
@@ -873,7 +882,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Bung bốn cột khi CHÍNH CỘT CHỨA nó đủ rộng, không phải khi cả thẻ rộng. */
         @container ytcot (min-width: 460px) {
           .source-switch { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .source-switch.so-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .source-switch.so-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
+        /* Ẩn bớt mục thì SỐ CỘT phải giảm theo, nếu không hàng thừa ô trống lệch hẳn
+           sang một bên. Lớp «so-N» do «_applySourceVisibility» đặt theo số mục còn
+           hiện. Chỉ viết những trường hợp KHÁC mặc định: chỗ hẹp vốn hai cột nên chỉ
+           một mục mới phải sửa; chỗ rộng vốn bốn cột nên hai và ba mục phải sửa.
+           Luật một-mục để ngoài khối đo vì nó đúng ở mọi bề rộng, và hai lớp (0,2,0)
+           nên thắng luật một lớp bên trong khối đo bất kể thứ tự viết. */
+        .source-switch.so-1 { grid-template-columns: minmax(0, 1fr); }
         button, input { font: inherit; }
         button { cursor: pointer; }
         .source-button {
@@ -3601,6 +3619,41 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   /** Một hàng gộp: hai nguồn nhạc và nút Playlist. Nút nào sáng là do khung đang
       xem quyết định — đang mở Playlist thì nút Playlist sáng, ngược lại là nguồn
       đang chọn. */
+  /** Các nguồn còn hiện theo cấu hình, đúng thứ tự của hàng nút. */
+  _nguonHienThi() {
+    return ["youtube", "zing", "facebook"].filter((ma) => this._config[`show_${ma}`] !== false);
+  }
+
+  /** Hiện/ẩn từng mục của hàng nguồn theo cấu hình, và chỉnh SỐ CỘT theo số mục còn lại. */
+  _applySourceVisibility() {
+    const hang = this.shadowRoot?.querySelector(".source-switch");
+    if (!hang) return;
+    const conLai = this._nguonHienThi();
+    const hienPlaylist = this._config.show_playlist !== false;
+    let dem = 0;
+    hang.querySelectorAll(".source-button").forEach((nut) => {
+      // Nút Playlist nằm chung hàng nhưng không phải một nguồn — phân biệt bằng data-view.
+      const an = nut.dataset.view ? !hienPlaylist : !conLai.includes(nut.dataset.source);
+      nut.hidden = an;
+      if (!an) dem += 1;
+    });
+    hang.classList.remove("so-1", "so-2", "so-3", "so-4");
+    if (dem >= 1 && dem <= 4) hang.classList.add(`so-${dem}`);
+    // Ẩn hết thì giấu luôn cả khung, để khỏi còn một dải rỗng có viền.
+    hang.hidden = dem === 0;
+    /* Ẩn đúng nguồn đang mở thì phải dời sang nguồn còn hiện: để nguyên thì ô tìm
+       kiếm vẫn gửi đi cái nguồn mà người dùng vừa bảo là không muốn thấy, và danh
+       sách kết quả cũ cũng không còn nút nào ứng với nó. */
+    if (conLai.length && !conLai.includes(this._source)) {
+      this._source = conLai[0];
+      this._results = [];
+      this._renderResults();
+    }
+    if (!hienPlaylist && this._view === "playlists") this._showView("search");
+    this._updateSourceButtons();
+    this._syncSavePlaylist();
+  }
+
   _updateSourceButtons() {
     if (!this.shadowRoot) return;
     const playlists = this._view === "playlists";
@@ -4601,8 +4654,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         memory = null;
       }
     }
-    if (memory && !this._results.length && Array.isArray(memory.results) && memory.results.length) {
-      this._source = ["youtube", "zing", "facebook", "http"].includes(memory.source) ? memory.source : "youtube";
+    /* Nguồn đã bị ẩn trong cấu hình thì KHÔNG khôi phục lần tìm cũ của nó: khôi phục
+       xong sẽ hiện một danh sách kết quả mà hàng nút không còn mục nào ứng với nó,
+       và bấm phát thì gửi đi đúng cái nguồn người dùng vừa bảo là không muốn thấy. */
+    const nguonNho = ["youtube", "zing", "facebook", "http"].includes(memory?.source) ? memory.source : "youtube";
+    if (memory && !this._results.length && Array.isArray(memory.results) && memory.results.length
+      && this._nguonHienThi().includes(nguonNho)) {
+      this._source = nguonNho;
       this._results = memory.results;
       this.shadowRoot.querySelector('input[type="search"]').value = String(memory.query || "");
       this._updateSourceButtons();
@@ -5472,7 +5530,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _showView(view) {
-    this._view = view === "playlists" ? "playlists" : "search";
+    /* MỘT CỬA VÀO duy nhất cho việc đổi khung. Lưu một playlist xong cũng tự nhảy
+       sang khung Playlist, nên chặn ở đây thay vì vá từng chỗ gọi: Playlist bị ẩn
+       trong cấu hình thì mọi đường vào đều quay về khung tìm kiếm. */
+    const moPlaylist = view === "playlists" && this._config.show_playlist !== false;
+    this._view = moPlaylist ? "playlists" : "search";
     const playlists = this._view === "playlists";
     // Hàng nút đã gộp làm một, nên chính nó lo việc tô sáng mục đang mở.
     this._updateSourceButtons();
@@ -5490,7 +5552,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _syncSavePlaylist() {
     const value = this.shadowRoot.querySelector('input[type="search"]').value.trim();
     this.shadowRoot.querySelector(".save-playlist").hidden =
-      this._view !== "search" || !PLAYLIST_LINK.test(value);
+      this._view !== "search" || this._config.show_playlist === false || !PLAYLIST_LINK.test(value);
   }
 
   _syncPlaylistSubmit() {
@@ -5951,6 +6013,9 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
         }
         input[type="color"] { padding: 2px; height: 38px; }
         input[type="range"] { padding: 0; border: 0; background: transparent; }
+        /* Luật chung phía trên cho ô nhập «width: 100%», để nguyên thì ô tích kéo dài
+           hết hàng trông như một ô trống. */
+        input[type="checkbox"] { width: 20px; height: 20px; padding: 0; justify-self: start; accent-color: var(--primary-color, #03a9f4); }
         .slider { display: flex; align-items: center; gap: 8px; }
         .slider output { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
         @media (max-width: 480px) { .row { grid-template-columns: 1fr; gap: 4px; } }
@@ -6043,6 +6108,25 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
           </div>
         </div>
         <div class="group">
+          <h4>👁 Hiện / ẩn mục</h4>
+          <div class="row">
+            <label for="ed-show-youtube">YouTube <span class="hint">Bỏ tích là ẩn mục này khỏi hàng nguồn; hàng tự dồn lại cho vừa</span></label>
+            <input id="ed-show-youtube" type="checkbox" checked />
+          </div>
+          <div class="row">
+            <label for="ed-show-zing">Zing MP3</label>
+            <input id="ed-show-zing" type="checkbox" checked />
+          </div>
+          <div class="row">
+            <label for="ed-show-facebook">Facebook</label>
+            <input id="ed-show-facebook" type="checkbox" checked />
+          </div>
+          <div class="row">
+            <label for="ed-show-playlist">Playlist <span class="hint">Ẩn cả nút Playlist lẫn nút lưu playlist</span></label>
+            <input id="ed-show-playlist" type="checkbox" checked />
+          </div>
+        </div>
+        <div class="group">
           <h4>🔍 Thu phóng</h4>
           <div class="row">
             <label for="ed-zoom">Cỡ chữ và nút (%) <span class="hint">Card vốn tự co theo màn hình; kéo đây để ép to hơn hoặc nhỏ hơn</span></label>
@@ -6102,6 +6186,17 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     on("ed-textdim", "text_dim_color", (el) => el.value);
     on("ed-danger", "danger_color", (el) => el.value);
     on("ed-line", "line_color", (el) => el.value);
+
+    /* Ô tích: BẬT là mặc định, nên khi bật thì phát chuỗi rỗng để «_emit» XOÁ khoá —
+       YAML chỉ ghi lại đúng những mục người dùng chọn ẩn, không đầy dòng thừa. */
+    const batTat = (id, khoa) => {
+      const el = this.shadowRoot.getElementById(id);
+      el.addEventListener("change", () => this._emit(khoa, el.checked ? "" : false));
+    };
+    batTat("ed-show-youtube", "show_youtube");
+    batTat("ed-show-zing", "show_zing");
+    batTat("ed-show-facebook", "show_facebook");
+    batTat("ed-show-playlist", "show_playlist");
 
     /* Bộ màu dựng sẵn. Chủ máy chốt: "có thêm màu cố định nhưng vẫn nên để cả bảng
        RGB như hiện tại để chọn cho từng mục" — nên đây chỉ là lối tắt điền sẵn cả
@@ -6218,6 +6313,16 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     dat("ed-opacity", config.opacity === undefined ? 100 : config.opacity);
     dat("ed-zoom", config.zoom === undefined ? 100 : config.zoom);
     dat("ed-width", config.player_width === undefined ? 55 : config.player_width);
+    /* Ô tích dùng «.checked», không phải «.value» — hàm «dat» ở trên không đặt được.
+       Chỉ đúng giá trị «false» mới là ẩn, nên khoá thiếu hay rỗng đều ra bật. */
+    const tich = (id, giatri) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.checked = giatri !== false;
+    };
+    tich("ed-show-youtube", config.show_youtube);
+    tich("ed-show-zing", config.show_zing);
+    tich("ed-show-facebook", config.show_facebook);
+    tich("ed-show-playlist", config.show_playlist);
     const soDi = (id, hau) => {
       const el = this.shadowRoot.getElementById(id);
       const out = this.shadowRoot.getElementById(id + "-out");
