@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.2 - 2026-09-19
+
+### Fixed
+
+- **Link chia sẻ dạng `/share/r/` (chia sẻ reel) không đọc được.** Hai dạng chia sẻ của
+  Facebook giấu mã video ở **hai nơi khác nhau**, đo trên trang thật:
+  - `/share/r/` → thẻ `canonical` và `og:url` trỏ **thẳng** vào
+    `facebook.com/reel/<mã video>`; trang **không có** trường nội bộ `impl_`.
+  - `/share/v/` → thẻ `canonical` trỏ vào **bài viết**, vô dụng cho việc lấy mã video;
+    mã nằm trong trường nội bộ `impl_`.
+
+  Bản trước chỉ biết một nơi nên dạng reel báo `facebook_share_unreadable`. Nay đọc
+  **thẻ chuẩn trước** — đó là thẻ HTML có tài liệu, bền hơn hẳn trường nội bộ — và chỉ
+  lùi về `impl_` khi thẻ chuẩn không trỏ vào video. Địa chỉ lấy từ thẻ được đưa thẳng
+  vào bộ đọc link sẵn có, không đẻ thêm bộ phân tích thứ hai.
+
+  Kiểm trên **dữ liệu thật**: chạy bộ đọc mới trên chính hai trang đã tải về (298 KB và
+  374 KB), cả hai ra đúng mã video.
+
 ## 0.9.1 - 2026-09-19
 
 ### Fixed
