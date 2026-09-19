@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.25.0 - 2026-09-19
+
+### Added — xem video Facebook trên thẻ (nốt nửa còn lại)
+
+Bản 0.24.0 mới nghe được. Nay xem được hình, và **nghe với xem vẫn là hai đường
+riêng** đúng như chủ máy chốt: tiếng ra loa (hoặc ra máy đang mở thẻ), hình chiếu trên
+thẻ và luôn tắt tiếng — không đẻ thêm lối phát tiếng thứ hai để rồi chồng tiếng.
+
+Cách làm khác hẳn YouTube, vì Facebook **không cho nhúng** trình phát: thẻ xin máy phát
+một địa chỉ luồng rồi chiếu thẳng vào phần tử `<video>` sẵn có. Nhờ dùng lại đúng cơ
+chế ấy, thanh tiến độ, nút phát/dừng và **tua** chạy được ngay mà không phải viết thêm
+gì — phần đọc mốc thời gian và phần gửi lệnh tua vốn đã ưu tiên phần tử video thật.
+
+**Một cửa vào, không vá theo danh sách.** Nhánh Facebook đặt ngay đầu hàm mở hình. Thẻ
+có **12 chỗ** gọi hàm này (hàng kết quả, hàng đợi, nút xem, khôi phục phiên…); vá từng
+chỗ thì sót một là bấm vào đó hỏng, mà lỗi lại hiện ra ở nơi khác hẳn.
+
+### Đã kiểm được gì, và chưa kiểm được gì
+
+Nói thẳng để khỏi hiểu nhầm:
+
+- **Đã kiểm:** cú pháp, chú thích cân 206/206, đấu nối đếm bằng grep (cửa rẽ nhánh có
+  đúng một, không chỗ gọi nào bị bỏ lại), thẻ dựng sạch không lỗi JavaScript, 90 + 4
+  phép kiểm máy phát và 56 + 17 phép kiểm tích hợp đều đạt. Phía máy phát, luồng hình
+  đã đo trên dữ liệu thật: mp4 gộp sẵn, hình h.264 kèm tiếng AAC, tới 1080p.
+- **Chưa kiểm được từ đây:** một lượt xem thật đầu-cuối. Việc đó cần Home Assistant
+  thật cùng add-on đang chạy, nên **máy của chủ máy mới xác nhận được**.
+
 ## 0.24.0 - 2026-09-19
 
 ### Fixed — bấm đĩa không còn dừng nhạc

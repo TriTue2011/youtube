@@ -38,6 +38,9 @@
   'use strict';
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+/* Mã video Facebook là một CHUỖI SỐ dài, khác hẳn mã 11 ký tự của YouTube. Dùng
+   «VIDEO_ID» cho mục Facebook sẽ loại sạch chúng mà không báo lỗi gì. */
+const FB_VIDEO_ID = /^[0-9]{5,25}$/;
 const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
 
@@ -3053,7 +3056,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _isVideoItem(item, source = item?.source || this._source) {
-    return source === "youtube" && VIDEO_ID.test(String(item?.id || ""));
+    const ma = String(item?.id || "");
+    // Mã Facebook là chuỗi số, không phải mã 11 ký tự của YouTube.
+    if (source === "facebook") return FB_VIDEO_ID.test(ma);
+    return source === "youtube" && VIDEO_ID.test(ma);
   }
 
   _sessions() {
@@ -3487,8 +3493,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         ? "Chọn một bài trong kết quả để phát ra loa."
         : "Chọn loa để phát ra loa, hoặc bấm nút nghe / xem video của một bài để phát ngay trên máy này.";
 
-    this._nowWatchItem = title && session.source === "youtube" && VIDEO_ID.test(String(session.id || ""))
-      ? { id: session.id, url: session.url, title, channel: session.artist, duration: session.duration }
+    /* «source» PHẢI có trong bản ghi: cửa vào của «_openVideo» rẽ nhánh theo đúng
+       trường này. Thiếu nó thì mục Facebook rơi vào đường nhúng YouTube rồi bị chặn
+       vì mã không phải 11 ký tự — hỏng ở một chỗ chẳng liên quan gì tới nguyên nhân. */
+    const maPhien = String(session?.id || "");
+    const xemDuoc = Boolean(title) && (
+      (session.source === "youtube" && VIDEO_ID.test(maPhien))
+      || (session.source === "facebook" && FB_VIDEO_ID.test(maPhien))
+    );
+    this._nowWatchItem = xemDuoc
+      ? {
+        id: session.id,
+        url: session.url,
+        title,
+        channel: session.artist,
+        duration: session.duration,
+        source: session.source,
+      }
       : null;
     this.shadowRoot.querySelector(".watch").hidden = !this._nowWatchItem;
 
@@ -4152,6 +4173,79 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
   }
 
+  /** Xem video Facebook ngay trên thẻ.
+   *
+   * KHÁC hẳn đường YouTube: Facebook không cho nhúng trình phát, nên thẻ xin máy phát
+   * một địa chỉ luồng rồi chiếu thẳng vào phần tử «<video>» sẵn có («_tryPicture»).
+   * Vì thế KHÔNG gọi «_openVideo» — hàm đó dựng khung nhúng và chặn cứng mã không
+   * phải 11 ký tự kiểu YouTube.
+   *
+   * Tiếng đi ĐƯỜNG RIÊNG, đúng yêu cầu "nghe và xem tách riêng": ra loa nếu có chọn
+   * loa, hoặc qua bộ phát tiếng của máy này. Phần tử hình luôn tắt tiếng — giống hệt
+   * đường hình của YouTube khi bị từ chối nhúng, nên không đẻ thêm lối phát tiếng
+   * thứ hai để rồi chồng tiếng.
+   */
+  async _xemFacebook(item, { withSpeakers, followsDevice = false }) {
+    const id = String(item?.id || "");
+    if (!FB_VIDEO_ID.test(id)) {
+      this._setStatus("Link Facebook này không có mã video.", true);
+      return;
+    }
+    if (this._video.picture) this._leavePicture();
+    const frame = this.shadowRoot.querySelector(".video-frame");
+    frame.hidden = false;
+    // «no-embed» cho khung nền đen; KHÔNG đặt «--poster» vì đó là ảnh của YouTube.
+    frame.classList.add("no-embed");
+    const pending = { item };
+    this._video = {
+      ...this._idleVideo(),
+      open: true,
+      item: {
+        id,
+        title: String(item.title || id),
+        channel: String(item.channel || ""),
+        duration: Number(item.duration || 0),
+        url: String(item.url || `https://www.facebook.com/watch/?v=${id}`),
+        thumbnail: String(item.thumbnail || ""),
+        source: "facebook",
+      },
+      withSpeakers,
+      followsDevice,
+      soundHere: false,
+      picture: pending,
+      moUL: Date.now(),
+    };
+    this._pictureNote("Đang lấy hình…");
+    this._syncNowPlaying();
+    this._updateTransportState();
+    let info = null;
+    try {
+      info = await this._hass.callApi("POST", "tritue_youtube_player/stream", {
+        entry_id: this._entryId(),
+        source: "facebook_video",
+        target: item.url || id,
+        max_height: this._pictureHeight(),
+      });
+    } catch (_error) {
+      info = null;
+    }
+    // Người dùng đã bỏ đi hoặc mở bài khác trong lúc chờ.
+    if (this._video.picture !== pending) return;
+    if (!info?.stream_url) {
+      this._pictureNote("Không lấy được hình của video này");
+      this._setStatus("Không lấy được hình video Facebook — vẫn nghe được tiếng.", true);
+      return;
+    }
+    const mo = await this._tryPicture(info.stream_url, pending, 20000);
+    if (this._video.picture !== pending) return;
+    if (!mo) {
+      this._pictureNote("Không mở được hình");
+      return;
+    }
+    this._pictureNote("");
+    if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
+  }
+
   _watchCurrent() {
     if (!this._nowWatchItem) return;
     if (deviceAudio.item) {
@@ -4196,6 +4290,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _openVideo(item, { withSpeakers, followsDevice = false, startSeconds = 0 }) {
+    /* MỘT CỬA VÀO duy nhất cho việc mở hình. Nguồn Facebook rẽ ngay tại đây, KHÔNG vá
+       ở từng chỗ gọi: hàm này được gọi từ sáu nơi (hàng kết quả, hàng đợi, nút xem,
+       khôi phục phiên…), sửa theo danh sách thì sót một nơi là bấm vào đó hỏng, mà
+       lỗi lại hiện ra ở chỗ khác hẳn.
+       Facebook không cho nhúng trình phát nên đi đường chiếu thẳng luồng; xem
+       «_xemFacebook». Rẽ trước cả dòng chặn bên dưới, nên dòng ấy giữ nguyên ý nghĩa
+       cũ: nó chỉ còn nói về đường NHÚNG. */
+    const nguonMuc = item?.source || this._source;
+    if (nguonMuc === "facebook") {
+      this._xemFacebook(item, { withSpeakers, followsDevice });
+      return;
+    }
     const id = String(item?.id || "");
     if (!VIDEO_ID.test(id)) {
       this._setStatus("Chỉ xem được video YouTube trên thẻ.", true);
