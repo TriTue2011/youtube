@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.26.7 - 2026-09-19
+
+### Fixed — mở hết màn hình thì ô tìm kiếm và hàng nguồn đè lên video
+
+Chủ máy gửi ảnh chụp iPhone: lúc phóng to, hàng nguồn và ô tìm kiếm **hiện đè** lên
+video đang xoay, chữ chồng lên nhau.
+
+**Nói thẳng phần tôi không chứng minh được.** Lỗi này **không dựng lại được trong
+Chrome**. Đo ở khổ 390px với khung phát đã phóng to, hỏi trình duyệt "phần tử trên
+cùng tại tâm ô tìm kiếm là ai" thì nó trả về `.video-frame` — tức lớp phủ che đúng.
+Kiểm thêm: `.player` tính ra `position: fixed` thật, và **không tổ tiên nào** có
+`transform`/`filter`/`contain`/`will-change` để phá vỡ nó. Hai giả thuyết của tôi
+(khối chứa bị phá, tranh chấp lớp chồng) đều **không đứng vững**; đây là đặc thù
+WebKit mà tôi chưa tìm ra cơ chế.
+
+**Nên bản sửa không nhắm vào cơ chế, nó gỡ bỏ chế độ hỏng:** phóng to thì ẩn hẳn cả
+cột phải. Lớp phủ chạy đúng thì mấy khối ấy vốn đã khuất, chẳng mất gì; lớp phủ hụt
+thì chúng đã ẩn nên không còn gì để đè lên video.
+
+Ẩn **tất**, không chừa dải "đang phát" — dải ấy đã có luật ẩn riêng khi phóng to từ
+yêu cầu 18/09 ("phóng to toàn màn hình thì ẩn hết, lúc này dùng bằng YouTube là
+được"). Chừa nó ra chỉ tạo một ngoại lệ không có thật rồi đánh lừa người đọc sau.
+Đường thoát vẫn còn: hàng biểu tượng nằm **trong** khung phát, không thuộc cột này.
+
+Viết theo nguyên tắc ("mọi con trực tiếp") thay vì liệt kê bảy lớp, nên khối mới thêm
+vào cột sau này tự được che.
+
+Đo lại sau khi sửa:
+
+| Trạng thái | Hàng nguồn | Ô tìm kiếm | Gợi ý | Kết quả |
+|---|---|---|---|---|
+| Thường, 390px | hiện | hiện (366×33) | hiện | — |
+| Phóng to, 390px | **ẩn** | **ẩn (0×0)** | **ẩn** | **ẩn** |
+| Phóng to, 1400px | **ẩn** | **ẩn** | **ẩn** | **ẩn** |
+
 ## 0.26.6 - 2026-09-19
 
 ### Changed — bắt máy TỰ KHAI BỆNH thay vì đoán tiếp về WebKit

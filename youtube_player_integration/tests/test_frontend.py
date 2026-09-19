@@ -187,6 +187,13 @@ class LovelaceCardContractTests(unittest.TestCase):
             script.index('iframe.setAttribute("src", src)'),
         )
         self.assertIn("this._toggleVideoExpanded()", script)
+        # 0.26.7: phóng to thì ẩn HẲN cả cột phải. Chủ máy gửi ảnh iPhone: hàng nguồn và
+        # ô tìm kiếm đè lên video đang xoay. Lỗi KHÔNG dựng lại được trong Chrome (lớp
+        # phủ che đúng khi đo), nên luật này gỡ bỏ chế độ hỏng chứ không nhắm vào cơ chế.
+        # Dùng "> *" theo nguyên tắc: khối mới thêm vào cột sau này tự được che.
+        self.assertIn(
+            ".player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .yt-playlist-inner > * {",
+            script)
         self.assertIn("this._videoFullscreen()", script)
         self.assertIn("[hidden] { display: none !important; }", script)
         # Pasted YouTube links are longer than the 120-character text limit.

@@ -1673,6 +1673,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* now/progress/control-bar giờ nằm trong .np-zone — là sibling của .player (không
            còn là con của .stage) nên khi player mở rộng/toàn màn hình, dùng tổ hợp "~"
            để nổi cả khối .np-zone lên trên video, thay cho "> .stage >" như bản cũ. */
+        /* PHÓNG TO THÌ ẨN HẲN CẢ CỘT PHẢI. Chủ máy gửi ảnh 19/09/2026: trên iPhone,
+           lúc mở hết màn thì hàng nguồn và ô tìm kiếm HIỆN ĐÈ lên video đang xoay.
+           Nói thẳng: lỗi này KHÔNG dựng lại được trong Chrome — đo ở khổ 390px, hỏi
+           «phần tử trên cùng tại tâm ô tìm kiếm» thì trả về «.video-frame», tức lớp
+           phủ che đúng. Đây là đặc thù WebKit mà tôi chưa chứng minh được cơ chế.
+           Nên luật này KHÔNG nhắm vào cơ chế, nó GỠ BỎ CHẾ ĐỘ HỎNG: lớp phủ chạy
+           đúng thì mấy khối này vốn đã khuất, chẳng mất gì; lớp phủ hụt thì chúng
+           đã ẩn nên không còn gì để đè lên video.
+           ẨN TẤT, không chừa «.np-zone»: dải ấy ĐÃ có luật ẩn riêng khi phóng to
+           (xem luật cùng tên phía dưới) theo đúng yêu cầu 18/09/2026 — "phóng to
+           toàn màn hình thì ẩn hết, lúc này dùng bằng YouTube là được". Chừa nó ra
+           chỉ tạo một ngoại lệ không có thật rồi đánh lừa người đọc sau. Đường
+           thoát vẫn còn: hàng biểu tượng «.stage-controls» nằm TRONG khung phát.
+           Viết theo NGUYÊN TẮC («mọi con trực tiếp») chứ không liệt kê bảy lớp:
+           thêm khối mới vào cột sau này thì tự được che, không ai phải nhớ. */
+        .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .yt-playlist-inner > * {
+          display: none;
+        }
         .player:is(.expanded, :fullscreen):not(.picture-on) ~ .yt-zone-playlist .np-zone .now { display: none; }
         .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone {
           position: fixed;
