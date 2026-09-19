@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.22.1 - 2026-09-19
+
+### Sửa lại một khẳng định SAI trong ghi chú 0.22.0 (link Facebook)
+
+Bản 0.22.0 viết rằng video Facebook chủ máy gửi "đòi tài khoản đã đăng nhập, không
+phải nội dung công khai". **Khẳng định đó mạnh hơn bằng chứng.** Chủ máy gửi ảnh chụp
+điện thoại: trình duyệt **không đăng nhập** vẫn xem và nghe được bài viết đó bình
+thường. Bằng chứng tôi có lúc ấy chỉ là *công cụ bóc luồng trên máy chủ bị từ chối* —
+tôi đã suy từ đó ra kết luận về quyền xem của video, và đó là suy diễn sai.
+
+Đã đo lại đầy đủ. Những gì kiểm chứng được:
+
+- **Phép đối chứng chạy đúng**: một video Facebook công khai khác bóc luồng thành công
+  từ chính máy chủ này (ra tên bài và thời lượng). Vậy **không** phải chặn theo vùng,
+  **không** phải thiếu hỗ trợ Facebook, **không** phải máy chủ mất đường ra Internet.
+- **Không phải do phần mềm cũ**: cài thẳng từ kho mã nguồn vẫn ra đúng bản mới nhất, và
+  bản mới nhất cho cùng kết quả. Giả thuyết "bộ bóc lạc hậu" đã thử và bị bác.
+- **Cookie khách có thật**: túi cookie chứa `fr` và `sb` do Facebook cấp; phép thử kèm
+  cookie khách là hợp lệ và vẫn bị từ chối. (Lần đầu tôi đếm nhầm số dòng rồi tưởng túi
+  rỗng.)
+- **Trình phát nhúng của chính Facebook** in ra màn hình: *"Video unavailable — This
+  video may no longer exist, or you don't have permission to view it."*
+
+Kết luận đúng với bằng chứng: **bài viết này không lấy được ẩn danh từ máy chủ, trong
+khi điện thoại chủ máy xem được.** Khác biệt nằm ở mạng và ở phiên khách mà Facebook
+cấp cho một trình duyệt điện thoại thật — thứ không tái hiện được trên máy chủ. Chưa
+xác định được cách lấy nội dung này về máy chủ mà không mượn phiên đăng nhập.
+
+Không có thay đổi mã nguồn nào trong bản này; chỉ sửa lại hồ sơ cho đúng sự thật.
+
 ## 0.22.0 - 2026-09-19
 
 ### Changed — khung sóng nhạc trong suốt, bỏ viền
@@ -20,16 +50,11 @@ dạng link.
 
 ### Không làm được — link Facebook
 
-Đo trên link chủ máy gửi. Facebook trả lời thẳng: *"This video is only available for
-registered users"* — video đòi tài khoản đã đăng nhập, không phải nội dung công khai.
-Bộ bóc luồng chạm được tới video rồi bị chặn, nên đây không phải chuyện thiếu hỗ trợ
-Facebook.
+Đo trên link chủ máy gửi: mọi dạng địa chỉ đều bị từ chối. Xem mục 0.22.1 bên trên —
+cách diễn giải ban đầu ở đây đã sai và được sửa lại ở đó.
 
-Muốn phát được thì phải nạp **cookie phiên đăng nhập Facebook** vào máy chủ, tức cất
-giữ phiên đăng nhập ở đó — ai đọc được tệp ấy là vào được tài khoản. Đó là quyết định
-của chủ máy, nên chưa làm. Ngoài ra máy phát khoá cứng theo nguồn (mỗi nguồn một danh
-sách máy chủ hợp lệ riêng), nên thêm Facebook còn kéo theo một nguồn mới và một danh
-sách CDN mới, chứ không phải một dòng.
+Máy phát còn khoá cứng theo nguồn (mỗi nguồn một danh sách máy chủ hợp lệ riêng), nên
+thêm Facebook kéo theo một nguồn mới và một danh sách CDN mới, chứ không phải một dòng.
 
 Link Zing dán vào ô này cũng chưa nhận — đường tìm kiếm hiện chỉ đọc link YouTube.
 
