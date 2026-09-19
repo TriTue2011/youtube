@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.25.1 - 2026-09-19
+
+### Fixed — ô tìm kiếm nay nói rõ vì sao hỏng
+
+Chủ máy dán link Facebook và chỉ thấy *"Không thể tìm kiếm lúc này"* — câu chung chung
+ấy nuốt mất thông tin duy nhất giúp truy nguyên. Đo được nguyên nhân thật: máy phát trả
+`invalid_search_source`, tức **máy phát chưa biết nguồn Facebook**, không phải link sai.
+
+Nay thẻ dịch thẳng mã lỗi của máy phát thành câu tiếng Việt nói rõ phải làm gì — ví dụ
+*"Máy phát chưa hỗ trợ nguồn này — hãy cập nhật add-on"*, hoặc *"Nguồn Facebook chỉ
+nhận LINK dán vào"*, hoặc *"Không đọc được link chia sẻ này — Facebook có thể đã đổi
+trang"*. Mã lạ thì hiện nguyên mã thay vì giấu đi.
+
+**Lưu ý về thứ tự cập nhật:** nút Facebook nằm ở thẻ, còn phần biết đọc link Facebook
+nằm ở **máy phát**. HACS chỉ cập nhật tích hợp và thẻ, nên máy phát phải cập nhật riêng
+thì nguồn Facebook mới chạy. Đây là chỗ bản 0.24.0 phát hành sớm hơn phần phía sau.
+
 ## 0.25.0 - 2026-09-19
 
 ### Added — xem video Facebook trên thẻ (nốt nửa còn lại)

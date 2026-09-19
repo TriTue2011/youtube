@@ -3651,7 +3651,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     } catch (error) {
       this._results = [];
       this._renderResults();
-      this._setStatus(error?.message || "Không thể tìm kiếm lúc này.", true);
+      /* Hiện ĐÚNG mã lỗi phía sau trả về. Câu chung chung "Không thể tìm kiếm lúc này"
+         nuốt mất thông tin duy nhất giúp truy nguyên — chủ máy 19/09/2026 dán link
+         Facebook và chỉ thấy đúng câu ấy, không biết là máy phát cũ hay link hỏng. */
+      const ma = String(error?.body?.error || error?.error || "");
+      const loi = {
+        invalid_search_source: "Máy phát chưa hỗ trợ nguồn này — hãy cập nhật add-on"
+          + " TriTue YouTube Player (HACS chỉ cập nhật tích hợp và thẻ).",
+        invalid_search_query: "Nguồn Facebook chỉ nhận LINK dán vào, không tìm theo từ khoá.",
+        facebook_share_unreadable: "Không đọc được link chia sẻ này — Facebook có thể đã"
+          + " đổi trang. Thử dán link dạng /reel/… hoặc /watch?v=…",
+        search_unavailable: "Máy phát không tra cứu được lúc này.",
+        search_provider_failed: "Máy phát không đọc được link này.",
+        search_process_failed: "Máy phát thiếu công cụ yt-dlp hoặc gọi không được.",
+      }[ma];
+      this._setStatus(loi || error?.message || (ma ? `Lỗi: ${ma}` : "Không thể tìm kiếm lúc này."), true);
     } finally {
       button.disabled = false;
     }
