@@ -147,6 +147,18 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn(
             "if (!audio.paused && tiengDangChay && Date.now() >= this._lastVideoSeekAt + 4000",
             script)
+        # 0.26.4: luồng MỞ ĐƯỢC NHƯNG KHÔNG CHẢY không bắn sự kiện nào — phần tử âm
+        # thanh chỉ có play/pause/ended/error — nên phải tự đo mới thấy. Chủ máy gặp
+        # trên iPhone với CẢ add-on lẫn c2a, và cả trên Safari: lỗi ở thẻ.
+        self.assertIn("if (!audio.paused && Date.now() - this._tiengChayLuc > 8000) {", script)
+        # ĐO BẰNG THỜI GIAN, KHÔNG ĐẾM NHỊP: _syncVideo còn chạy mỗi lần hass đổi
+        # trạng thái (nhiều lần mỗi giây), đếm nhịp là báo nhầm ngay.
+        self.assertIn(
+            "if (tiengDangChay || audio.paused || this._tiengChayLuc === undefined)"
+            " this._tiengChayLuc = Date.now();", script)
+        # Đường phục hồi dùng CHUNG cho hai ca (lấy luồng hỏng, và luồng kẹt), không chép đôi.
+        self.assertIn("_traTiengVeKhung() {", script)
+        self.assertEqual(script.count("this._traTiengVeKhung();"), 2)
         self.assertIn("this._speakerJoinsVideo(entityId)", script)
         # Loa tích vào khi đang xem: nguồn lấy từ CHÍNH bài đang xem. Gắn cứng "youtube"
         # thì xem Facebook rồi tích loa sẽ hỏi sai khả năng của loa và gửi địa chỉ

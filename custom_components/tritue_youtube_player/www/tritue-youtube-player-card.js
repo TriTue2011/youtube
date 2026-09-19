@@ -4560,6 +4560,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
+  /** Máy này không phát được tiếng: trả tiếng về cho khung, chờ một cú chạm.
+   *
+   * Dùng cho HAI tình huống, nên tách ra thay vì chép đôi: luồng lấy KHÔNG ĐƯỢC
+   * (phần tử âm thanh bắn «error»), và luồng MỞ ĐƯỢC NHƯNG KHÔNG CHẢY — ca thứ
+   * hai không bắn sự kiện nào cả, «_syncVideo» phải tự đo mới thấy.
+   */
+  _traTiengVeKhung() {
+    const video = this._video;
+    video.followsDevice = false;
+    video.soundHere = true;
+    // Dừng và bỏ tắt tiếng, để cú chạm vào video khởi động nó kèm tiếng của chính nó.
+    this._videoCommand("pauseVideo");
+    this._videoCommand("unMute");
+    this._soundHintShown = true;
+    this._syncSoundHint();
+  }
+
   _deviceAudioChanged(message, isError) {
     if (!this.shadowRoot || !this._hass) return;
     const video = this._video;
@@ -4568,13 +4585,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (video.open && video.followsDevice && isError && !video.picture) {
       // The device's sound couldn't start (no stream from the player server): the
       // picture keeps its own sound, and a tap inside the video starts it.
-      video.followsDevice = false;
-      video.soundHere = true;
-      // Stopped and unmuted, so the tap inside the video starts it with its sound.
-      this._videoCommand("pauseVideo");
-      this._videoCommand("unMute");
-      this._soundHintShown = true;
-      this._syncSoundHint();
+      this._traTiengVeKhung();
     } else if (video.open && video.followsDevice && deviceAudio.item?.id !== video.item?.id) {
       if (deviceAudio.item && this._isVideoItem(deviceAudio.item)) {
         this._openVideo(deviceAudio.item, { withSpeakers: false, followsDevice: true });
@@ -5110,6 +5121,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       const giayTieng = audio.currentTime;
       const tiengDangChay = this._tiengGiayTruoc !== undefined && giayTieng !== this._tiengGiayTruoc;
       this._tiengGiayTruoc = giayTieng;
+      /* Luồng MỞ ĐƯỢC NHƯNG KHÔNG CHẢY là hỏng hoàn toàn im lặng: phần tử âm thanh
+         chỉ bắn «error» khi lấy luồng hỏng, còn kẹt giữa chừng thì nó vẫn báo là
+         đang phát. Chủ máy gặp đúng ca này trên iPhone với CẢ HAI máy phát (add-on
+         và c2a), tức lỗi ở thẻ chứ không ở máy phát.
+         ĐO BẰNG THỜI GIAN THẬT, KHÔNG ĐẾM NHỊP: hàm này còn chạy mỗi lần Home
+         Assistant đẩy trạng thái — nhiều lần mỗi giây — nên đếm nhịp thì ba nhịp
+         trôi qua trong chưa đầy một giây và báo nhầm ngay. */
+      if (tiengDangChay || audio.paused || this._tiengChayLuc === undefined) this._tiengChayLuc = Date.now();
+      if (!audio.paused && Date.now() - this._tiengChayLuc > 8000) {
+        this._tiengChayLuc = undefined;
+        // Trả tiếng về khung TRƯỚC khi dừng bộ phát: «stop» báo cho bên nghe ngay,
+        // mà lúc ấy cờ bám-tiếng phải đã tắt, nếu không nó lại đi mở lại video.
+        this._traTiengVeKhung();
+        deviceAudio.stop();
+        this._setStatus("Máy này mở được tiếng nhưng không chạy — chạm vào video để nghe.", true);
+        return;
+      }
       if (!audio.paused && tiengDangChay && Date.now() >= this._lastVideoSeekAt + 4000
         && Math.abs(giayTieng - this._videoTimeNow()) > 2) {
         this._seekPicture(giayTieng);

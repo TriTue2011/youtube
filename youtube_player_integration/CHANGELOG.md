@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.26.4 - 2026-09-19
+
+### Fixed — tiếng "đang phát" mà không ra tiếng, và không ai báo gì
+
+Bản 0.26.3 chặn được thiệt hại (video hết bị giật về 0) nhưng **chưa trả lại tiếng**:
+người dùng vẫn ngồi trước một video chạy mượt mà im lặng. Đây là phần còn lại.
+
+Ba dữ kiện của chủ máy khoanh vùng gọn nguyên nhân:
+
+- Lỗi xảy ra với **cả add-on lẫn c2a** — hai máy phát khác hẳn nhau.
+- Lỗi xảy ra **cả trên Safari**, không riêng app Home Assistant.
+
+Hai điều đó loại máy phát và loại khung web của app. Lỗi ở **thẻ**.
+
+**Vì sao nó hỏng im lặng:** phần tử âm thanh của thẻ chỉ được gắn **bốn** sự kiện —
+`play`, `pause`, `ended`, `error`. Luồng *lấy không được* thì bắn `error` và thẻ đã có
+đường xử lý. Nhưng luồng **mở được rồi kẹt giữa chừng** không bắn gì cả: phần tử vẫn
+báo "không tạm dừng", `currentTime` thì đứng nguyên ở 0. Thẻ tin là đang phát, người
+dùng không nghe thấy gì, và không có chỗ nào phát hiện ra.
+
+**Sửa:** vòng đồng bộ nay tự đo — "đang phát" mà đồng hồ không nhúc nhích quá 8 giây
+thì trả tiếng về cho khung YouTube và mời chạm để nghe, **dùng lại đúng đường phục
+hồi đã có** cho ca luồng lỗi (nay tách thành một hàm, gọi từ cả hai chỗ, không chép
+đôi).
+
+**Một cái bẫy đã né:** `_syncVideo` không chỉ chạy mỗi 2 giây — nó còn chạy **mỗi lần
+Home Assistant đẩy trạng thái**, tức nhiều lần mỗi giây. Đếm số nhịp thì ba nhịp trôi
+qua trong chưa đầy một giây và báo nhầm ngay; nên phép đo dùng **thời gian thực** kể
+từ lần đồng hồ nhúc nhích gần nhất.
+
+Chưa chạm tới nguyên nhân gốc khiến luồng kẹt trên WebKit — nghi vấn hiện nay là khung
+YouTube (dù đã tắt tiếng) giành mất phiên âm thanh của phần tử `<audio>`, nhưng chưa
+đo được nên **không khẳng định**. Dù gốc rễ là gì, thẻ nay không còn im lặng chịu trận.
+
 ## 0.26.3 - 2026-09-19
 
 ### Fixed — video YouTube cứ chạy vài giây rồi giật về 0, lặp mãi
