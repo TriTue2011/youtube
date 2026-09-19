@@ -5151,8 +5151,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          ĐO BẰNG THỜI GIAN THẬT, KHÔNG ĐẾM NHỊP: hàm này còn chạy mỗi lần Home
          Assistant đẩy trạng thái — nhiều lần mỗi giây — nên đếm nhịp thì ba nhịp
          trôi qua trong chưa đầy một giây và báo nhầm ngay. */
+      /* CHƯA TẢI XONG KHÁC HẲN VỚI KẸT — bản 0.26.4 gộp hai thứ này làm một, và đó
+         là lỗi của chính tôi. Số liệu thật từ máy chủ máy 19/09/2026:
+         «nap=0 mang=2 loi=0», tức phần tử ĐANG TẢI và CHƯA nhận được byte nào,
+         không hề có lỗi. Đường phục hồi vốn dành cho ca "có dữ liệu mà đồng hồ
+         đứng"; nổ trong lúc chưa có dữ liệu là cướp tiếng của một luồng có thể
+         đang chạy tốt, rồi đưa về khung YouTube — mà khung ấy iOS treo khi tắt
+         màn hình, nên chính bản sửa lại làm mất đúng tính năng người dùng cần.
+         Nay tách hai đường: CÓ dữ liệu mà không nhúc nhích thì mới trả tiếng về
+         khung; còn đang tải mà chưa có gì thì CHỜ, và chỉ nói thật là chưa lấy
+         được tiếng — không tự ý đổi nguồn phát của người dùng. */
+      const coDuLieu = audio.readyState >= 2;   // HAVE_CURRENT_DATA trở lên
       if (tiengDangChay || audio.paused || this._tiengChayLuc === undefined) this._tiengChayLuc = Date.now();
-      if (!audio.paused && Date.now() - this._tiengChayLuc > 8000) {
+      const doiQua = Date.now() - this._tiengChayLuc;
+      if (!audio.paused && !coDuLieu && doiQua > 20000) {
+        // Vẫn đang tải mà 20 giây chưa có byte nào: nói thật, KHÔNG cướp tiếng.
+        this._tiengChayLuc = Date.now();   // nói một lần mỗi 20 giây, không spam
+        this._setStatus(
+          `Chưa lấy được tiếng từ máy phát — vẫn đang tải. [nap=${audio.readyState}`
+          + ` mang=${audio.networkState} loi=${audio.error ? audio.error.code : 0}]`, true);
+      }
+      if (!audio.paused && coDuLieu && doiQua > 8000) {
         this._tiengChayLuc = undefined;
         // Trả tiếng về khung TRƯỚC khi dừng bộ phát: «stop» báo cho bên nghe ngay,
         // mà lúc ấy cờ bám-tiếng phải đã tắt, nếu không nó lại đi mở lại video.

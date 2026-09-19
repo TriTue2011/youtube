@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.26.8 - 2026-09-20
+
+### Fixed — thẻ cướp tiếng trong lúc luồng MỚI ĐANG TẢI (lỗi của bản 0.26.4)
+
+Bốn con số từ máy người dùng, thu được hai lần độc lập (22:31 và 22:35):
+
+```
+nap=0  mang=2  loi=0  giay=0.0
+```
+
+Đọc theo bảng đã công bố ở 0.26.6: phần tử âm thanh **đang tải** (`mang=2`) và **chưa
+nhận được byte nào** (`nap=0`), **không có lỗi** (`loi=0`). Đây **không phải** "kẹt
+giữa chừng" — đó là **chưa mở xong**. Bản 0.26.4 gộp hai trạng thái ấy làm một, nên nó
+tuyên bố hỏng rồi trả tiếng về khung YouTube trong lúc luồng có thể đang chạy bình
+thường. Mà iOS treo khung nhúng khi tắt màn hình, nên **chính bản sửa lại làm mất đúng
+tính năng người dùng cần**. Lỗi này là của tôi, không phải của máy phát.
+
+Nay tách hai đường:
+
+| Tình trạng | Thẻ làm gì |
+|---|---|
+| `nap≥2`, đồng hồ đứng > 8 giây | kẹt thật → trả tiếng về khung, mời chạm |
+| `nap<2`, đang tải > 20 giây | **chờ tiếp**, chỉ nói thật là chưa lấy được tiếng |
+
+### Đã loại trừ xong phía máy chủ — đo trên chính đường trình duyệt đi
+
+Gọi đúng chuỗi mà `<audio>` của iPhone dùng: xin vé qua Home Assistant, rồi tải vé đó
+**không kèm chứng chỉ nào**, chỉ dựa chữ ký trên đường dẫn:
+
+```
+mã trả về     : 206
+Content-Type  = audio/mp4
+Content-Range = bytes 0-65535/4557665
+Accept-Ranges = bytes
+byte đầu tiên : 0,16 giây   (xin vé: 1,51 giây)
+```
+
+Cả chuỗi khoẻ mạnh đầu-cuối. Cộng với việc lỗi xảy ra **giống hệt** ở add-on lẫn c2a,
+ở Safari lẫn app Home Assistant: **máy phát vô can**, byte có sẵn ở đầu kia mà WebKit
+không kéo về.
+
+Nghi vấn còn lại — **chưa chứng minh, nói rõ để không ai trông đợi nhầm**: lúc đó khung
+YouTube đang phát video, mà iOS chỉ cho một phần tử phát chạy thật; khung video chiếm
+đường nên phần tử âm thanh xếp hàng mãi. Nó khớp trọn bộ triệu chứng (phải bật loa
+trong khung mới nghe được, tắt màn là im), nhưng đây đã là giả thuyết thứ tư trong khi
+ba cái trước đều bị số đo bác bỏ, nên cần một phép thử trước khi sửa.
+
 ## 0.26.7 - 2026-09-19
 
 ### Fixed — mở hết màn hình thì ô tìm kiếm và hàng nguồn đè lên video

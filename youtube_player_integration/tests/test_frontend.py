@@ -156,7 +156,14 @@ class LovelaceCardContractTests(unittest.TestCase):
         # 0.26.4: luồng MỞ ĐƯỢC NHƯNG KHÔNG CHẢY không bắn sự kiện nào — phần tử âm
         # thanh chỉ có play/pause/ended/error — nên phải tự đo mới thấy. Chủ máy gặp
         # trên iPhone với CẢ add-on lẫn c2a, và cả trên Safari: lỗi ở thẻ.
-        self.assertIn("if (!audio.paused && Date.now() - this._tiengChayLuc > 8000) {", script)
+        # 0.26.8: CHƯA TẢI XONG khác hẳn KẸT. Số liệu thật từ máy chủ máy: nap=0 mang=2
+        # loi=0 — đang tải, chưa có byte nào, không lỗi. Đường phục hồi chỉ dành cho ca
+        # "có dữ liệu mà đồng hồ đứng"; nổ lúc chưa có dữ liệu là cướp tiếng của một
+        # luồng có thể đang chạy, đưa về khung YouTube — mà iOS treo khung ấy khi tắt
+        # màn, nên chính bản sửa lại làm mất đúng tính năng người dùng cần.
+        self.assertIn("const coDuLieu = audio.readyState >= 2;", script)
+        self.assertIn("if (!audio.paused && coDuLieu && doiQua > 8000) {", script)
+        self.assertIn("if (!audio.paused && !coDuLieu && doiQua > 20000) {", script)
         # 0.26.6: khi bắt được tình trạng "mở được nhưng không chạy" thì phải in kèm SỐ
         # LIỆU của chính phần tử âm thanh. Không có bốn số này thì chỉ còn đường đoán,
         # mà ba nguyên nhân khả dĩ (chờ dữ liệu / bị chặn phát / lỗi giải mã) cần ba
