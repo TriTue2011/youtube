@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.22.2 - 2026-09-19
+
+### Sửa lại kết luận Facebook — LẦN THỨ HAI, và lần này có bằng chứng ngược hẳn
+
+Bản 0.22.1 kết luận "bài viết này không lấy được ẩn danh từ máy chủ". **Sai.** Chủ máy
+gửi cùng nội dung đó dưới dạng địa chỉ reel, và nó lấy được sạch sẽ:
+
+- Bóc luồng thành công: thời lượng 148,8 giây, có bản hình tới 1920×1080.
+- **Có luồng tiếng riêng**: `mp4a.40.5`, ~73 kbps, 48 kHz — tức đủ để phát ra loa, chứ
+  không phải chỉ có hình.
+- Máy chủ phục vụ luồng: `video-hkg1-2.xx.fbcdn.net`.
+- Trang nhúng: 206.373 byte và có `hd_src` (mốc so sánh: trang có nguồn phát ~190 nghìn
+  byte, trang bị từ chối ~50 nghìn byte).
+
+Nguyên nhân thật của mọi lần hỏng trước: tôi lấy **mã bài viết** (`story_fbid`,
+`1135095972510953`) đem đi hỏi như thể nó là **mã video**. Mã video thật là
+`1807802260572674`. Không hề có chuyện đòi đăng nhập, cũng không có chuyện thiếu quyền
+xem — chỉ là hỏi sai mã, rồi dựng một kết luận về quyền xem lên trên dấu hiệu đó.
+
+**Lớp lỗi, ghi lại để khỏi lặp:** suy từ một thông báo lỗi ra nguyên nhân, mà không
+kiểm chứng rằng mình đã đưa đúng dữ liệu đầu vào. Thông báo "chỉ dành cho người dùng đã
+đăng ký" là câu Facebook trả lời cho **một mã không tồn tại dưới dạng video**, không
+phải câu trả lời về bài viết của chủ máy.
+
+### Changed — dòng báo lỗi khi dán link không đọc được
+
+Bỏ câu "link Facebook đòi đăng nhập nên không phát được" — câu đó sai. Nay nói đúng
+hiện trạng: ô này chỉ nhận link YouTube, còn Facebook và Zing thì **máy phát chưa có
+nguồn tương ứng**, tức là thiếu tính năng chứ không phải bị chặn.
+
+### Chưa làm — nguồn Facebook cho máy phát
+
+Đã đo được là khả thi và biết rõ khuôn mẫu: máy phát phân nhánh theo nguồn trong
+`validate_stream_target`, mỗi nguồn có một danh sách máy chủ hợp lệ riêng
+(`YOUTUBE_STREAM_HOSTS`, `ZING_CDN_HOSTS`) và một hàm giải luồng riêng theo cùng một
+hình dạng. Thêm Facebook nghĩa là: thêm `fbcdn.net` vào danh sách cho phép, thêm một
+nhánh nguồn, thêm một hàm giải luồng theo khuôn `resolve_youtube_audio`, và dạy đường
+tìm kiếm nhận link Facebook. Đụng cả máy phát, tích hợp lẫn thẻ — chờ chủ máy quyết.
+
 ## 0.22.1 - 2026-09-19
 
 ### Sửa lại một khẳng định SAI trong ghi chú 0.22.0 (link Facebook)

@@ -3760,8 +3760,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         + `&source=youtube&q=${encodeURIComponent(link)}&limit=1`);
       const bai = Array.isArray(payload.items) ? payload.items[0] : null;
       if (!bai) {
-        this._setStatus("Không đọc được link này. Hiện chỉ gắn được link YouTube —"
-          + " link Facebook đòi đăng nhập nên không phát được, link Zing thì chưa nhận.", true);
+        this._setStatus("Không đọc được link này. Ô này hiện chỉ nhận link YouTube;"
+          + " link Facebook và link Zing thì máy phát chưa có nguồn tương ứng.", true);
         return;
       }
       if ((muc.songs || []).some((daCo) => daCo.id === bai.id)) {
