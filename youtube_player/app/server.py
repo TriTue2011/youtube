@@ -593,7 +593,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 {
                     "app_title": self.server.app_title,
                     "max_history": self.server.max_history,
-                    "sources": ["youtube", "zing"],
+                    "sources": ["youtube", "zing", "facebook"],
                 },
             )
             return
@@ -622,8 +622,8 @@ class PlayerHandler(BaseHTTPRequestHandler):
                         "youtube_stream",
                         "zing_stream",
                     ],
-                    "sources": ["youtube", "zing"],
-                    "playback_sources": ["youtube", "zing", "http"],
+                    "sources": ["youtube", "zing", "facebook"],
+                    "playback_sources": ["youtube", "zing", "facebook", "http"],
                 },
             )
             return

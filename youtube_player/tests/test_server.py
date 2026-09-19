@@ -1013,7 +1013,7 @@ class YouTubePlayerHttpTests(unittest.TestCase):
             {
                 "app_title": "Test Player",
                 "max_history": 2,
-                "sources": ["youtube", "zing"],
+                "sources": ["youtube", "zing", "facebook"],
             },
             config,
         )
@@ -1060,7 +1060,7 @@ class YouTubePlayerHttpTests(unittest.TestCase):
                 {
                     "app_title": "Configured Player",
                     "max_history": 3,
-                    "sources": ["youtube", "zing"],
+                    "sources": ["youtube", "zing", "facebook"],
                 },
                 config,
             )

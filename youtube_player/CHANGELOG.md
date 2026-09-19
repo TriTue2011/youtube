@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.1 - 2026-09-19
+
+### Fixed
+
+- **Add-on tự khai thiếu nguồn Facebook.** Điểm cuối "sức khoẻ" vẫn trả
+  `"sources": ["youtube", "zing"]` và `"playback_sources": ["youtube", "zing", "http"]`
+  dù add-on đã phát được Facebook từ 0.9.0. Không mã nào tiêu thụ hai trường này nên
+  không có gì hỏng vì nó — nhưng một lời tự khai sai là thứ đánh lừa người đọc về sau.
+  Tài liệu `API.md` đã sửa cho khớp.
+
 ## 0.9.0 - 2026-09-19
 
 ### Added
