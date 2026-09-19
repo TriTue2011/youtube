@@ -5097,8 +5097,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       if (!audio) return;
       if (audio.paused && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
       if (!audio.paused && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
-      if (!audio.paused && Date.now() >= this._lastVideoSeekAt + 4000 && Math.abs(audio.currentTime - this._videoTimeNow()) > 2) {
-        this._seekPicture(audio.currentTime);
+      /* ĐỒNG HỒ DẪN PHẢI ĐANG CHẠY thì mới được kéo đồng hồ theo. Đo trên clip
+         quay màn hình iPhone 19/09/2026: phần tử âm thanh báo "không tạm dừng"
+         nhưng `currentTime` đứng nguyên ở 0 (luồng bị kẹt trong khung web của
+         app Home Assistant). Video YouTube vẫn chạy, nên cứ bò tới 0:02–0:03 là
+         lệch quá 2 giây, và dòng dưới tua nó về đúng vị trí của tiếng — tức về
+         0. Chu kỳ 4 giây của cái phanh ngay bên dưới chính là chu kỳ giật về 0
+         mà chủ máy thấy: 0:01 → 0:02 → 0:03 → 0:00, lặp mãi.
+         So với nhịp trước là phép thử "đồng hồ có chạy không" đúng nghĩa, không
+         phải một ngưỡng tự nghĩ ra; lần chạy đầu chưa có mốc so nên không tua,
+         đúng mong muốn. */
+      const giayTieng = audio.currentTime;
+      const tiengDangChay = this._tiengGiayTruoc !== undefined && giayTieng !== this._tiengGiayTruoc;
+      this._tiengGiayTruoc = giayTieng;
+      if (!audio.paused && tiengDangChay && Date.now() >= this._lastVideoSeekAt + 4000
+        && Math.abs(giayTieng - this._videoTimeNow()) > 2) {
+        this._seekPicture(giayTieng);
       }
       return;
     }

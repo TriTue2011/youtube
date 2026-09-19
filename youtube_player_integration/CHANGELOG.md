@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.26.3 - 2026-09-19
+
+### Fixed — video YouTube cứ chạy vài giây rồi giật về 0, lặp mãi
+
+Chủ máy gửi clip quay màn hình iPhone 60 giây. Trích từng giây thì quy luật hiện ra
+rất rõ, trên **hai** video khác nhau:
+
+```
+ 9s 0:00   13s 0:01   17s 0:00   21s 0:00   25s 0:00
+10s 0:01   14s 0:02   18s 0:01   22s 0:01   27s 0:01
+11s 0:00 ← 15s 0:03   19s 0:02              28s 0:00 ←
+12s 0:00   16s 0:00 ← 20s 0:00 ←            29s 0:01
+```
+
+Video **có** chạy rồi bị kéo về 0, chu kỳ 4–5 giây — không phải "không phát được".
+Cùng lúc, thanh tiến trình của thẻ **đứng yên ở 0:00**; mà ở chế độ "nghe khi tắt màn
+hình", thanh ấy lấy số **thẳng từ `currentTime` của phần tử âm thanh**. Nên con số đó
+nói thẳng: **đồng hồ của tiếng chưa hề chạy**, dù phần tử báo là không tạm dừng —
+luồng bị kẹt trong khung web của app Home Assistant trên iPhone.
+
+Vòng đồng bộ 2 giây có luật: *tiếng không tạm dừng, đã qua 4 giây từ lần tua trước, và
+lệch quá 2 giây thì tua video về vị trí của tiếng*. Đồng hồ tiếng đứng ở 0, video bò
+tới 0:03 là lệch quá 2 giây → tua về 0. Chu kỳ 4 giây trong luật chính là chu kỳ giật
+về 0 đo được trên clip.
+
+**Sửa ở đúng chỗ sai: đồng hồ dẫn phải ĐANG CHẠY thì mới được kéo đồng hồ theo.** So
+`currentTime` với nhịp trước — một phép thử "đồng hồ có chạy không" đúng nghĩa, không
+phải thêm ngưỡng tự nghĩ ra. Tiếng kẹt thì video cứ chạy tiếp, không ai giật nó nữa.
+
+Không đụng tới nguyên nhân gốc của việc luồng tiếng kẹt trên app iPhone — đó là việc
+khác. Nhưng dù nguyên nhân ấy là gì, thẻ cũng không được phá hỏng video vì nó.
+
 ## 0.26.2 - 2026-09-19
 
 ### Added — tự chọn hiện hay ẩn YouTube, Zing MP3, Facebook và Playlist

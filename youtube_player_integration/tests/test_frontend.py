@@ -137,6 +137,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         # a speaker joining a video being watched seeks to it when it can.
         self.assertIn("this._syncVideo()", script)
         self.assertIn("this._seekPicture(speakerTime)", script)
+        # 0.26.3: đồng hồ dẫn phải ĐANG CHẠY mới được kéo đồng hồ theo. Đo trên clip
+        # quay màn hình iPhone: phần tử âm thanh báo "không tạm dừng" nhưng currentTime
+        # đứng ở 0, nên vòng đồng bộ tua video YouTube về 0 mỗi 4 giây — đúng lỗi
+        # "phát cứ về 0 liên tục". Không có dòng này thì lỗi quay lại mà không ai biết.
+        self.assertIn(
+            "const tiengDangChay = this._tiengGiayTruoc !== undefined"
+            " && giayTieng !== this._tiengGiayTruoc;", script)
+        self.assertIn(
+            "if (!audio.paused && tiengDangChay && Date.now() >= this._lastVideoSeekAt + 4000",
+            script)
         self.assertIn("this._speakerJoinsVideo(entityId)", script)
         # Loa tích vào khi đang xem: nguồn lấy từ CHÍNH bài đang xem. Gắn cứng "youtube"
         # thì xem Facebook rồi tích loa sẽ hỏi sai khả năng của loa và gửi địa chỉ
