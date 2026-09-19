@@ -73,6 +73,213 @@ def parse_search_payload(payload, *, limit):
     return results
 
 
+FACEBOOK_ID = re.compile(r"^[0-9]{5,25}$")
+FACEBOOK_URL_HOSTS = {
+    "facebook.com",
+    "www.facebook.com",
+    "m.facebook.com",
+    "web.facebook.com",
+}
+
+
+def facebook_url_query(query):
+    """Mã video Facebook trong một link người ta dán, hoặc None.
+
+    Nhận /watch/?v=<mã>, /reel/<mã>/, /<trang>/videos/<mã>/. KHÔNG nhận link chia sẻ
+    /share/v/<mã ngắn>: đo 19/09/2026, mã trong đó không phải mã video và bộ bóc luồng
+    không đọc được dạng ấy. Cũng không nhận fb.watch vì chưa đo được dạng đó."""
+    text = str(query or "").strip()
+    if FACEBOOK_ID.fullmatch(text):
+        return text
+    if "//" not in text:
+        text = f"https://{text}"
+    parsed = urlsplit(text)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or host not in FACEBOOK_URL_HOSTS:
+        return None
+    phan = [doan for doan in parsed.path.split("/") if doan]
+    video_id = ""
+    if parsed.path.rstrip("/").endswith("/watch"):
+        video_id = parse_qs(parsed.query).get("v", [""])[0]
+    elif phan and phan[0] == "reel" and len(phan) > 1:
+        video_id = phan[1]
+    elif "videos" in phan:
+        # Quét tìm đoạn LÀ CHUỖI SỐ, không lấy đoạn kế tiếp: Facebook chèn tên bài vào
+        # giữa. Chủ máy gửi 19/09/2026 địa chỉ mà trình duyệt CHƯA ĐĂNG NHẬP nhận được:
+        # /Emgaibay.686868/videos/có-những-chuyện-…/1807802260572674/
+        # Lấy đoạn kế tiếp sẽ ra tên bài chứ không ra mã.
+        sau = phan[phan.index("videos") + 1 :]
+        video_id = next((doan for doan in sau if FACEBOOK_ID.fullmatch(doan)), "")
+    return video_id if FACEBOOK_ID.fullmatch(video_id) else None
+
+
+FACEBOOK_SHARE_PATH = re.compile(r"^/share/[a-z]/[A-Za-z0-9_-]{4,64}/?$", re.IGNORECASE)
+# Mã video nằm trong trường NỘI BỘ của Facebook, dạng
+#   media_id: "<mã trang>;<mã bài viết>;;9::impl_<mã video>"
+# Đo 19/09/2026 trên trang trả về cho link chia sẻ của chủ máy: chuỗi này xuất hiện
+# nhiều lần, còn thẻ canonical và og:url thì chỉ trỏ tới BÀI VIẾT nên không dùng được.
+FACEBOOK_MEDIA_ID = re.compile(r"impl_([0-9]{5,25})")
+# Thiếu nhóm đầu đề này là Facebook đá sang trang đăng nhập rồi trả 400 — đo được:
+# gọi trần thì 400 với 3.676 byte, gọi đủ đầu đề thì 200 với 298.659 byte.
+FACEBOOK_PAGE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+}
+
+
+def facebook_share_url(query):
+    """Địa chỉ link chia sẻ Facebook (/share/v/…, /share/r/…), hoặc None."""
+    text = str(query or "").strip()
+    if "//" not in text:
+        text = f"https://{text}"
+    parsed = urlsplit(text)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or host not in FACEBOOK_URL_HOSTS:
+        return None
+    return text if FACEBOOK_SHARE_PATH.fullmatch(parsed.path) else None
+
+
+def resolve_facebook_share(share_url, *, timeout=20):
+    """Mã video đứng sau một link chia sẻ Facebook.
+
+    ĐƯỜNG DỰ PHÒNG, không bền: nó đọc một trường nội bộ không có tài liệu của trang
+    Facebook, nên Facebook đổi trang là hỏng. Hỏng thì ném `SearchUnavailableError`
+    để người dùng thấy lý do, chứ không trả None rồi biến thành "không tìm thấy".
+
+    Vì sao phải làm: mã trong link chia sẻ KHÔNG phải mã video, và cũng không suy ra
+    được — mã bài viết là 1135095972510953 còn mã video là 1807802260572674."""
+    request = Request(share_url, headers=FACEBOOK_PAGE_HEADERS)
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            body = response.read(SEARCH_RESPONSE_LIMIT + 1)
+            if len(body) > SEARCH_RESPONSE_LIMIT:
+                raise SearchUnavailableError("search_response_too_large")
+            if response.headers.get("Content-Encoding", "").lower() == "gzip":
+                body = gzip.decompress(body)
+                if len(body) > SEARCH_RESPONSE_LIMIT:
+                    raise SearchUnavailableError("search_response_too_large")
+    except SearchUnavailableError:
+        raise
+    except (OSError, ValueError, gzip.BadGzipFile) as error:
+        raise SearchUnavailableError("search_provider_failed") from error
+    found = FACEBOOK_MEDIA_ID.search(body.decode("utf-8", "ignore"))
+    if not found:
+        raise SearchUnavailableError("facebook_share_unreadable")
+    return found.group(1)
+
+
+# Facebook nhét số liệu vào ĐẦU trường tiêu đề. Đo 19/09/2026 trên dữ liệu thật của
+# một reel: "49K views · 1.2K reactions | Có những chuyện có lẽ nên để trong lòng…".
+# Để nguyên thì trên thẻ hiện một dòng rác trước tên bài. Chỉ cắt khi phần đứng trước
+# dấu "|" ĐÚNG LÀ cụm số liệu — tên bài thật có chứa dấu "|" thì giữ nguyên.
+FACEBOOK_COUNT_PREFIX = re.compile(
+    r"^\s*[\d.,]+\s*[KMB]?\s*(views?|reactions?|comments?|shares?|likes?)"
+    r"(\s*·\s*[\d.,]+\s*[KMB]?\s*(views?|reactions?|comments?|shares?|likes?))*\s*\|\s*",
+    re.IGNORECASE,
+)
+
+
+def _facebook_title(raw, fallback):
+    """Tên bài đã bỏ cụm số liệu Facebook chèn sẵn ở đầu."""
+    title = " ".join(str(raw or "").split())
+    cleaned = FACEBOOK_COUNT_PREFIX.sub("", title).strip()
+    return cleaned or title or fallback
+
+
+def parse_facebook_payload(payload, *, limit):
+    """Dựng mục hiển thị từ dữ liệu thô của một video Facebook.
+
+    Viết riêng thay vì dùng lại bản YouTube: bản ấy gắn cứng nguồn "youtube", ghép
+    địa chỉ thành link watch của YouTube, lấy ảnh dự phòng từ i.ytimg.com, và lọc mọi
+    mục theo mã ĐÚNG 11 KÝ TỰ — mã Facebook là chuỗi số dài hơn nên sẽ bị loại âm
+    thầm, không báo lỗi gì. Zing cũng có bản dựng riêng vì đúng lý do này."""
+    results = []
+    entries = payload.get("entries") if isinstance(payload, dict) else []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        video_id = str(entry.get("id") or "")
+        if not FACEBOOK_ID.fullmatch(video_id):
+            continue
+        thumbnails = entry.get("thumbnails") or []
+        thumbnail = next(
+            (
+                str(candidate.get("url"))
+                for candidate in reversed(thumbnails)
+                if isinstance(candidate, dict) and candidate.get("url")
+            ),
+            str(entry.get("thumbnail") or ""),
+        )
+        duration = entry.get("duration")
+        try:
+            duration = int(duration) if duration is not None else None
+        except (TypeError, ValueError):
+            duration = None
+        results.append(
+            {
+                "source": "facebook",
+                "kind": "video",
+                "id": video_id,
+                "url": f"https://www.facebook.com/watch/?v={video_id}",
+                "title": _facebook_title(entry.get("title"), video_id),
+                "channel": str(entry.get("channel") or entry.get("uploader") or ""),
+                "duration": duration,
+                "thumbnail": thumbnail,
+            }
+        )
+        if len(results) >= limit:
+            break
+    return results
+
+
+def search_facebook(query, *, limit=1, timeout=30):
+    """Tra cứu một video Facebook từ LINK DÁN VÀO.
+
+    Cố ý không nhận tìm theo từ khoá: Facebook không có đường tìm kiếm công khai để
+    gọi, nên hứa suông chỉ sinh ra lỗi mơ hồ. Dán link thì báo rõ, gõ chữ thì báo rõ."""
+    video_id = facebook_url_query(query)
+    if video_id is None:
+        # Link CHIA SẺ: mã trong đó là mã bài viết, phải lần ra mã video từ trang.
+        share_url = facebook_share_url(query)
+        if share_url is None:
+            raise ValueError("invalid_search_query")
+        video_id = resolve_facebook_share(share_url, timeout=timeout)
+    _validated_query_and_limit(query, limit, max_length=MAX_URL_LENGTH)
+    command = [
+        "yt-dlp",
+        "--dump-single-json",
+        "--skip-download",
+        "--no-warnings",
+        f"https://www.facebook.com/watch/?v={video_id}",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SearchUnavailableError("search_process_failed") from error
+    if completed.returncode != 0:
+        raise SearchUnavailableError("search_provider_failed")
+    try:
+        entry = json.loads(completed.stdout)
+    except (json.JSONDecodeError, TypeError) as error:
+        raise SearchUnavailableError("invalid_search_response") from error
+    return parse_facebook_payload({"entries": [entry]}, limit=1)
+
+
 def youtube_url_query(query):
     """Return ("video", id) or ("playlist", id) when the query is a YouTube link.
 

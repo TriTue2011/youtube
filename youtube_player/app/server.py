@@ -18,6 +18,7 @@ from playlists import PlaylistError, PlaylistStore, is_share_code, read_share_co
 from search import (
     SearchUnavailableError,
     fetch_youtube_playlist,
+    search_facebook,
     search_youtube,
     search_zing,
     youtube_playlist_id,
@@ -29,6 +30,8 @@ from streaming import (
     build_signed_stream_url,
     fetch_zing_playlist,
     normalize_public_base_url,
+    resolve_facebook_audio,
+    resolve_facebook_video,
     resolve_youtube_audio,
     resolve_youtube_video,
     resolve_zing_stream,
@@ -59,6 +62,56 @@ STATIC_FILES = {
 }
 APP_VERSION = "0.8.1"
 API_VERSION = "1"
+
+
+FACEBOOK_ID = re.compile(r"^[0-9]{5,25}$")
+FACEBOOK_HOSTS = {
+    "facebook.com",
+    "www.facebook.com",
+    "m.facebook.com",
+    "web.facebook.com",
+}
+
+
+def normalize_facebook_target(raw_target):
+    """Mã video Facebook, từ chính mã số hoặc từ một link người dùng dán.
+
+    Nhận: /reel/<mã>, /watch/?v=<mã>, /<trang>/videos/<mã>/, /videos/<mã>.
+    KHÔNG nhận link chia sẻ dạng /share/v/<mã ngắn> — đo 19/09/2026: bộ bóc luồng
+    không nhận dạng được dạng đó ("No suitable extractor"), và mã trong đó không phải
+    mã video. Nhận bừa dạng ấy chỉ đẩy lỗi xuống sâu hơn rồi báo sai nguyên nhân."""
+    target = str(raw_target or "").strip()
+    if FACEBOOK_ID.fullmatch(target):
+        return target
+    parsed = urlsplit(target if "//" in target else f"https://{target}")
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or host not in FACEBOOK_HOSTS:
+        raise ValueError("invalid_facebook_target")
+    phan = [doan for doan in parsed.path.split("/") if doan]
+    video_id = ""
+    if parsed.path.rstrip("/").endswith("/watch") or parsed.path == "/watch":
+        video_id = parse_qs(parsed.query).get("v", [""])[0]
+    elif phan and phan[0] == "reel" and len(phan) > 1:
+        video_id = phan[1]
+    elif "videos" in phan:
+        # Quét tìm đoạn LÀ CHUỖI SỐ (Facebook chèn tên bài vào giữa) — xem chú thích
+        # cùng nội dung ở `facebook_url_query` trong search.py.
+        sau = phan[phan.index("videos") + 1 :]
+        video_id = next((doan for doan in sau if FACEBOOK_ID.fullmatch(doan)), "")
+    if not FACEBOOK_ID.fullmatch(video_id):
+        raise ValueError("invalid_facebook_target")
+    return video_id
+
+
+def facebook_video_target(video_id, max_height):
+    """Đích cho phần HÌNH: "<mã>:<chiều cao>". Facebook chỉ có hai bậc gộp sẵn (hd/sd)
+    nên chiều cao ở đây chỉ dùng để chọn giữa hai bậc ấy."""
+    try:
+        height = int(max_height or 0)
+    except (TypeError, ValueError):
+        height = 0
+    chon = 720 if height >= 720 or height == 0 else 480
+    return f"{video_id}:{chon}"
 
 
 def normalize_target(raw_target):
@@ -353,6 +406,13 @@ class PlayerServer(ThreadingHTTPServer):
                 with self.player_lock:
                     self.playback_session.remember_search(source, results)
                 return results
+            if source == "facebook":
+                # Chỉ tra cứu được bằng LINK DÁN VÀO; `search_facebook` tự ném
+                # `invalid_search_query` nếu đưa vào chữ thường.
+                results = search_facebook(query, limit=limit)
+                with self.player_lock:
+                    self.playback_session.remember_search(source, results)
+                return results
             raise ValueError("invalid_search_source")
 
     def remember_public_zing_results(self, results, *, ttl=3600):
@@ -454,6 +514,9 @@ class PlayerServer(ThreadingHTTPServer):
             if normalized.get("kind") != "video" or not normalized.get("id"):
                 raise ValueError("youtube_audio_requires_video")
             target = normalized["id"] if source == "youtube" else youtube_video_target(normalized["id"], max_height)
+        elif source in {"facebook", "facebook_video"}:
+            video_id = normalize_facebook_target(target)
+            target = video_id if source == "facebook" else facebook_video_target(video_id, max_height)
         else:
             raise ValueError("unsupported_stream_source")
         return target, self._resolve_stream(source, target)
@@ -465,10 +528,17 @@ class PlayerServer(ThreadingHTTPServer):
             cached = self.stream_cache.get(key)
             if cached and cached[0] >= time.monotonic():
                 return dict(cached[1])
+        # Hai nhánh Facebook PHẢI đứng trước cái `else` bên dưới: `else` là nhánh mặc
+        # định rơi về Zing, nên thiếu chúng thì đích Facebook sẽ bị đem đi giải bằng
+        # bộ giải Zing và hỏng ở một chỗ chẳng liên quan gì.
         if source == "youtube":
             resolved = resolve_youtube_audio(target)
         elif source == "youtube_video":
             resolved = resolve_youtube_video(target)
+        elif source == "facebook":
+            resolved = resolve_facebook_audio(target)
+        elif source == "facebook_video":
+            resolved = resolve_facebook_video(target)
         else:
             resolved = resolve_zing_stream(target)
         with self.stream_lock:

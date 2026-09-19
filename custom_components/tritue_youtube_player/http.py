@@ -142,10 +142,17 @@ class TriTueStreamView(HomeAssistantView):
             )
         source = payload.get("source")
         target = str(payload.get("target") or "").strip()
-        if source not in {"youtube", "zing", "youtube_video"} or not 1 <= len(target) <= 2048:
+        # Danh sách này là CỬA CHẶN THỨ HAI, độc lập với `STREAM_SOURCES` của máy phát.
+        # Thêm nguồn mới mà quên chỗ này thì tích hợp chặn ngay, add-on không bao giờ
+        # nhận được yêu cầu, và triệu chứng chỉ là "không phát được" chung chung.
+        if source not in {"youtube", "zing", "youtube_video", "facebook", "facebook_video"} or not 1 <= len(target) <= 2048:
             return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
         try:
-            max_height = int(payload.get("max_height") or 0) if source == "youtube_video" else 0
+            max_height = (
+                int(payload.get("max_height") or 0)
+                if source in {"youtube_video", "facebook_video"}
+                else 0
+            )
         except (TypeError, ValueError):
             max_height = 0
         try:
