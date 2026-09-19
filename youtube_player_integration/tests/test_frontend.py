@@ -49,7 +49,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._applySourceVisibility()", script)
         self.assertIn("hang.classList.add(`so-${dem}`)", script)
         self.assertIn(".source-switch.so-1 { grid-template-columns: minmax(0, 1fr); }", script)
-        self.assertIn(".source-switch.so-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }", script)
+        # 0.26.5: BA MỤC THÌ MỘT HÀNG ở MỌI bề rộng — chủ máy chốt "nếu 3 cái thì phải
+        # đặt cùng hàng như trước chứ". Luật phải có mặt HAI lần: một bản trong khối đo
+        # bề rộng (thắng luật bốn cột), một bản không điều kiện (thắng mặc định hai cột
+        # ở chỗ hẹp). Thiếu bản không điều kiện là mục thứ ba lại rơi xuống một mình.
+        self.assertEqual(
+            script.count(".source-switch.so-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }"),
+            2)
         # Ba tình huống hỏng mà chính tính năng này sinh ra, mỗi cái một chốt chặn:
         # ẩn nguồn đang mở, ẩn Playlist khi đang đứng trong khung Playlist (chặn tại
         # MỘT cửa vào vì còn đường tự nhảy vào đó sau khi lưu), và khôi phục lần tìm

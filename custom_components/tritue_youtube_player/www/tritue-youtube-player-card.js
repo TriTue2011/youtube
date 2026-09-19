@@ -892,6 +892,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            Luật một-mục để ngoài khối đo vì nó đúng ở mọi bề rộng, và hai lớp (0,2,0)
            nên thắng luật một lớp bên trong khối đo bất kể thứ tự viết. */
         .source-switch.so-1 { grid-template-columns: minmax(0, 1fr); }
+        /* BA MỤC THÌ MỘT HÀNG, ở mọi bề rộng — chủ máy chốt 19/09/2026: "nếu 3 cái
+           thì phải đặt cùng hàng như trước chứ". Mặc định hai cột làm mục thứ ba
+           rơi xuống một mình, nhìn như lỗi. Ba nhãn còn lại đều ngắn nên vẫn đủ
+           chỗ; bốn mục thì vẫn giữ 2×2 khi hẹp vì nhãn "YouTube" từng bị cắt cụt. */
+        .source-switch.so-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         button, input { font: inherit; }
         button { cursor: pointer; }
         .source-button {

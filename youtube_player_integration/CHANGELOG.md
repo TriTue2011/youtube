@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.26.5 - 2026-09-19
+
+### Fixed — ẩn bớt còn ba mục thì phải nằm CÙNG MỘT HÀNG
+
+Chủ máy chốt: *"nếu 3 cái thì phải đặt cùng hàng như trước chứ"*. Bản 0.26.2 để chỗ
+hẹp mặc định hai cột, nên mục thứ ba rơi xuống một mình — nhìn như lỗi bố cục chứ
+không như một lựa chọn.
+
+Nay ba mục ra ba cột ở **mọi** bề rộng. Bốn mục vẫn giữ 2×2 khi hẹp, vì đó là lý do
+mặc định hai cột tồn tại: bốn nhãn dàn ngang ở cột hẹp từng làm chữ "YouTube" bị
+chính nút cắt cụt (đo 19/09).
+
+Đo trong trình duyệt thật, cột chứa rộng 376px (đúng ca điện thoại của chủ máy) và
+622px — không tin luật CSS vừa viết:
+
+| Số mục | Cột 376px | Cột 622px | Chữ tràn khỏi nút |
+|---|---|---|---|
+| 4 | 2 | 4 | không |
+| 3 | **3** | 3 | không |
+| 2 | 2 | 2 | không |
+
+Cột "chữ tràn" đo riêng bằng `scrollWidth` so với `clientWidth` của từng nhãn, vì đó
+mới là thứ hỏng khi nhồi thêm cột — số cột đúng mà chữ cụt thì vẫn là hỏng.
+
 ## 0.26.4 - 2026-09-19
 
 ### Fixed — tiếng "đang phát" mà không ra tiếng, và không ai báo gì
