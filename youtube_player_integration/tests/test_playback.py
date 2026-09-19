@@ -197,37 +197,38 @@ class PlaybackRequestTests(unittest.TestCase):
                 validator(oversized)
 
     def test_capability_matrix_routes_sources_by_transport(self):
-        # Every play_media speaker can take all three sources; only the YouTube
+        # Every play_media speaker can take all four sources (Facebook joined in
+        # 0.26.0, relayed exactly like Zing); only the YouTube
         # transport differs: TVs play the native app, others get an audio stream.
         cases = {
             "cast_tv": (
                 {"target_platform": "cast", "target_device_class": "tv"},
                 "google_cast_video",
-                {"youtube", "zing", "http"},
+                {"youtube", "zing", "facebook", "http"},
                 "native",
             ),
             "cast_speaker": (
                 {"target_platform": "cast", "target_device_class": "speaker"},
                 "google_cast_audio",
-                {"youtube", "zing", "http"},
+                {"youtube", "zing", "facebook", "http"},
                 "audio",
             ),
             "dlna": (
                 {"target_platform": "dlna_dmr", "target_device_class": "speaker"},
                 "dlna",
-                {"youtube", "zing", "http"},
+                {"youtube", "zing", "facebook", "http"},
                 "audio",
             ),
             "android_tv": (
                 {"target_platform": "androidtv_remote", "target_device_class": "tv"},
                 "android_tv",
-                {"youtube", "zing", "http"},
+                {"youtube", "zing", "facebook", "http"},
                 "native",
             ),
             "generic_audio": (
                 {"target_platform": "esphome", "target_device_class": "speaker"},
                 "generic_audio",
-                {"youtube", "zing", "http"},
+                {"youtube", "zing", "facebook", "http"},
                 "audio",
             ),
         }
@@ -298,7 +299,7 @@ class PlaybackRequestTests(unittest.TestCase):
         )
 
         self.assertEqual("google_cast_unknown", capability["transport"])
-        self.assertEqual({"youtube", "zing", "http"}, set(capability["sources"]))
+        self.assertEqual({"youtube", "zing", "facebook", "http"}, set(capability["sources"]))
         self.assertEqual("audio", capability["youtube_transport"])
 
     def test_target_entity_list_is_ordered_deduplicated_and_bounded(self):
