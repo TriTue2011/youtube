@@ -45,7 +45,7 @@ const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
    KIẾM, không đổi bài đang phát — nên đổi tab xong nhìn vẫn thấy bài cũ là đúng, chỉ
    là card không hề nói bài ấy lấy từ đâu (chủ máy hỏi "có đang chạy đúng bài trên
    zing không"). Ghi hẳn tên nguồn ra thì không phải đoán nữa. */
-const TEN_NGUON = { youtube: "YouTube", zing: "Zing MP3", http: "Link" };
+const TEN_NGUON = { youtube: "YouTube", zing: "Zing MP3", facebook: "Facebook", http: "Link" };
 
 /** Song in a speaker's signed stream URL (the payload is plain base64 JSON); null = not the player's stream. */
 function streamTarget(mediaContentId) {
@@ -854,12 +854,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            chênh nhau quá ít nên nhìn không ra đâu là nền, đâu là lựa chọn. */
         .source-switch {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          /* MẶC ĐỊNH HAI CỘT — bốn nút (YouTube, Zing MP3, Facebook, Playlist) dàn
+             ngang chỉ vừa khi hàng thật sự rộng. Ba cột như bản cũ thì nút thứ tư rơi
+             xuống một mình; bốn cột ở chỗ hẹp thì nhãn bị chính nút cắt cụt — đo
+             19/09/2026, ảnh chụp cho thấy chữ "YouTube" đứt giữa chừng ở cột phải
+             rộng 337px. Hai cột an toàn ở mọi chỗ hẹp, và luật ngay dưới mới bung ra
+             bốn khi ĐO ĐƯỢC là đủ rộng. */
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           padding: 4px;
           margin: 12px 0 10px;
           border-radius: 12px;
           background: rgba(var(--ad-c2,13,21,37),0.55);
           border: 1px solid rgba(var(--ad-c1,0,204,204),0.18);
+        }
+        /* Bung bốn cột khi CHÍNH CỘT CHỨA nó đủ rộng, không phải khi cả thẻ rộng. */
+        @container ytcot (min-width: 460px) {
+          .source-switch { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
         button, input { font: inherit; }
         button { cursor: pointer; }
@@ -1332,7 +1342,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .nghe-bia { cursor: pointer; }
         .nghe-bia:focus-visible { outline: 2px solid var(--ad-accent,#00ffcc); outline-offset: 2px; }
         .nghe-bia img:not([hidden]) { animation: nghe-quay 7.2s linear infinite; animation-play-state: paused; }
-        .wrap.is-playing .nghe-bia img:not([hidden]) { animation-play-state: running; }
+        /* Nhạc đang chạy thì đĩa quay, TRỪ KHI người dùng tự bấm cho nó dừng. Lớp
+           «dung-quay» chỉ ghìm cái đĩa lại, nhạc vẫn phát bình thường. */
+        .wrap.is-playing .nghe-bia:not(.dung-quay) img:not([hidden]) { animation-play-state: running; }
         @keyframes nghe-quay { to { transform: rotate(360deg); } }
         .nghe-khung {
           display: flex;
@@ -1781,6 +1793,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .yt-zone-playlist {
           grid-area: playlist;
           position: relative;      /* mốc cho .yt-playlist-inner định vị tuyệt đối */
+          /* Khung đo RIÊNG cho cột phải. Cần nó vì bề rộng cột này KHÔNG theo bề rộng
+             thẻ: đo 19/09/2026, thẻ rộng 860px thì cột phải chỉ 337px — hẹp hơn cả
+             thẻ trên điện thoại (374px). Luật nào gác theo bề rộng THẺ để quyết bố
+             cục bên trong cột này đều sai; hàng chọn nguồn đã dính đúng lỗi đó. */
+          container-type: inline-size;
+          container-name: ytcot;
           min-width: 0;
           height: var(--yt-col-min-h, 640px);
           align-self: start;
@@ -1931,6 +1949,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              and shrink text so the card isn't a column of oversized boxes. */
           .wrap { padding: 12px; }
           h2 { font-size: 1.02rem; }
+          /* Số cột do khung đo của CỘT CHỨA quyết định (xem «@container ytcot» ở
+             trên), không quyết ở đây theo bề rộng thẻ — đó chính là chỗ bản trước làm
+             sai. Ở đây chỉ còn việc thu lề. */
           .source-switch { margin: 10px 0 8px; }
           .source-button { padding: 6px 4px; font-size: .8rem; }
           input[type="search"] { padding: 7px 10px; font-size: .9rem; }
@@ -2310,7 +2331,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                     <span class="nghe-nguon" hidden></span>
                   </div>
                   <div class="nghe-hang">
-                    <div class="nghe-bia" role="button" tabindex="0" aria-label="Phát hoặc tạm dừng" title="Bấm để phát hoặc tạm dừng">
+                    <div class="nghe-bia" role="button" tabindex="0" aria-pressed="false" aria-label="Dừng hoặc cho đĩa quay lại" title="Bấm để dừng đĩa">
                       <ha-icon icon="mdi:music-note"></ha-icon>
                       <img alt="" hidden />
                     </div>
@@ -2363,6 +2384,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <div class="source-switch" role="group" aria-label="Nguồn nhạc và playlist">
                 <button class="source-button" type="button" data-source="youtube"><ha-icon icon="mdi:youtube"></ha-icon><span>YouTube</span></button>
                 <button class="source-button" type="button" data-source="zing">Zing MP3</button>
+                <button class="source-button" type="button" data-source="facebook"><ha-icon icon="mdi:facebook"></ha-icon><span>Facebook</span></button>
                 <button class="source-button" type="button" data-view="playlists"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
               </div>
 
@@ -2512,18 +2534,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     this.shadowRoot.querySelector(".previous").addEventListener("click", () => this._skip(-1));
     this.shadowRoot.querySelector(".play-pause").addEventListener("click", () => this._togglePlay());
-    /* Đĩa bấm được: đang dừng thì bấm cho quay, đang quay thì bấm cho dừng tại chỗ.
-       Gọi THẲNG «_togglePlay» — cùng một việc với nút phát/dừng thì phải cùng một
-       hàm, tách ra là hai nơi rồi lệch nhau. Phần "dừng đúng vị trí" do CSS lo bằng
-       «animation-play-state», không phải do đây.
-       Bàn phím theo đúng nếp thẻ bài hát ở dưới: Enter và dấu cách. */
+    /* Bấm đĩa CHỈ dừng hoặc cho quay lại CÁI ĐĨA — không đụng tới nhạc.
+       Bản đầu tôi nối nút này vào «_togglePlay» là hiểu sai yêu cầu: chủ máy
+       19/09/2026 báo ngay "dừng đĩa lại dừng cả nhạc là sao". Đĩa là thứ trang trí,
+       nút phát/dừng nhạc đã có riêng ở hàng dưới.
+       Phần "dừng đúng vị trí" do CSS lo bằng «animation-play-state»; ở đây chỉ bật
+       tắt một lớp. Bàn phím theo đúng nếp thẻ bài hát: Enter và dấu cách. */
     const dia = this.shadowRoot.querySelector(".nghe-bia");
     if (dia) {
-      dia.addEventListener("click", () => this._togglePlay());
+      const doiQuay = () => {
+        const dung = dia.classList.toggle("dung-quay");
+        dia.setAttribute("aria-pressed", dung ? "true" : "false");
+        dia.title = dung ? "Đĩa đang dừng — bấm để quay lại" : "Bấm để dừng đĩa";
+      };
+      dia.addEventListener("click", doiQuay);
       dia.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          this._togglePlay();
+          doiQuay();
         }
       });
     }
@@ -3563,9 +3591,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     const input = this.shadowRoot.querySelector('input[type="search"]');
     const submit = this.shadowRoot.querySelector(".search-button");
+    /* Facebook nói rõ là CHỈ dán link: Facebook không có đường tìm kiếm công khai để
+       gọi, nên mời người dùng gõ từ khoá là hứa một thứ chắc chắn không chạy. Link
+       chia sẻ cũng nhận được — máy phát tự lần ra mã video từ trang. */
     input.placeholder = this._source === "youtube"
       ? "Tìm tên bài hát, ca sĩ hoặc dán link YouTube…"
-      : "Tìm tên bài hát hoặc ca sĩ…";
+      : this._source === "facebook"
+        ? "Dán link video Facebook (reel, watch hoặc link chia sẻ)…"
+        : "Tìm tên bài hát hoặc ca sĩ…";
     input.setAttribute("aria-label", "Tìm tên bài hát hoặc ca sĩ");
     input.maxLength = this._source === "zing" ? 120 : 2048;
     submit.querySelector(".search-label").textContent = "Tìm kiếm";
@@ -4430,7 +4463,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       }
     }
     if (memory && !this._results.length && Array.isArray(memory.results) && memory.results.length) {
-      this._source = ["youtube", "zing", "http"].includes(memory.source) ? memory.source : "youtube";
+      this._source = ["youtube", "zing", "facebook", "http"].includes(memory.source) ? memory.source : "youtube";
       this._results = memory.results;
       this.shadowRoot.querySelector('input[type="search"]').value = String(memory.query || "");
       this._updateSourceButtons();

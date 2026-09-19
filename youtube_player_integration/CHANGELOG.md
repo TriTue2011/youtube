@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.24.0 - 2026-09-19
+
+### Fixed — bấm đĩa không còn dừng nhạc
+
+Chủ máy báo ngay: *"dừng đĩa lại dừng cả nhạc là sao"*. **Tôi hiểu sai yêu cầu.** Câu
+gốc là "đĩa quay hay dừng bằng cách kích vào" — chỉ nói về **cái đĩa**, mà tôi lại nối
+nút đĩa vào lệnh phát/dừng nhạc.
+
+Nay bấm đĩa chỉ ghìm hoặc thả cho đĩa quay lại, và **không đụng tới nhạc**. Nhạc vẫn
+chạy tiếp; nút phát/dừng nhạc vẫn ở hàng dưới như cũ. Dừng thì đĩa đứng im đúng góc
+đang quay, không bật về vị trí đầu.
+
+### Added — nguồn Facebook: NGHE được (chưa xem được hình)
+
+Thêm nút **Facebook** cạnh YouTube và Zing MP3. Dán link video Facebook vào ô tìm
+kiếm: dạng `/reel/…`, `/watch/?v=…`, `/…/videos/…`, **và cả link chia sẻ**
+`/share/v/…` — thẻ tự lần ra mã video rồi phát.
+
+Nói rõ giới hạn để khỏi hiểu nhầm:
+
+- **Chỉ nghe**, chưa xem được hình trên thẻ. Máy phát đã giải được cả luồng hình
+  (đo được: mp4 gộp sẵn, hình h.264 kèm tiếng AAC, tới 1080p), nhưng phía thẻ chưa
+  nối đường xem, nên thẻ không mời bạn bấm xem ở bất cứ đâu.
+- **Chỉ nhận link dán vào**, không tìm theo từ khoá: Facebook không có đường tìm kiếm
+  công khai để gọi, hứa suông chỉ sinh lỗi mơ hồ.
+- Đường đọc **link chia sẻ** là đường dự phòng không bền: nó đọc một trường nội bộ
+  không có tài liệu của trang Facebook, nên Facebook đổi trang là hỏng — và khi hỏng
+  nó báo rõ chứ không lặng lẽ thành "không tìm thấy bài nào".
+
+### Fixed — hàng chọn nguồn gác theo sai thứ, nên bị cắt chữ
+
+Hàng chọn nguồn quyết định số cột theo **bề rộng của cả thẻ**. Nhưng ở bố cục hai cột,
+hàng ấy nằm trong cột phải — đo 19/09/2026: thẻ rộng 860px thì cột phải chỉ **337px**,
+tức **hẹp hơn cả thẻ trên điện thoại** (374px). Hậu quả: thẻ rộng thì nó bung ra bốn
+cột dù chỗ thật sự chỉ đủ hai, và chữ "YouTube" bị chính nút của nó cắt cụt.
+
+Nay chính cột chứa nó là khung đo: mặc định hai cột, chỉ bung bốn khi cột thật sự rộng
+trên 460px.
+
 ## 0.23.0 - 2026-09-19
 
 ### Added — bấm vào đĩa để phát hoặc dừng

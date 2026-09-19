@@ -281,6 +281,18 @@ class PlayerServer(ThreadingHTTPServer):
         elif source == "zing":
             target = self.require_public_zing_result(target)
             fallback = {"source": "zing", "kind": "song", "id": target, "url": target}
+        elif source == "facebook":
+            # Thiếu nhánh này thì NGHE TRÊN MÁY chạy còn PHÁT RA LOA hỏng: đường ra loa
+            # đi qua đây, đường nghe trên máy thì không. Hai đường khác nhau nên sửa
+            # một chỗ mà tưởng xong là kiểu sót kinh điển.
+            video_id = normalize_facebook_target(target)
+            target = video_id
+            fallback = {
+                "source": "facebook",
+                "kind": "video",
+                "id": video_id,
+                "url": f"https://www.facebook.com/watch/?v={video_id}",
+            }
         elif source == "http":
             fallback = None
         else:
