@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.21.0 - 2026-09-19
+
+### Changed — khối "chỉ nghe nhạc" dựng lại theo thẻ phicomm-r1
+
+Chủ máy gửi tệp `phicomm-r1-card.js` để tham khảo. Ba điểm học được, và cả ba đều là
+thứ bản cũ làm sai:
+
+- **Hàng nút nằm BÊN TRONG khung sóng nhạc**, khung cao cố định. Bản cũ để sóng và nút
+  thành hai khối rời, mỗi khối một nền, nên nút hay bị đẩy lệch và sóng cao lấn.
+- **Ảnh bìa là một CỘT THẬT của lưới**, không phải lớp phủ. Hai lần trước tôi đặt đĩa
+  bằng `position: absolute` nên nó tràn ra đè lên chữ.
+- **Nền gần như không làm mờ** (blur 0,4px) — thứ đẩy ảnh xuống làm nền là **giảm sáng
+  còn 58%** cộng một lớp tối dần. Bản cũ làm mờ rất mạnh mà vẫn sáng, nên chữ đè lên
+  không đọc nổi.
+
+### Changed — tên bài, nguồn phát và ảnh nền nằm chung một khung với đĩa
+
+- Tên bài, ca sĩ và **nhãn nguồn** (YouTube / Zing MP3 / Link) chuyển vào ngay đầu khối
+  nghe. Ô "Đang phát" tách riêng ở cột phải đã ẩn đi.
+- Ảnh bài hát làm nền cho chính khung đó.
+- Nhãn nguồn đặt ở **một** chỗ trong mã, không rải ra ba nhánh (xem video / nghe trên
+  máy / phát ra loa) — ba nhánh đều thoát sớm nên rải ra là kiểu chắc chắn sót.
+
+### Added — danh sách gợi ý thu gọn được, mặc định đóng
+
+Chủ máy: *"List gợi ý có thể xoá và kích mới ra, không đưa hết ra màn"*. Đóng lại chỉ
+còn hàng tiêu đề kèm mũi tên; bấm mũi tên là mở. Nhớ theo từng máy và từng thẻ, cùng
+cách đã dùng cho kiểu bố cục và "nghe khi tắt màn hình".
+
+### Changed — toàn màn hình: thẻ không vẽ gì lên video nữa
+
+- Bỏ nốt nút đóng khi **toàn màn hình thật**. Đường ra không cần nút của thẻ: phím Esc,
+  và nút thu nhỏ của chính YouTube.
+- Thoát bằng nút của YouTube nay về **thẳng thẻ**, không dừng ở trạng thái phủ kín
+  trang như trước.
+- Kiểu phủ trang (máy không có element fullscreen, ví dụ iPhone) **vẫn giữ nút đóng**:
+  ở đó không có phím Esc, bỏ nốt là nhốt người dùng trong màn hình không lối ra.
+
+### Fixed — thẻ tràn ngang ở màn hình hẹp
+
+Bố cục một cột dùng `grid-template-columns: 1fr`, mà `1fr` là viết tắt của
+`minmax(auto, 1fr)` — mức tối thiểu `auto` bằng chiều rộng nội dung tối thiểu, nên chỉ
+cần một khối con không co được là cột phình to hơn khung chứa. Đo ở bề rộng thẻ 400px:
+trước khi sửa có **43 phần tử vượt mép thẻ**, đứng đầu là khối phát rộng 497px so với
+thẻ 461px; sau khi sửa còn **0**.
+
+### Fixed — mảng trống lớn giữa khối phát và thanh loa (màn hình rộng)
+
+Cột phải cao cố định 640px, hai hàng lưới tự chia nhau phần dư nên hàng trên bị kéo
+giãn. Trước đây danh sách gợi ý lấp đầy cột phải nên không lộ; từ lúc gợi ý đóng sẵn
+thì hở hẳn. Nay phần dư dồn hết xuống hàng dưới.
+
 ## 0.20.12 - 2026-09-18
 
 ### Fixed — nút của card không còn che nút cài đặt của YouTube
