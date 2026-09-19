@@ -4211,6 +4211,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // «no-embed» cho khung nền đen; KHÔNG đặt «--poster» vì đó là ảnh của YouTube.
     frame.classList.add("no-embed");
     const pending = { item };
+    /* Khung hình Facebook LUÔN câm: phần tử <video> mà «_tryPicture» dựng ra đặt
+       muted = true. Không có loa thì phải có người phát tiếng, nếu không thẻ chạy
+       hình câm — đúng lỗi "mặc định tắt tiếng" trên iPhone, nơi tuỳ chọn "nghe khi
+       tắt màn hình" mặc định TẮT nên đây chính là đường mặc định.
+       KHÔNG đẻ nhánh tiếng riêng cho Facebook: dùng lại đúng kiến trúc YouTube vẫn
+       dùng khi khung nhúng không phát được tiếng (xem «_embedRefused») — máy này
+       phát tiếng, hình câm bám theo. Cờ bám-tiếng còn tắt luôn nhánh tự chuyển bài
+       trong «_setVideoState» (nhánh ấy chỉ chạy khi KHÔNG loa và KHÔNG bám tiếng),
+       vốn biến một lần hình kết thúc sớm thành vòng mở lại bài từ giây 0. */
+    const theoTieng = followsDevice || !withSpeakers;
     this._video = {
       ...this._idleVideo(),
       open: true,
@@ -4224,11 +4234,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         source: "facebook",
       },
       withSpeakers,
-      followsDevice,
+      followsDevice: theoTieng,
       soundHere: false,
       picture: pending,
       moUL: Date.now(),
     };
+    /* Chỉ gọi SAU khi «this._video» đã là bài mới: «listen» báo ngay cho bên nghe,
+       mà «_deviceAudioChanged» so mã bài của tiếng với mã bài của hình — gọi trước
+       thì hai mã lệch nhau và nó mở lại video. Người gọi đã bật tiếng sẵn
+       (followsDevice) thì không phát lại từ đầu. */
+    if (theoTieng && !followsDevice) {
+      const mucTieng = { ...item, id, source: "facebook" };
+      deviceAudio.entryId = this._entryId();
+      deviceAudio.listen(mucTieng, this._queue.length ? this._queue : [mucTieng], Math.max(0, this._queueIndex));
+    }
     this._pictureNote("Đang lấy hình…");
     this._syncNowPlaying();
     this._updateTransportState();
@@ -5315,15 +5334,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const item = this._video.item;
     const entryId = this._entryId();
     if (!state || state.state === "unavailable" || !item || !entryId) return;
-    if (!this._supportsFeature(entityId, 512) || !this._supportsSource(entityId, "youtube")) {
-      this._setStatus(`${name} không nhận tiếng YouTube.`, true);
+    /* Nguồn lấy từ CHÍNH bài đang xem, không gắn cứng "youtube": đang xem video
+       Facebook mà tích loa thì hai dòng dưới vừa hỏi sai khả năng của loa, vừa gửi
+       địa chỉ Facebook kèm nhãn nguồn YouTube — loa nhận một thứ nó không hiểu. */
+    const nguon = item.source || "youtube";
+    if (!this._supportsFeature(entityId, 512) || !this._supportsSource(entityId, nguon)) {
+      this._setStatus(`${name} không nhận tiếng ${TEN_NGUON[nguon] || nguon}.`, true);
       return;
     }
     const videoTime = this._videoTimeNow();
     try {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: entryId,
-        source: "youtube",
+        source: nguon,
         target: item.url,
         entity_id: [entityId],
       });

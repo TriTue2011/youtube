@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.26.1 - 2026-09-19
+
+### Fixed — xem video Facebook trên iPhone: câm tiếng và tự mở lại bài từ giây 0
+
+Chủ máy báo hai triệu chứng trên iPhone: *"mặc định tắt tiếng và restart liên tục thời
+gian về 0"*. Hoá ra **một nguyên nhân duy nhất**, do chính bản Facebook hôm nay sinh ra.
+
+Facebook không cho nhúng trình phát, nên thẻ chiếu video bằng phần tử `<video>` của
+riêng mình. Phần tử ấy **luôn** được dựng ở trạng thái câm — đúng thiết kế, vì mọi
+đường hình của thẻ đều để cho loa hoặc cho máy này giữ tiếng. YouTube có sẵn cơ chế
+giao tiếng cho máy này khi khung nhúng không phát được (`_embedRefused`), còn đường
+Facebook tôi viết hôm nay **đi vòng qua cơ chế đó**: đặt hình lên rồi không ai bật
+tiếng cả.
+
+Vì sao iPhone lộ rõ hơn máy khác: tuỳ chọn "nghe khi tắt màn hình" **mặc định tắt**,
+mà chỉ khi bật nó đường xem mới khởi động tiếng trên máy. Máy nào cũng câm như nhau;
+iPhone chỉ là nơi chủ máy dùng nhiều nhất.
+
+Và triệu chứng thứ hai là **hệ quả của cùng lỗ hổng đó**, không phải lỗi riêng: nhánh
+tự chuyển bài trong `_setVideoState` chỉ chạy khi *không có loa* **và** *không bám theo
+tiếng máy này*. Hình câm rơi đúng vào cả hai điều kiện, nên một lần hình kết thúc sớm
+là thẻ nhảy bài kế, mở lại từ giây 0, rồi lặp.
+
+**Sửa ở tầng kiến trúc, không vá triệu chứng:** khi không có loa, đường xem Facebook
+khởi động tiếng trên máy này và bật cờ bám-tiếng — dùng lại đúng lối YouTube vẫn dùng,
+không đẻ nhánh tiếng thứ hai. Một thay đổi xoá cả hai triệu chứng: có tiếng, và cờ
+bám-tiếng tự tắt nhánh tự-chuyển-bài nên vòng lặp không còn chỗ phát sinh.
+
+Thứ tự gọi quan trọng và đã ghi rõ trong mã: trạng thái video phải đặt **trước** khi
+gọi phát tiếng, vì bên nghe thông báo so mã bài của tiếng với mã bài của hình — gọi
+ngược lại thì hai mã lệch nhau và chính nó mở lại video.
+
+Bốn giả thuyết khác đã bị **đo và loại**, ghi lại để khỏi ai đi lại: thẻ vẽ lại giao
+diện mỗi lần Home Assistant đẩy trạng thái (không — `_render()` chỉ chạy một lần); vòng
+đồng bộ 2 giây tua hình về 0 (không — nhánh ấy thoát ngay khi chưa có tiếng); máy chủ
+không hỗ trợ đọc từng khúc (không — đo thật: `206 Partial Content`, `accept-ranges:
+bytes`); video Facebook mã hoá AV1 mà iPhone không giải nổi (không — luồng ghép là
+`avc1`, tức H.264).
+
+### Fixed — đang xem video Facebook mà tích loa thì gửi sai nguồn
+
+Tìm ra bằng một lượt quét cùng lớp lỗi, không phải do ai báo: hàm "loa tham gia video
+đang xem" gắn cứng nguồn `"youtube"` ở **hai** chỗ — hỏi loa có nhận nguồn YouTube
+không, rồi gửi lệnh phát với nhãn nguồn YouTube trong khi địa chỉ là link Facebook.
+Đang xem Facebook mà tích loa là loa nhận một thứ nó không hiểu, và câu báo lỗi cũng
+nói nhầm tên nguồn. Nay cả ba chỗ đọc nguồn của chính bài đang xem.
+
+Đường phía sau vốn đã sẵn sàng, đã kiểm lại từng mắt: lược đồ dịch vụ `play_on_players`
+nhận `facebook`, danh sách khả năng mỗi loa quảng bá cũng có `facebook` — chỉ mỗi thẻ
+còn gắn cứng.
+
+### Không đổi — và đây là chủ ý
+
+Hai chỗ khác cũng chỉ có `youtube` với `zing` nhưng **cố tình giữ nguyên**: công cụ nhạc
+của trợ lý (`llm_api.py` ở tích hợp, `nhac_chat.py` ở c2a). Hai công cụ ấy nhận **từ
+khoá** để bot tự tìm bài, còn Facebook chỉ tra được khi có **link cụ thể**. Mở ra chỉ
+sinh ra lỗi khó hiểu khi người dùng nhờ bot "mở bài gì đó trên Facebook".
+
 ## 0.26.0 - 2026-09-19
 
 ### Fixed — tích hợp còn NĂM chỗ chặn nguồn Facebook, nay đã mở hết

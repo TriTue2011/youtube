@@ -45,6 +45,7 @@ function stopPlayer() {
 
 function historyLabel(target) {
   if (target.source === "zing") return "Zing MP3";
+  if (target.source === "facebook") return "Facebook";
   if (target.source === "http") return "HTTP Audio";
   return target.kind === "playlist" ? "Playlist" : "Video";
 }

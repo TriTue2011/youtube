@@ -118,6 +118,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._syncVideo()", script)
         self.assertIn("this._seekPicture(speakerTime)", script)
         self.assertIn("this._speakerJoinsVideo(entityId)", script)
+        # Loa tích vào khi đang xem: nguồn lấy từ CHÍNH bài đang xem. Gắn cứng "youtube"
+        # thì xem Facebook rồi tích loa sẽ hỏi sai khả năng của loa và gửi địa chỉ
+        # Facebook kèm nhãn nguồn YouTube.
+        self.assertIn('const nguon = item.source || "youtube";', script)
+        self.assertIn("this._supportsSource(entityId, nguon)", script)
+        self.assertIn("source: nguon,", script)
         self.assertIn('"media_player", "media_seek"', script)
         self.assertIn("https://www.youtube-nocookie.com/embed/${id}", script)
         # HA pages send "Referrer-Policy: no-referrer" -> YouTube Error 153
@@ -157,6 +163,17 @@ class LovelaceCardContractTests(unittest.TestCase):
         # A refused play() releases the video to its own sound; a superseded one is no error.
         self.assertIn('if (error?.name === "AbortError") return;', script)
         self.assertIn("if (video.open && video.followsDevice && isError && !video.picture) {", script)
+        # Facebook không cho nhúng trình phát nên hình đi đường phần tử <video>, mà phần
+        # tử ấy LUÔN câm. Không loa thì máy này phải phát tiếng và hình bám theo — thiếu
+        # dòng này là xem Facebook không có tiếng, và vì cờ bám-tiếng cũng tắt nhánh tự
+        # chuyển bài, thiếu nó còn sinh vòng mở lại bài từ giây 0 khi hình kết thúc sớm.
+        self.assertIn("const theoTieng = followsDevice || !withSpeakers;", script)
+        self.assertIn("followsDevice: theoTieng,", script)
+        self.assertIn(
+            "deviceAudio.listen(mucTieng, this._queue.length ? this._queue : [mucTieng],"
+            " Math.max(0, this._queueIndex));",
+            script,
+        )
         # Screen-off listening, off by default: hiding the page pauses the sound.
         self.assertIn('document.addEventListener("visibilitychange"', script)
         self.assertIn('localStorage.getItem(LISTEN_SCREEN_OFF_KEY) === "1"', script)

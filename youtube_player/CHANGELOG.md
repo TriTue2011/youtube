@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.3 - 2026-09-19
+
+### Fixed
+
+- **Trang của add-on gọi mục Facebook là "Video".** Danh sách đã nghe dán nhãn nguồn cho
+  Zing MP3 và HTTP Audio nhưng không có Facebook, nên mọi mục Facebook hiện ra dưới cái
+  tên chung chung "Video" — không phân biệt được với YouTube. Nay có nhãn riêng. Phần
+  bấm vào để mở thì vốn đã đúng: mọi nguồn không phải YouTube đều mở trang gốc, vì
+  trang này chỉ sở hữu khung nhúng YouTube.
+
 ## 0.9.2 - 2026-09-19
 
 ### Fixed
