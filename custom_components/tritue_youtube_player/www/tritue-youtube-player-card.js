@@ -1325,7 +1325,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         /* Ảnh và biểu tượng dự phòng chồng đúng một ô lưới, không đẩy nhau. */
         .nghe-bia > * { grid-area: 1 / 1; }
         .nghe-bia img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-        .wrap.is-playing .nghe-bia img:not([hidden]) { animation: nghe-quay 7.2s linear infinite; }
+        /* Đĩa bấm được để phát/dừng. Hiệu ứng quay LUÔN gắn sẵn, chỉ bật/tắt bằng
+           «animation-play-state» — chủ máy 19/09/2026: "đang quay thì kích vào dừng
+           đúng vị trí đó". Nếu gỡ hẳn hiệu ứng lúc dừng thì ảnh bật ngược về góc 0;
+           tạm dừng thì trình duyệt giữ nguyên góc hiện tại. */
+        .nghe-bia { cursor: pointer; }
+        .nghe-bia:focus-visible { outline: 2px solid var(--ad-accent,#00ffcc); outline-offset: 2px; }
+        .nghe-bia img:not([hidden]) { animation: nghe-quay 7.2s linear infinite; animation-play-state: paused; }
+        .wrap.is-playing .nghe-bia img:not([hidden]) { animation-play-state: running; }
         @keyframes nghe-quay { to { transform: rotate(360deg); } }
         .nghe-khung {
           display: flex;
@@ -2303,7 +2310,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                     <span class="nghe-nguon" hidden></span>
                   </div>
                   <div class="nghe-hang">
-                    <div class="nghe-bia">
+                    <div class="nghe-bia" role="button" tabindex="0" aria-label="Phát hoặc tạm dừng" title="Bấm để phát hoặc tạm dừng">
                       <ha-icon icon="mdi:music-note"></ha-icon>
                       <img alt="" hidden />
                     </div>
@@ -2505,6 +2512,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     this.shadowRoot.querySelector(".previous").addEventListener("click", () => this._skip(-1));
     this.shadowRoot.querySelector(".play-pause").addEventListener("click", () => this._togglePlay());
+    /* Đĩa bấm được: đang dừng thì bấm cho quay, đang quay thì bấm cho dừng tại chỗ.
+       Gọi THẲNG «_togglePlay» — cùng một việc với nút phát/dừng thì phải cùng một
+       hàm, tách ra là hai nơi rồi lệch nhau. Phần "dừng đúng vị trí" do CSS lo bằng
+       «animation-play-state», không phải do đây.
+       Bàn phím theo đúng nếp thẻ bài hát ở dưới: Enter và dấu cách. */
+    const dia = this.shadowRoot.querySelector(".nghe-bia");
+    if (dia) {
+      dia.addEventListener("click", () => this._togglePlay());
+      dia.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          this._togglePlay();
+        }
+      });
+    }
     this.shadowRoot.querySelector(".next").addEventListener("click", () => this._skip(1));
     this.shadowRoot.querySelector(".stop").addEventListener("click", () => this._stop());
     this.shadowRoot.querySelector(".watch").addEventListener("click", () => this._watchCurrent());

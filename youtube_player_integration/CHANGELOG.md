@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.23.0 - 2026-09-19
+
+### Added — bấm vào đĩa để phát hoặc dừng
+
+Chủ máy: *"Đang dừng kích vào quay tròn, đang quay thì kích vào dừng đúng vị trí đó"*.
+
+- Bấm (hoặc chạm) vào đĩa gọi **đúng cùng một hàm** với nút phát/dừng — một việc thì
+  một chỗ, tách ra hai nơi là mầm lệch về sau.
+- **Dừng đúng vị trí**: hiệu ứng quay luôn gắn sẵn, chỉ bật/tắt bằng
+  `animation-play-state`. Nếu gỡ hẳn hiệu ứng lúc dừng thì ảnh bật ngược về góc 0 —
+  đó chính là chỗ dễ làm sai.
+- Đĩa là một nút thật: đi tới được bằng phím Tab, bấm được bằng Enter hoặc dấu cách,
+  và có nhãn cho trình đọc màn hình.
+
 ## 0.22.2 - 2026-09-19
 
 ### Sửa lại kết luận Facebook — LẦN THỨ HAI, và lần này có bằng chứng ngược hẳn
