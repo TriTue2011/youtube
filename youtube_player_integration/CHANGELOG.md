@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.26.6 - 2026-09-19
+
+### Changed — bắt máy TỰ KHAI BỆNH thay vì đoán tiếp về WebKit
+
+Chủ máy báo: bật "Nghe khi tắt màn hình" là **mất tiếng**; tắt viên đó thì nghe được.
+Điều này khớp đúng chuỗi đã dựng: bật viên ấy là chuyển tiếng sang bộ phát riêng của
+thẻ, mà trên iPhone bộ phát đó **không bao giờ chạy** — nên mọi triệu chứng còn lại
+(phải bật loa trong khung video, tắt màn là im) đều là hệ quả.
+
+Bản 0.26.4 đã phát hiện được tình trạng "mở được nhưng không chạy" và trả tiếng về
+cho khung. Nhưng nó **không biết vì sao**, mà ba nguyên nhân khả dĩ lại cần ba cách
+sửa khác hẳn nhau. Trong một ngày tôi đã đoán sai cơ chế ba lần và đều bị chính số đo
+bác bỏ (vẽ lại giao diện, vòng đồng bộ tua về 0, nội dung hỗn hợp HTTP/HTTPS), nên
+bản này **không đoán nữa**: chỗ phát hiện nay in kèm bốn con số mà chỉ trình duyệt
+biết.
+
+| Số đo | Nghĩa |
+|---|---|
+| `nap=0` + `mang=2` | đang chờ dữ liệu — nghẽn mạng hoặc luồng không tới |
+| `nap≥2` + `giay` đứng yên | có dữ liệu mà bị chặn phát — chuỗi cử chỉ người dùng |
+| `loi≠0` | lỗi tải hoặc giải mã thật |
+
+Người dùng chỉ cần tái hiện **một lần** rồi chụp màn hình là biết chắc, thay vì thêm
+vài vòng sửa mò. Đây là bước **đo**, không phải bản sửa gốc rễ — nói rõ để không ai
+trông đợi nhầm.
+
 ## 0.26.5 - 2026-09-19
 
 ### Fixed — ẩn bớt còn ba mục thì phải nằm CÙNG MỘT HÀNG

@@ -157,6 +157,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         # thanh chỉ có play/pause/ended/error — nên phải tự đo mới thấy. Chủ máy gặp
         # trên iPhone với CẢ add-on lẫn c2a, và cả trên Safari: lỗi ở thẻ.
         self.assertIn("if (!audio.paused && Date.now() - this._tiengChayLuc > 8000) {", script)
+        # 0.26.6: khi bắt được tình trạng "mở được nhưng không chạy" thì phải in kèm SỐ
+        # LIỆU của chính phần tử âm thanh. Không có bốn số này thì chỉ còn đường đoán,
+        # mà ba nguyên nhân khả dĩ (chờ dữ liệu / bị chặn phát / lỗi giải mã) cần ba
+        # cách sửa khác hẳn nhau.
+        self.assertIn("nap=${audio.readyState} mang=${audio.networkState}", script)
+        self.assertIn("loi=${audio.error ? audio.error.code : 0} giay=", script)
         # ĐO BẰNG THỜI GIAN, KHÔNG ĐẾM NHỊP: _syncVideo còn chạy mỗi lần hass đổi
         # trạng thái (nhiều lần mỗi giây), đếm nhịp là báo nhầm ngay.
         self.assertIn(

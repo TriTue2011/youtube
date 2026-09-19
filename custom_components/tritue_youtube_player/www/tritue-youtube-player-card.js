@@ -5138,9 +5138,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._tiengChayLuc = undefined;
         // Trả tiếng về khung TRƯỚC khi dừng bộ phát: «stop» báo cho bên nghe ngay,
         // mà lúc ấy cờ bám-tiếng phải đã tắt, nếu không nó lại đi mở lại video.
+        /* IN KÈM SỐ LIỆU CỦA CHÍNH PHẦN TỬ ÂM THANH. Tới đây đã biết "tiếng không
+           chạy", nhưng KHÔNG biết vì sao, mà bốn con số dưới đây phân biệt được ba
+           nguyên nhân dẫn tới ba cách sửa khác hẳn nhau:
+             nap=0  (HAVE_NOTHING) + mang=2 (LOADING) → đang chờ dữ liệu, nghẽn mạng
+             nap>=2 + giây đứng yên                    → có dữ liệu mà bị chặn phát,
+                                                         tức chuỗi cử chỉ người dùng
+             loi!=0                                    → lỗi tải/giải mã thật
+           Không có bốn số này thì chỉ còn đường đoán, mà đoán mò về hành vi WebKit
+           đã sai ba lần trong ngày. Người dùng tái hiện một lần là biết chắc. */
+        const soLieu = `nap=${audio.readyState} mang=${audio.networkState}`
+          + ` loi=${audio.error ? audio.error.code : 0} giay=${giayTieng.toFixed(1)}`;
         this._traTiengVeKhung();
         deviceAudio.stop();
-        this._setStatus("Máy này mở được tiếng nhưng không chạy — chạm vào video để nghe.", true);
+        this._setStatus(
+          `Máy này mở được tiếng nhưng không chạy — chạm vào video để nghe. [${soLieu}]`, true);
         return;
       }
       if (!audio.paused && tiengDangChay && Date.now() >= this._lastVideoSeekAt + 4000
