@@ -201,6 +201,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("mo_khoa=${this.moKhoa", script)
         # Và thử phát lại một lần sau 3 giây, đúng cái mẹo người dùng tự tìm ra.
         self.assertIn("this.thuLaiTimer = setTimeout(() => {", script)
+        # 0.26.15: số đo «mo_khoa=ok» chứng minh phần tử ĐÃ được phép phát mà vẫn
+        # không tải — tức iOS đòi lệnh phát nằm TRONG cú chạm, không phải chỉ cần
+        # từng được phép. Nút ▶ là cú chạm ấy, nên lúc kẹt nó phải PHÁT LẠI chứ
+        # không được đi tạm dừng một thứ vốn đã đứng im.
+        self.assertIn("if (!audio.paused && audio.readyState === 0) {", script)
+        self.assertIn("chạm nút ▶ để bắt đầu", script)
         # Canh tiếng phải nằm trong «deviceAudio», KHÔNG phải trong vòng đồng bộ video:
         # vòng ấy thoát ngay khi không có video, nên đúng ca "chỉ nghe" lại mất sạch
         # số đo — chủ máy báo "chỉ nghe không chạy thanh thời gian" mà không dòng chẩn
@@ -251,6 +257,21 @@ class LovelaceCardContractTests(unittest.TestCase):
             ".player:is(.expanded, :fullscreen):not(.picture-on)"
             " :is(.progress, .control-bar, .nghe-hang) { display: none; }",
             script)
+        # 0.26.15: ở toàn màn hình, HÌNH lấp kín và điều khiển NỔI LÊN TRÊN. Bản
+        # trước cho điều khiển hiện lại nhưng vẫn nằm trong luồng nên nó bóp hẹp
+        # khung hình. «aspect-ratio: auto» là bắt buộc: khung hình vốn bị ràng buộc
+        # 16:9 nên chỉ «inset: 0» thì vẫn chỉ cao 273/757.
+        self.assertIn(
+            ".player:is(.expanded, :fullscreen).picture-on > .stage > .video-frame {", script)
+        self.assertIn("aspect-ratio: auto;", script)
+        # Điều khiển phải mờ theo CÙNG NHỊP với hàng biểu tượng, nếu không thì nút
+        # thoát mờ đi mà thanh điều khiển nằm lì.
+        self.assertIn(
+            ".player.idle:is(.expanded, :fullscreen) :is(.progress, .control-bar)"
+            " { opacity: 0; pointer-events: none; }", script)
+        # Nút X ở toàn màn hình là THOÁT TOÀN MÀN, không đóng video (đóng xong tiếng
+        # vẫn chạy nên người dùng rơi vào chế độ chỉ-nghe mà họ không hề chọn).
+        self.assertIn('} else if (player.classList.contains("expanded")) {', script)
         # 0.26.11: ghim được bài Facebook, và bản ghi MANG THEO NGUỒN — thiếu nguồn thì
         # phát lại sẽ đi vào đường YouTube rồi chết ở cửa chặn mã 11 ký tự.
         self.assertIn('if (["youtube", "facebook"].includes(item.source || this._source)) {', script)

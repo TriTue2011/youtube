@@ -31,6 +31,30 @@ ZING = {"source": "zing", "kind": "song", "id": "USJgi8Pq9Ouf", "title": "Âm Th
         "url": "https://zingmp3.vn/bai-hat/Am-Tham-Ben-Em-Son-Tung-M-TP/USJgi8Pq9Ouf.html", "duration": 291, "thumbnail": ""}
 
 
+class NguonBaiTests(unittest.TestCase):
+    """Mỗi nguồn một khuôn mã riêng — thiếu nhánh nào thì bài nguồn ấy rơi IM LẶNG."""
+
+    def test_them_bai_facebook_vao_playlist(self):
+        """Chủ máy 20/09/2026: "ghim video face được nhưng thêm playlist không được".
+
+        Ghim đi qua kho gợi ý của tích hợp nên chạy; playlist đi qua `normalize_item`
+        mà hàm này chỉ biết youtube/zing/http, nên trả None và bài rơi không một lời.
+        """
+        bai = playlists.normalize_item(
+            {"source": "facebook", "id": "1964113577722801", "title": "Bài Facebook"})
+        self.assertIsNotNone(bai)
+        self.assertEqual(bai["source"], "facebook")
+        self.assertEqual(bai["kind"], "video")
+        self.assertEqual(bai["url"], "https://www.facebook.com/watch/?v=1964113577722801")
+
+    def test_moi_nguon_mot_khuon_ma_rieng(self):
+        """Khuôn lỏng dùng chung là mở cửa cho mã của nguồn kia lọt vào."""
+        self.assertIsNone(playlists.normalize_item(
+            {"source": "facebook", "id": "kJQP7kiw5Fk", "title": "Mã YouTube"}))
+        self.assertIsNone(playlists.normalize_item(
+            {"source": "youtube", "id": "1964113577722801", "title": "Mã Facebook"}))
+
+
 class PlaylistStoreTests(unittest.TestCase):
     def test_share_code_round_trip_and_bad_codes(self):
         with tempfile.TemporaryDirectory() as folder:

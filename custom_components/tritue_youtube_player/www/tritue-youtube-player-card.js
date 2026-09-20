@@ -350,7 +350,9 @@ const deviceAudio = {
     this.canhTimer = setTimeout(() => {
       if (generation !== this.generation || !this.item) return;
       if (audio.paused || audio.currentTime > moc + 0.3) return;   // đang chạy, yên tâm
-      this.notify("Máy này không phát được tiếng."
+      // Lời nhắn phải NÓI VIỆC CẦN LÀM, không chỉ kêu hỏng: chạm nút ▶ là một cú
+      // chạm thật, và đó đúng là thứ iOS đang đòi để chịu tải dữ liệu.
+      this.notify("Máy này chưa chạy được tiếng — chạm nút ▶ để bắt đầu."
         + ` [nap=${audio.readyState} mang=${audio.networkState}`
         + ` loi=${audio.error ? audio.error.code : 0}`
         + ` nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}`
@@ -370,6 +372,19 @@ const deviceAudio = {
   toggle() {
     const audio = this.real();
     if (!audio) return;
+    /* ĐANG KẸT thì nút này là PHÁT LẠI, không phải tạm dừng. Số đo từ iPhone
+       20/09/2026: «nap=0 mang=2 loi=0 nguon=1 dom=1 mo_khoa=ok» — phần tử đã được
+       phép phát, đã có nguồn, đang "tải" mà suốt 12 giây không một byte. Tức iOS chỉ
+       chịu lấy dữ liệu khi lệnh phát nằm TRONG CHÍNH CÚ CHẠM, chứ không phải chỉ cần
+       phần tử từng được phép một lần.
+       Cú chạm vào nút này là cơ hội cứu duy nhất còn lại — mà theo nghĩa đen thì lúc
+       ấy phần tử "không tạm dừng", nên bản cũ đem đúng cú chạm ấy đi tạm dừng một thứ
+       vốn đã đứng im. Đổi bài cũng vấp y hệt, đúng lời người dùng: "chuyển bài khác
+       là lại tịt". */
+    if (!audio.paused && audio.readyState === 0) {
+      audio.play().catch(() => {});
+      return;
+    }
     if (audio.paused) audio.play().catch(() => {});
     else audio.pause();
   },
@@ -1846,6 +1861,61 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .player.idle:is(.expanded, :fullscreen) { cursor: none; }
         .player.idle:is(.expanded, :fullscreen) > .idle-shield { display: block; position: absolute; inset: 0; z-index: 3; }
         .player.idle:is(.expanded, :fullscreen) > .stage > .stage-controls { opacity: 0; pointer-events: none; }
+        /* Thanh tiến trình và hàng nút phát nay CŨNG hiện ở toàn màn hình khi hình là
+           của chính thẻ (0.26.11) — nên phải mờ theo CÙNG NHỊP với hàng biểu tượng.
+           Không nối vào thì nút thoát mờ đi trong khi thanh điều khiển nằm lì, và
+           chủ máy báo đúng thế 20/09/2026: "chưa có chế độ sau 3s ẩn thanh điều
+           khiển" và "chưa có nút x thoát màn". Nút thoát vẫn ở đó, chỉ là đã mờ. */
+        /* HÌNH CỦA CHÍNH THẺ Ở TOÀN MÀN HÌNH: hình LẤP KÍN, điều khiển NỔI LÊN TRÊN.
+           Bản 0.26.11 cho thanh tiến trình và khối nghe hiện lại nhưng để nguyên
+           TRONG LUỒNG bố cục, nên chúng bóp hẹp khung hình — chủ máy báo 20/09/2026:
+           "thanh điều khiển không chiếm chỗ khi mở toàn màn, như bây giờ đang chiếm".
+           Chữa bằng cách đưa KHUNG HÌNH ra khỏi luồng cho nó lấp kín, chứ không phải
+           thu nhỏ điều khiển: làm ngược thì mai thêm một nút nữa là lại chiếm chỗ.
+           Cũng đúng ở chế độ xoay ngang, nơi «.stage» thành hộp thật và chính nó là
+           gốc định vị cho khung hình. */
+        .player:is(.expanded, :fullscreen).picture-on,
+        .player:is(.expanded, :fullscreen).picture-on.rotated > .stage { justify-content: flex-end; }
+        .player:is(.expanded, :fullscreen).picture-on > .stage > .video-frame {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          /* «height» và «aspect-ratio» PHẢI khai ở đây. Khung hình vốn bị ràng buộc
+             tỉ lệ 16:9, nên chỉ «inset: 0» thì chiều cao vẫn tính từ bề rộng — đo
+             được 485×273 trên khung phát 485×757, tức vẫn hụt hai phần ba. Gỡ ràng
+             buộc tỉ lệ rồi cho cao hết khung; phần thừa do video không đúng tỉ lệ
+             màn đã có «object-fit: contain» lo, không méo hình. */
+          height: 100%;
+          aspect-ratio: auto;
+          margin: 0;
+        }
+        .player:is(.expanded, :fullscreen).picture-on > .stage > .video-frame .picture {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+        .player:is(.expanded, :fullscreen).picture-on > .stage > :is(.nghe-hero, .progress) {
+          position: relative;
+          z-index: 2;
+        }
+        /* Dải dưới rút gọn: bỏ đĩa và ảnh nền, chỉ còn tên bài + hàng nút trên nền mờ.
+           Đĩa quay và ảnh nền là của chế độ CHỈ NGHE — chồng lên một video đang chạy
+           thì vừa thừa vừa che hình. */
+        .player:is(.expanded, :fullscreen).picture-on :is(.nghe-nen, .nghe-phu-lop, .nghe-bia) {
+          display: none;
+        }
+        .player:is(.expanded, :fullscreen).picture-on .nghe-hang {
+          grid-template-columns: minmax(0, 1fr);
+          margin-top: 0;
+        }
+        .player:is(.expanded, :fullscreen).picture-on .nghe-khung { height: auto; padding: 4px 8px; }
+        .player:is(.expanded, :fullscreen).picture-on > .stage > .nghe-hero {
+          border: 0;
+          border-radius: 0;
+          background: linear-gradient(transparent, rgba(0, 0, 0, .78));
+        }
+        .player:is(.expanded, :fullscreen) :is(.progress, .control-bar) { transition: opacity .3s; }
+        .player.idle:is(.expanded, :fullscreen) :is(.progress, .control-bar) { opacity: 0; pointer-events: none; }
         .player.idle:is(.expanded, :fullscreen) ~ .yt-zone-playlist .np-zone { opacity: 0; pointer-events: none; }
         /* Dải thông tin bài hát dưới đáy cũng ẩn ở toàn màn hình — YouTube đã hiện tên
            bài ngay trên hình. Đặt SAU khối định vị và sau luật «.idle» ở trên, cùng độ
@@ -2701,7 +2771,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".screen-off").addEventListener("click", () => this._toggleScreenOff());
     this.shadowRoot.querySelector(".video-expand").addEventListener("click", () => this._toggleVideoExpanded());
     this.shadowRoot.querySelector(".video-fullscreen").addEventListener("click", () => this._videoFullscreen());
-    this.shadowRoot.querySelector(".video-close").addEventListener("click", () => this._closeVideo());
+    this.shadowRoot.querySelector(".video-close").addEventListener("click", () => {
+      /* Ở TOÀN MÀN HÌNH, X là THOÁT TOÀN MÀN — không đóng video, không đổi chế độ.
+         Chủ máy chốt 20/09/2026: "nút x phải là thoát toàn màn hình chứ không phải
+         chuyển chế độ gì cả". Trước đây nó gọi thẳng «_closeVideo»: hình đóng nhưng
+         tiếng vẫn chạy trên máy, nên người dùng rơi vào chế độ chỉ-nghe mà họ không
+         hề chọn. Ở toàn màn hình đây lại là nút DUY NHẤT còn hiện (luật
+         «.ctl:not(.video-close)» ẩn hết phần còn lại), nên nó càng phải đúng nghĩa.
+         Ngoài toàn màn hình thì X vẫn là đóng video như cũ. */
+      const player = this.shadowRoot.querySelector(".player");
+      if (this.shadowRoot.fullscreenElement === player) {
+        document.exitFullscreen?.();
+      } else if (player.classList.contains("expanded")) {
+        player.classList.remove("expanded", "rotated");
+        this._syncVideoExpandButton();
+      } else {
+        this._closeVideo();
+      }
+    });
     this.shadowRoot.querySelector(".video-listen").addEventListener("click", () => this._listenOnly());
     this.shadowRoot.querySelector(".video-rotate").addEventListener("click", () => this._toggleRotated());
     this.shadowRoot.querySelector(".spk-toggle").addEventListener("click", () => {

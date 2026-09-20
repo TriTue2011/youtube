@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.26.15 - 2026-09-20
+
+### Fixed — toàn màn hình Facebook: hình lấp kín, điều khiển nổi lên trên
+
+Chủ máy: *"thanh điều khiển không chiếm chỗ khi mở toàn màn, như bây giờ đang chiếm"*.
+
+Đúng vậy, và đó là hệ quả của chính bản 0.26.11: tôi cho thanh tiến trình và hàng nút
+hiện lại nhưng **để nguyên trong luồng bố cục**, nên chúng bóp hẹp khung hình. Nay đưa
+**khung hình ra khỏi luồng** cho nó lấp kín, rồi để điều khiển nổi đè lên — chữa theo
+chiều này thì mai thêm một nút nữa hình vẫn đầy màn.
+
+Một chi tiết suýt làm bản sửa hụt: khung hình bị ràng buộc tỉ lệ 16:9, nên chỉ đặt
+`inset: 0` thì chiều cao vẫn tính từ bề rộng. Đo được **485×273 trên khung phát
+485×757** — vẫn hụt hai phần ba. Phải gỡ ràng buộc tỉ lệ; phần thừa do video không
+đúng tỉ lệ màn đã có `object-fit: contain` lo nên không méo hình.
+
+Đo lại sau khi sửa: khung hình **485×757 — lấp kín**, dải điều khiển đè lên hình, đĩa
+quay của chế độ chỉ-nghe đã ẩn. Đường YouTube **không đổi gì**.
+
+### Fixed — tự ẩn sau 3 giây, và nút X là THOÁT TOÀN MÀN
+
+Hai báo cáo, cùng một gốc: thanh tiến trình và hàng nút mà 0.26.11 trả lại **chưa được
+nối vào cơ chế tự mờ**. Nên hàng biểu tượng (chứa nút thoát) mờ đi đúng hẹn, còn thanh
+điều khiển nằm lì — chủ máy thấy "không tự ẩn" và "không có nút X". Nút X vẫn ở đó, chỉ
+là đã mờ. Nay cả ba mờ và hiện lại cùng nhịp.
+
+Và nút X nay **thoát toàn màn hình**, đúng như chủ máy chốt: *"nút x phải là thoát toàn
+màn hình chứ không phải chuyển chế độ gì cả"*. Trước đây nó gọi thẳng đóng video — hình
+tắt nhưng tiếng vẫn chạy nên người dùng rơi vào chế độ chỉ-nghe mà họ không hề chọn. Ở
+toàn màn hình đây lại là nút **duy nhất** còn hiện, nên nó càng phải đúng nghĩa. Ngoài
+toàn màn hình thì X vẫn là đóng video như cũ.
+
+### Fixed — nút ▶ lúc kẹt phải PHÁT LẠI, không phải tạm dừng
+
+Số đo mới từ iPhone khép lại một nhánh lớn:
+
+```
+nap=0 mang=2 loi=0 nguon=1 dom=1 mo_khoa=ok
+```
+
+`mo_khoa=ok` nghĩa là **cú mở khoá đã thành công** — phần tử được phép phát, có nguồn,
+nằm trong trang, vậy mà suốt 12 giây không một byte. Theo đúng bảng đã công bố ở
+0.26.14, nhánh này bác bỏ mô hình *"mở khoá một lần là xong"*: iOS đòi lệnh phát nằm
+**trong chính cú chạm**, không phải chỉ cần phần tử từng được phép.
+
+Cú chạm vào nút ▶ là cơ hội cứu duy nhất còn lại — nhưng lúc ấy phần tử "không tạm
+dừng" (nó tưởng đang phát), nên bản cũ đem đúng cú chạm ấy đi **tạm dừng** một thứ vốn
+đã đứng im. Nay khi kẹt, ▶ là phát lại. Lời nhắn cũng đổi thành việc cần làm thay vì chỉ
+kêu hỏng.
+
+**Chưa phải bản sửa gốc rễ** — nói rõ để không trông đợi nhầm. Gốc rễ là khoảng chờ
+1,5–2,6 giây giữa cú chạm và lúc có địa chỉ luồng. Đã thử một lối tắt và **đo thấy nó
+chết**: chữ ký của Home Assistant không sống sót khi thêm tham số (trả 401), nên không
+thể ký sẵn một địa chỉ rồi gắn mã bài vào lúc chạm. Lối còn lại là ký sẵn **từng địa
+chỉ cho từng bài** ngay sau khi tìm — việc lớn hơn, để riêng một bản.
+
 ## 0.26.14 - 2026-09-20
 
 ### Changed — đo nốt chỗ duy nhất còn tối: cú mở khoá có thành công không

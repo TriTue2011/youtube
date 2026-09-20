@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.4 - 2026-09-20
+
+### Fixed
+
+- **Thêm bài Facebook vào playlist thì rơi im lặng.** `normalize_item` chỉ biết
+  `youtube`, `zing`, `http` — gặp `facebook` là trả `None` và bài biến mất không một
+  lời báo. Chủ máy báo: *"ghim video face được nhưng thêm playlist không được"* —
+  ghim đi qua kho gợi ý của tích hợp nên chạy, còn playlist đi qua đúng hàm này.
+
+  Nay có nhánh `facebook` với **khuôn mã riêng** (chuỗi số), không dùng chung khuôn
+  lỏng với YouTube: mã của nguồn này khai sang nguồn kia thì bị từ chối, cả hai chiều.
+
+  Sửa ở **cả hai bản song song** (add-on và c2a) và đã đối chiếu `diff` để chắc hai
+  bản khớp từng byte — để chúng lệch nhau là lớp lỗi đã cắn dự án này nhiều lần.
+
 ## 0.9.3 - 2026-09-19
 
 ### Fixed
