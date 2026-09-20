@@ -184,6 +184,9 @@ const deviceAudio = {
   alongKey: "",
   generation: 0,
   pausedByHide: false,
+  //: Kết quả cú mở khoá gần nhất ("ok" / tên lỗi). Khai ở đây cho cùng nếp với mọi
+  //: trạng thái khác của bộ phát — xem «unlock».
+  moKhoa: "",
   listeners: new Set(),
 
   playRefused(error) {
@@ -268,7 +271,16 @@ const deviceAudio = {
        là phát tiếp một thứ đã được người dùng cho phép — không phải xin phép lại. */
     audio.loop = true;
     audio.src = SILENCE;
-    audio.play().catch(() => {});
+    /* GHI LẠI KẾT QUẢ MỞ KHOÁ. Bản cũ nuốt im lặng mọi lỗi ở đây («catch(() => {})»),
+       nên nếu chính cú mở khoá hỏng thì không ai biết — mà mọi thứ sau đó đều dựa vào
+       nó. Số đo từ máy chủ máy 20/09/2026 («nap=0 mang=2 loi=0 nguon=1 dom=1») là chữ
+       ký của iOS TỪ CHỐI TẢI vì việc phát chưa được một cú chạm cho phép; nếu đúng
+       vậy thì cái hỏng nằm ở đây chứ không ở đường lấy luồng. */
+    this.moKhoa = "dang-thu";
+    audio.play().then(
+      () => { this.moKhoa = "ok"; },
+      (loi) => { this.moKhoa = loi?.name || "hong"; },
+    );
     return audio;
   },
 
@@ -325,14 +337,24 @@ const deviceAudio = {
    */
   canhTieng(audio, generation) {
     clearTimeout(this.canhTimer);
+    clearTimeout(this.thuLaiTimer);
     const moc = audio.currentTime;
+    /* THỬ LẠI MỘT LẦN sau 3 giây. Người dùng iPhone thấy "lượn qua app khác rồi quay
+       lại thì lại phát" — tức lệnh phát chỉ cần được nhắc lại một lần nữa là chạy.
+       Rẻ và vô hại: đang chạy rồi thì nhánh này thoát ngay. */
+    this.thuLaiTimer = setTimeout(() => {
+      if (generation !== this.generation || !this.item) return;
+      if (audio.currentTime > moc + 0.3) return;
+      audio.play().catch(() => {});
+    }, 3000);
     this.canhTimer = setTimeout(() => {
       if (generation !== this.generation || !this.item) return;
       if (audio.paused || audio.currentTime > moc + 0.3) return;   // đang chạy, yên tâm
       this.notify("Máy này không phát được tiếng."
         + ` [nap=${audio.readyState} mang=${audio.networkState}`
         + ` loi=${audio.error ? audio.error.code : 0}`
-        + ` nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}]`, true);
+        + ` nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}`
+        + ` mo_khoa=${this.moKhoa || "chua-thu"}]`, true);
     }, 12000);
   },
 

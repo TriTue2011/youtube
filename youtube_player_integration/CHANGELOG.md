@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.26.14 - 2026-09-20
+
+### Changed — đo nốt chỗ duy nhất còn tối: cú mở khoá có thành công không
+
+Dòng chẩn đoán của 0.26.13 đã hiện ra trên máy chủ máy, và nó **loại sạch hai nghi
+can**:
+
+```
+nap=0  mang=2  loi=0  nguon=1  dom=1
+```
+
+`nguon=1` — phần tử **đã chọn được nguồn phát**. `dom=1` — nó **đã nằm trong trang**.
+Vậy mà sau 12 giây vẫn không có byte nào và cũng không lỗi.
+
+Đó là chữ ký của iOS **từ chối tải dữ liệu** vì việc phát chưa được một cú chạm cho
+phép — WebKit cố tình không lấy dữ liệu cho tới khi được phép, đúng `readyState 0` +
+`networkState LOADING` + không lỗi.
+
+**Cú chạm thì không bị mất** — đã kiểm: nút tai nghe gọi thẳng `_playResult`, và không
+có `await` nào chen vào trước lúc `unlock()` chạy. Nên chỉ còn một khả năng chưa ai
+kiểm: **chính cú mở khoá thất bại**. Mã đang nuốt im lặng lỗi của nó
+(`play().catch(() => {})`), mà mọi thứ sau đó đều dựa vào nó.
+
+Nay kết quả cú mở khoá được ghi lại và in kèm (`mo_khoa=`). Chỉ cần một lần tái hiện
+nữa là biết chắc:
+
+- `mo_khoa=ok` → cú mở khoá thành công, nhưng iPhone vẫn không cho tải ⇒ mô hình "mở
+  khoá một lần là xong" sai, phải bỏ hẳn khoảng chờ giữa cú chạm và lúc có địa chỉ
+  luồng (đổi kiến trúc, không phải vá).
+- `mo_khoa=NotAllowedError` (hoặc tên lỗi khác) → hỏng ngay từ cú mở khoá, và chỗ phải
+  sửa là đoạn im lặng chứ không phải đường lấy luồng.
+
+**Kèm một phép thử lại** sau 3 giây, dựng thẳng từ mẹo người dùng tự tìm ra ("lượn qua
+app khác rồi quay lại thì lại phát" — tức lệnh phát chỉ cần được nhắc lại). Rẻ và vô
+hại: đang chạy rồi thì nhánh ấy thoát ngay.
+
+Nói thẳng: bản này **là bước đo, không hứa hết lỗi**. Nhưng nó là bước đo cuối cùng —
+sau nó thì không còn chỗ nào tối để mà đoán nữa.
+
 ## 0.26.13 - 2026-09-20
 
 ### Fixed — chỗ chẩn đoán đặt sai chỗ, nên ca quan trọng nhất không có số đo

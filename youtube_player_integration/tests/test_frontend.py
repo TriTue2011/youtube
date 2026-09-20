@@ -195,6 +195,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Lưới an toàn: quay lại trang thì thử phát lại — chính là cái mẹo thủ công
         # mà người dùng tự tìm ra, nay làm tự động.
         self.assertIn("} else if (this.item && this.real() && audio.paused) {", script)
+        # 0.26.14: GHI LẠI kết quả cú mở khoá. Bản cũ nuốt im lặng mọi lỗi ở đó, nên
+        # nếu chính cú mở khoá hỏng thì không ai biết — mà mọi thứ sau đều dựa vào nó.
+        self.assertIn('this.moKhoa = "dang-thu";', script)
+        self.assertIn("mo_khoa=${this.moKhoa", script)
+        # Và thử phát lại một lần sau 3 giây, đúng cái mẹo người dùng tự tìm ra.
+        self.assertIn("this.thuLaiTimer = setTimeout(() => {", script)
         # Canh tiếng phải nằm trong «deviceAudio», KHÔNG phải trong vòng đồng bộ video:
         # vòng ấy thoát ngay khi không có video, nên đúng ca "chỉ nghe" lại mất sạch
         # số đo — chủ máy báo "chỉ nghe không chạy thanh thời gian" mà không dòng chẩn
