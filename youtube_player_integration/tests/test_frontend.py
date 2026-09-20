@@ -183,71 +183,36 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("iPhone không cho vừa xem video vừa nghe khi tắt màn hình.", script)
         # Phần tử âm thanh phải NẰM TRONG tài liệu: «new Audio()» sinh ra phần tử đứng
         # ngoài DOM, và WebKit có thể không bao giờ bắt đầu tải cho phần tử như vậy.
-        self.assertIn("document.body.appendChild(audio);", script)
-        # 0.26.18 — ĐỔI HẲN MÔ HÌNH, theo đúng tài liệu Apple và mã của chính Home
-        # Assistant. Apple: trên iOS "no data is loaded until the user initiates it",
-        # và play()/load() vô tác dụng nếu không do người dùng khởi động. Giữ MỘT phần
-        # tử sống rồi ĐỔI «src» cho bài mới là mở một lượt tải NGOÀI cú chạm — iOS
-        # không tải, không báo lỗi, nằm im ở «đang tải»: đúng «nap=0 mang=2 loi=0».
-        # Trình duyệt Media của HA chạy được trên iPhone vì nó dựng phần tử MỚI mang
-        # sẵn địa chỉ, để «autoplay» lo việc phát, và có «controls» làm lối thoát.
-        # Sao y hình dạng của HA: <audio controls autoplay><source src type /></audio>.
-        # «type» là gợi ý thật cho WebKit, khỏi phải tự đánh hơi byte đầu; máy phát đã
-        # trả sẵn kiểu nên không tốn thêm lượt hỏi nào.
-        self.assertIn('const nguon = document.createElement("source");', script)
-        self.assertIn("nguon.src = url;", script)
-        self.assertIn("if (kieu) nguon.type = kieu;", script)
-        self.assertIn('String(payload?.media_content_type || "")', script)
-        self.assertIn("audio.autoplay = true;", script)
-        self.assertIn("audio.playsInline = true;", script)
-        self.assertIn("audio.controls = hienNut;", script)
-        # Địa chỉ phải lấy TRƯỚC cú chạm, nếu không thì dù dựng phần tử mới, lượt tải
-        # vẫn rơi ra ngoài cử chỉ người dùng. Có sẵn thì «listen» chạy THẲNG, không
-        # một «await» nào chen vào — đó là điều kiện bắt buộc, không phải tối ưu.
-        self.assertIn("listen(item, queue, index, startAt = 0) {", script)
-        self.assertIn("const san = this.luongSan(item);", script)
+        # 0.26.21 — TRẢ ĐƯỜNG TIẾNG VỀ ĐÚNG BẢN 0.26.2.
+        # Chủ máy đo trên máy thật: bản cũ nghe được, loạt bản "sửa cho iOS"
+        # (0.26.13–0.26.20) thì không, và còn làm hỏng cả Android. Đã thử mô hình
+        # mới ba lần vẫn hỏng, nên theo đúng quy ước "sai một chỗ hai lần thì dừng":
+        # không chữa tiếp, trả về nguyên trạng cái đang chạy được.
+        # Mô hình đúng: MỘT phần tử sống lâu, mở khoá bằng đoạn im lặng NGAY TRONG
+        # cú chạm, rồi đổi «src» khi có địa chỉ.
+        self.assertIn("const SILENCE = ", script)
+        self.assertIn("audio.src = SILENCE;", script)
+        self.assertIn("  unlock() {", script)
+        self.assertIn("audio.src = url;", script)
+        # «real()» phân biệt bài thật với đoạn im lặng bằng chính địa chỉ — đây là
+        # thứ giữ cho vòng đồng bộ video KHÔNG đụng vào khung lúc còn đang chờ.
+        self.assertIn('return src && !src.startsWith("data:") ? this.element : null;', script)
+        # Mô hình mới phải bị gỡ HẲN, không để sót nửa vời.
+        self.assertNotIn("goPhanTu", script)
+        self.assertNotIn("daChay", script)
+        self.assertNotIn('nguon.type = kieu', script)
+        # Thứ DUY NHẤT giữ lại từ đợt làm lại: lớp nhớ địa chỉ luồng. Nó nằm BÊN
+        # TRONG «streamUrl» nên không đụng một dòng nào của đường phát, mà vẫn bỏ
+        # được quãng chờ 1,5–2,6 giây hỏi máy chủ sau mỗi cú chạm.
         self.assertIn("async chuanBi(item) {", script)
-        # ĐẤU NỐI, không chỉ có hàm. Viết đúng hàm rồi không gọi nó ở đâu là kiểu hỏng
-        # im lặng nhất: mã trông đầy đủ mà đường nhanh không bao giờ chạy. Hai nơi gọi:
-        # lúc hiện kết quả (để cú chạm đầu tiên có sẵn), và lúc bắt đầu một bài (để
-        # bài KẾ TIẾP có sẵn — "chuyển bài khác là lại tịt" chính là chỗ này).
+        self.assertIn("async layLuong(item) {", script)
+        self.assertIn("if (ban && Date.now() - ban.luc <= 240000) return ban.url;", script)
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
         self.assertIn("if (ke) this.chuanBi(ke);", script)
-        # 0.26.20: phần tử VỪA DỰNG luôn "đang tạm dừng" trong khoảnh khắc chờ
-        # «autoplay» khởi động — đó KHÔNG phải ý người dùng. Vòng đồng bộ gương
-        # trạng thái ấy sang khung YouTube, nên thiếu hàng rào này là vừa bấm
-        # "Nghe trên máy này" đã dừng đúng cái video đang xem (chủ máy báo
-        # 20/09/2026: "không nghe thấy và dừng video"). Bản cũ vô tình không vấp
-        # vì đoạn im lặng mở khoá đã chạy sẵn từ trước.
-        self.assertIn("this.daChay = false;", script)
-        self.assertIn('audio.addEventListener("play", () => { this.daChay = true; this.notify(); });', script)
-        self.assertIn("audio.paused && deviceAudio.daChay && [1, 3].includes(video.state)", script)
-        # Đo được: «autoplay» một mình KHÔNG đủ khởi động (paused vẫn true sau 400ms
-        # dù readyState = 4). Nên «play()» bị từ chối thì phải đưa ra một nút THẬT,
-        # không được im — bản đầu nuốt lỗi nên đường nhanh không tiếng, không lỗi,
-        # không có gì để bấm.
-        self.assertIn("audio.controls = true;", script)
-        self.assertIn("chạm nút ▶ ngay trên thanh phát để nghe", script)
-        # MỘT LUỒNG MỘT LÚC: Apple giới hạn iOS ở đúng một luồng tiếng hoặc hình. Phần
-        # tử cũ còn trong trang là còn giữ chỗ, nên phải gỡ HẲN chứ không chỉ tạm dừng.
-        # Thứ tự bắt buộc: dừng, bỏ nguồn, load() để WebKit buông, rồi mới gỡ.
-        self.assertIn("goPhanTu(audio) {", script)
-        self.assertIn("audio.replaceChildren();", script)
-        self.assertIn("audio.remove();", script)
-        # Mô hình im-lặng-mở-khoá phải bị gỡ HẲN, không để sót nửa vời: chính nó là
-        # cái sai gốc (đổi «src» trên một phần tử đang sống = tải ngoài cú chạm).
-        self.assertEqual(script.count("audio.loop = false;"), 0)
-        self.assertNotIn("const SILENCE =", script)
-        self.assertNotIn("unlock()", script)
-        self.assertNotIn("moKhoa", script)
-        # Lưới an toàn: quay lại trang thì thử phát lại — chính là cái mẹo thủ công
-        # mà người dùng tự tìm ra, nay làm tự động.
-        self.assertIn("} else if (this.item && this.real() && audio.paused) {", script)
-        # 0.26.14 từng ghi lại kết quả cú mở khoá («mo_khoa=…»). Số đo ấy ĐÃ LÀM XONG
-        # việc của nó: «mo_khoa=ok» kèm «nap=0» chính là bằng chứng bác bỏ mô hình
-        # mở-khoá-một-lần-rồi-đổi-nguồn. Mô hình chết thì số đo của nó cũng bỏ, chứ
-        # không giữ lại một con số không còn đo điều gì — xem assertNotIn bên dưới.
-        # Và thử phát lại một lần sau 3 giây, đúng cái mẹo người dùng tự tìm ra.
+        # Thử phát lại một lần sau 3 giây — cái mẹo người dùng iPhone tự tìm ra
+        # ("lượn qua app khác rồi quay lại thì lại phát"), nay làm tự động. Đây là
+        # phần DUY NHẤT của đợt sửa iOS còn giữ lại, vì nó chỉ NHẮC LẠI lệnh phát
+        # chứ không đổi cách dựng phần tử — thứ đã đo được là làm hỏng cả Android.
         self.assertIn("this.thuLaiTimer = setTimeout(() => {", script)
         # 0.26.15: số đo «mo_khoa=ok» chứng minh phần tử ĐÃ được phép phát mà vẫn
         # không tải — tức iOS đòi lệnh phát nằm TRONG cú chạm, không phải chỉ cần
@@ -260,11 +225,10 @@ class LovelaceCardContractTests(unittest.TestCase):
         # số đo — chủ máy báo "chỉ nghe không chạy thanh thời gian" mà không dòng chẩn
         # đoán nào hiện ra.
         self.assertIn("canhTieng(audio, generation) {", script)
-        # 0.26.18: nay chỉ còn MỘT nơi gọi. Hai đường nghe (nghe một mình và nghe kèm
-        # loa) trước đây mỗi đường tự dựng phần tử rồi tự canh; nay cả hai đi qua
-        # «batDau», nên chỗ dựng phần tử và chỗ canh tiếng chỉ có một bản.
-        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 1)
-        self.assertIn("batDau(url, startAt, generation,", script)
+        # Hai đường nghe — nghe một mình và nghe kèm loa — mỗi đường tự canh, nên
+        # có ĐÚNG hai nơi gọi. (Đợt 0.26.18 từng gộp về một qua «batDau»; bản ấy đã
+        # được trả về nguyên trạng 0.26.2 vì đo trên máy thật thấy nó không nghe được.)
+        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 2)
         # Hai số đo thêm để phân định phần còn lại: đã chọn được nguồn phát chưa, và
         # phần tử có nằm trong trang không.
         self.assertIn("nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}", script)

@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.26.21 - 2026-09-20
+
+### Trả đường tiếng về đúng bản 0.26.2 — bản mà chủ máy đo là chạy được
+
+Chủ máy: *"YouTube vẫn chưa nghe được, xem lại code của mấy bản trước khi sửa cho iOS
+ấy, vẫn bình thường"*. Đúng, và đây là việc nên làm từ mấy bản trước.
+
+Loạt bản 0.26.13–0.26.20 xây một mô hình phát mới để chữa iOS. Kết quả đo trên máy
+thật: **iOS vẫn không nghe được, và Android — vốn đang tốt — cũng hỏng theo.** Đã thử
+chữa mô hình ấy ba lần (0.26.18, .19, .20) mà vẫn hỏng. Theo đúng quy ước của chính dự
+án này — *sai một chỗ hai lần thì đừng sửa lần thứ ba* — bản này không chữa tiếp mà
+**trả nguyên trạng** phần phát tiếng về bản 0.26.2.
+
+Cụ thể, quay lại đúng mô hình cũ: **một** phần tử âm thanh sống lâu, mở khoá bằng đoạn
+im lặng **ngay trong cú chạm**, rồi đổi `src` khi có địa chỉ. Gỡ sạch mô hình mới —
+phần tử-mới-mỗi-bài, `<source type>`, `autoplay`, bộ nút gốc, cờ "đã chạy", và việc gỡ
+phần tử khỏi trang khi dừng. Có `assertNotIn` ghim để không ai dựng lại nửa vời.
+
+### Vì sao giả thuyết của tôi sai, và đo thế nào mới biết
+
+Tôi từng nghi thẻ `<source type="audio/mp4">` làm trình duyệt bỏ qua nguồn. **Đo thì
+sai**: máy chủ trả đúng `audio/mp4`, một kiểu MIME hợp lệ.
+
+Rồi dựng cả ba kiểu phần tử chạy **song song** trên đúng luồng thật qua Home Assistant:
+
+```
+1) MOI: <source src type=audio/mp4>   nap=4  loi=0  dai=213
+2) MOI, khong dat type                nap=4  loi=0  dai=213
+3) CU: audio.src = url  (0.26.2)      nap=4  loi=0  dai=213
+```
+
+Cả ba nạp luồng **y hệt nhau**: dữ liệu đủ, không lỗi, biết đúng thời lượng. Tức hình
+dạng phần tử không phải thủ phạm — và cũng không có phép đo nào của tôi chứng minh được
+mô hình mới tốt hơn. Nó chỉ dựa trên tài liệu, còn máy thật thì nói ngược lại. Máy thật
+thắng.
+
+### Giữ lại đúng một thứ: lấy sẵn địa chỉ luồng
+
+Thứ duy nhất của đợt làm lại còn giữ, vì nó **không đụng một dòng nào** vào đường phát:
+lớp nhớ địa chỉ luồng nằm bên trong hàm hỏi máy chủ. Ba bài đầu của danh sách và bài kế
+tiếp được lấy sẵn, nên bấm bài là vào ngay thay vì chờ 1,5–2,6 giây. Lợi cho cả Android
+lẫn iOS, và nếu có hỏng thì hỏng về đúng hành vi cũ chứ không thành thứ khác.
+
+### Còn lại gì chưa xong
+
+**iOS vẫn chưa nghe được.** Bản này không hứa chữa được — nó chỉ đưa mọi thứ về đúng
+chỗ đã biết là chạy được trên Android, để không mất thêm nền tảng nào nữa. Việc iOS
+quay lại từ đầu, và lần sau sẽ chỉ đổi khi có phép đo trên máy thật chứng minh, chứ
+không đổi vì tài liệu nói vậy.
+
+**Lỗi 153 của add-on trên iPhone** là chuyện khác: giao diện add-on đã có sẵn
+`referrerpolicy` (có test ghim), nên đó là YouTube từ chối nhúng khi trang mở bằng địa
+chỉ IP. Thẻ đã có đường lui cho ca này (lấy hình từ máy chủ), giao diện add-on thì chưa.
+
 ## 0.26.20 - 2026-09-20
 
 ### Fixed — lỗi do CHÍNH bản 0.26.19 gây ra: bấm "Nghe trên máy này" thì dừng video
