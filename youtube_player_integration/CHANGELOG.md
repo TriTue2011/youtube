@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.26.35 - 2026-09-21
+
+### Lớp tiếp sức luồng nay trả lời cả HEAD
+
+Soát lại cả đường đi của tiếng thì thấy một khả năng bị đánh rơi giữa đường. Đo trên máy
+nhà 20/09/2026, cùng một địa chỉ luồng:
+
+| Hỏi kiểu gì | Máy phát (c2a / add-on) | Qua lớp tiếp sức của tích hợp |
+|---|---|---|
+| GET kèm `Range: bytes=0-1` | 206, `audio/mp4`, `accept-ranges: bytes` | 206 — đúng |
+| HEAD | 200 kèm kiểu và cỡ tệp | **405 Method Not Allowed** |
+
+Cả hai máy phát đều cố ý trả lời HEAD (c2a có tuyến riêng, add-on có hẳn hàm
+`head_stream`), nhưng lớp tiếp sức chỉ khai `get`, nên aiohttp từ chối. Trình phát nào
+hỏi HEAD trước khi tải — AVFoundation của máy nhà Táo, vài loa DLNA — sẽ coi như luồng
+hỏng mà không có lý do nào hiện ra.
+
+Nay lớp tiếp sức hỏi máy phát **một byte** rồi suy ra cỡ tệp từ `Content-Range`, đúng cách
+`head_stream` của add-on làm — nên chạy được với cả bản add-on đời cũ chưa có hàm ấy.
+
+**Add-on không phải sửa gì.** Nó đã đúng từ trước; chỗ hụt nằm ở lớp tiếp sức.
+
 ## 0.26.34 - 2026-09-20
 
 ### Nghe trên máy này: lấy tiếng thẳng từ YouTube, không đi vòng qua máy chủ nữa

@@ -216,6 +216,49 @@ class TriTueProxyView(HomeAssistantView):
                 pass
             return response
 
+    async def head(self, request: web.Request, token: str) -> web.StreamResponse:
+        """Tiêu đề của luồng (kiểu, cỡ, có tua được không) mà không tải tiếng.
+
+        VÌ SAO CẦN: cả hai máy phát đều trả lời HEAD — c2a có tuyến riêng, add-on có
+        «head_stream» — nhưng lớp tiếp sức này trước đây chỉ khai «get», nên aiohttp
+        trả 405 cho mọi lời hỏi HEAD, và người hỏi coi như luồng hỏng. Đo trên máy nhà
+        20/09/2026, cùng một địa chỉ: GET kèm «Range: bytes=0-1» trả 206 đúng chuẩn,
+        HEAD trả 405. Một khả năng máy phát có mà lớp tiếp sức làm mất.
+
+        HỎI BẰNG MỘT BYTE, KHÔNG HỎI HEAD LÊN MÁY PHÁT: cách này đúng với cả hai máy
+        phát lẫn bản add-on đời cũ chưa có «head_stream», và lấy luôn được cỡ tệp thật
+        từ «Content-Range» — chính cách «head_stream» của add-on đang làm.
+        """
+        hass = request.app["hass"]
+        link = hass.data.get(PROXY_DATA, {}).get(token)
+        if link is None or link[1] < time.monotonic():
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        session = async_get_clientsession(hass)
+        try:
+            upstream = await session.get(
+                link[0],
+                headers={"Accept-Encoding": "identity", "Range": "bytes=0-0"},
+                timeout=ClientTimeout(total=None, sock_connect=15, sock_read=30),
+            )
+        except (ClientError, TimeoutError):
+            return web.Response(status=HTTPStatus.BAD_GATEWAY)
+        async with upstream:
+            if upstream.status >= HTTPStatus.BAD_REQUEST:
+                return web.Response(status=upstream.status)
+            response = web.StreamResponse(status=HTTPStatus.OK)
+            if value := upstream.headers.get("Content-Type"):
+                response.headers["Content-Type"] = value
+            response.headers["Accept-Ranges"] = "bytes"
+            response.headers["Cache-Control"] = "private, no-store"
+            tong = (upstream.headers.get("Content-Range") or "").rsplit("/", 1)[-1].strip()
+            if tong.isdigit():
+                # Đặt qua thuộc tính, KHÔNG qua headers: đo bằng aiohttp 3.12.15 thì
+                # cách này trả đúng «Content-Length» và không kèm thân, còn ghi thẳng
+                # vào headers là để aiohttp tự tính lại thành 0.
+                response.content_length = int(tong)
+            await response.prepare(request)
+            return response
+
 
 class TriTuePlaylistsView(HomeAssistantView):
     """Household playlists on the player server (the add-on or c2a)."""
