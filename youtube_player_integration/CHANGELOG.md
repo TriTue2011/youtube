@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.26.10 - 2026-09-20
+
+### Fixed — khởi động lại Home Assistant: nhạc vẫn chạy mà thẻ mất dấu bài và loa
+
+Chủ máy báo: phát ra loa, khởi động lại Home Assistant thì **nhạc không mất**, nhưng
+vào lại thẻ thì **không thấy bài đang phát, không thấy loa đang chọn**. Và hỏi thêm:
+dùng add-on có bị như c2a không.
+
+**Lỗi nằm trong thẻ, nên add-on và c2a dính y như nhau.** Chuỗi gây lỗi:
+
+1. Home Assistant khởi động lại → loa biến mất một lúc (Cast dò lại).
+2. `_syncPlayers` thấy loa `unavailable` liền **xoá nó khỏi danh sách đang chọn** —
+   đúng thiết kế, để thiết bị mất kết nối không nằm lại trong lựa chọn.
+3. Loa trở lại. Nhưng phiên vẫn là phiên cũ nên **chữ ký y hệt**, và hàm khôi phục có
+   cổng canh `marker === this._sharedSessionMarker` nên **thoát sớm** — loa không bao
+   giờ được chọn lại. Mất loa thì cũng mất luôn phiên đang theo, nên tên bài biến mất
+   theo.
+
+Chữ ký sinh ra để **khỏi vẽ lại thừa**, không phải để chặn lần cần vẽ lại thật. Nay
+chỉ bỏ qua khi **cả hai** cùng khớp: chữ ký chưa đổi **và** lựa chọn hiện tại vẫn đủ
+loa của phiên. Đã kiểm thứ tự gọi: hàm khôi phục chạy **trước** bộ lọc loa trong cùng
+một nhịp, nên loa vừa trở lại là được chọn lại ngay.
+
+### Đã kiểm, KHÔNG phải nguyên nhân
+
+- **Tích hợp không tự giữ phiên.** `sessions.py` chỉ là hàm thuần đọc trạng thái; bộ
+  điều phối mỗi nhịp hỏi thẳng máy phát. Khởi động lại Home Assistant không xoá gì.
+- **Máy phát giữ phiên tới khi bị dừng hẳn.** `state` đặt `"playing"` lúc bắt đầu và
+  **không chỗ nào** cập nhật lại.
+- **Cờ `_manualSelection`** đặt `false` lúc khởi tạo, chỉ bật khi người dùng tự tay
+  tích loa, **không** khôi phục từ bộ nhớ — nên nó không chặn gì. (Đây là nghi can đầu
+  của tôi, và nó sai.)
+
+### Còn một lỗ hổng khác, CHƯA sửa — nói ra để chủ máy quyết
+
+Cả c2a lẫn add-on giữ phiên **thuần trong bộ nhớ**, không ghi xuống đĩa. Nên khi **máy
+phát** khởi động lại — c2a được Watchtower cập nhật, add-on được nâng cấp, hoặc máy chủ
+nhà khởi động lại — thì loa **vẫn phát tiếp** mà phiên biến mất, và thẻ không còn đường
+nào nhận lại.
+
+Khác biệt giữa hai đường, đo theo kiến trúc:
+
+| Tình huống | c2a | Add-on |
+|---|---|---|
+| Khởi động lại **Home Assistant Core** | phiên còn (máy khác) | phiên còn (Supervisor không khởi động lại add-on) |
+| **Khởi động lại máy chủ nhà** | phiên còn | **phiên mất** |
+| **Cập nhật máy phát** | phiên mất | phiên mất |
+
+Chữa được bằng cách ghi phiên xuống đĩa rồi nạp lại lúc khởi động — nhưng phải kiểm
+loa có thật sự còn phát không trước khi khôi phục, nếu không sẽ bày ra phiên ma.
+
 ## 0.26.9 - 2026-09-20
 
 ### Fixed — iOS: "nghe khi tắt màn hình" không chạy. Gỡ đối thủ, đừng đầu hàng

@@ -2648,7 +2648,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ? attributes.output_entity_ids.filter((entityId) => this._hass.states[entityId])
       : [];
     const marker = `${attributes.session_revision ?? attributes.session_updated_at ?? ""}:${sharedOutputs.join(",")}`;
-    if (!sharedOutputs.length || marker === this._sharedSessionMarker) return;
+    /* CHỮ KÝ KHÔNG ĐỔI VẪN PHẢI CHỌN LẠI NẾU LỰA CHỌN ĐÃ TRÔI MẤT. Chuỗi gây lỗi,
+       chủ máy báo 20/09/2026 — khởi động lại Home Assistant thì nhạc vẫn chạy nhưng
+       thẻ trắng trơn:
+         1. Home Assistant khởi động lại → loa biến mất một lúc (Cast dò lại).
+         2. «_syncPlayers» thấy loa «unavailable» liền XOÁ nó khỏi «_selectedPlayers».
+         3. Loa trở lại — nhưng phiên vẫn là phiên cũ nên chữ ký Y HỆT, cổng canh
+            thoát sớm, và loa KHÔNG BAO GIỜ được chọn lại.
+       Chữ ký sinh ra để khỏi vẽ lại thừa, không phải để chặn lần cần vẽ lại thật.
+       Nên chỉ bỏ qua khi CẢ HAI cùng khớp: chữ ký chưa đổi VÀ lựa chọn hiện tại vẫn
+       đủ loa của phiên. Lỗi nằm ở thẻ nên add-on và c2a dính y như nhau. */
+    const duLoa = sharedOutputs.every((entityId) => this._selectedPlayers.has(entityId));
+    if (!sharedOutputs.length || (marker === this._sharedSessionMarker && duLoa)) return;
     this._selectedPlayers = new Set(sharedOutputs);
     this._sharedSessionMarker = marker;
     this._defaultsApplied = true;

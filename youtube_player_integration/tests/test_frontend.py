@@ -108,6 +108,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("queuePosition", script)
         self.assertIn("this._applySharedOutputs()", script)
         self.assertIn("this._selectedPlayers = new Set(sharedOutputs)", script)
+        # 0.26.10: chữ ký không đổi VẪN phải chọn lại nếu lựa chọn đã trôi mất. Khởi
+        # động lại Home Assistant → loa «unavailable» một lúc → «_syncPlayers» xoá nó
+        # khỏi danh sách đang chọn; loa trở lại nhưng phiên vẫn là phiên cũ nên chữ ký
+        # y hệt và cổng canh thoát sớm → loa không bao giờ được chọn lại.
+        self.assertIn(
+            "const duLoa = sharedOutputs.every((entityId) => this._selectedPlayers.has(entityId));",
+            script)
+        self.assertIn(
+            "if (!sharedOutputs.length || (marker === this._sharedSessionMarker && duLoa)) return;",
+            script)
         self.assertIn("source,\n        target: item.url || item.id,", script)
         self.assertIn("this._syncNowPlaying()", script)
         # Hidden players: loaded from and saved to the integration's HA storage.
