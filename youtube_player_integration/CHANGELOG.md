@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.26.11 - 2026-09-20
+
+### Fixed — phóng to video Facebook thì mất nút thoát và nút tua
+
+Chủ máy báo: Facebook phóng to toàn màn thì ổn, nhưng không có nút thoát màn và không
+chỉnh được thời gian.
+
+Thủ phạm là một luật CSS:
+
+```css
+.player:is(.expanded, :fullscreen) :is(.progress, .control-bar, .nghe-hang) { display: none; }
+```
+
+Luật ấy sinh ra vì **khung nhúng YouTube đã có bộ nút riêng** nên thẻ nhường chỗ (yêu
+cầu 18/09: *"lúc này dùng bằng YouTube là được"*). Nhưng video Facebook chạy bằng phần
+tử `<video>` do chính thẻ dựng, mà `_tryPicture` dựng nó **không có bộ nút gốc** — thẻ
+nhường chỗ cho một bộ nút không tồn tại. Nay luật chỉ áp khi **không phải** hình của
+thẻ (`:not(.picture-on)`).
+
+Tua bằng thanh của thẻ còn **đúng hơn** bộ nút gốc của trình duyệt: `_seekFraction`
+dời **cả tiếng lẫn hình**, trong khi bộ nút gốc chỉ dời mỗi hình rồi bị vòng đồng bộ
+kéo ngược về.
+
+Đo trong trình duyệt, ba trạng thái:
+
+| Trạng thái | Thanh tiến trình | Hàng nút phát | Nút thoát |
+|---|---|---|---|
+| Bình thường | hiện | hiện | hiện |
+| Phóng to + khung YouTube | ẩn *(như cũ)* | ẩn *(như cũ)* | hiện |
+| Phóng to + hình của thẻ | **hiện** | **hiện** | hiện |
+
+**Một bản sửa hụt đã tự thu hồi:** ban đầu tôi nhắm vào `.np-zone`, nhưng đo ra nó bị
+một luật nền ẩn trong **mọi** trường hợp — nó không phải chỗ chứa thanh tiến trình.
+Hai phép sửa đó vô hại nhưng chú thích của chúng nói sai, nên đã gỡ bỏ thay vì để lại.
+
+### Added — ghim được bài Facebook để sau nghe lại
+
+Chủ máy: *"Face cũng chưa có phần lưu link bài để sau nghe lại, và khi lưu thì lưu như
+ghim Facebook"*. Đúng vậy — **cả hai đường ghim đều chặn Facebook**:
+
+- Nút ghim trên dòng kết quả chỉ dựng khi nguồn là `youtube`.
+- Ô "dán link để gắn thẳng" ghi cứng `source=youtube`, nên link Facebook luôn bị máy
+  phát đọc bằng bộ giải YouTube rồi trả rỗng.
+- Và `normalize_song` đòi mã khớp khuôn 11 ký tự của YouTube, lại **không lưu nguồn** —
+  nên dù lọt qua thì phát lại cũng bị coi là YouTube.
+
+Nay bản ghi **mang theo nguồn**, mỗi nguồn một khuôn mã riêng (YouTube 11 ký tự,
+Facebook là chuỗi số). Ô dán link tự suy nguồn từ chính cái link. Bản ghi cũ không khai
+nguồn thì rơi về YouTube — đúng thứ đã lưu trước đây, không phải đoán.
+
+**`suggestions.py` tới nay chưa hề có test chức năng nào** — chỉ được soi gián tiếp
+bằng khớp chuỗi, và đó đúng là lý do lỗ hổng này sống được. Nay có `test_suggestions.py`
+với 5 ca, gồm tương thích ngược và chặn chéo nguồn (mã YouTube khai là Facebook thì từ
+chối, và ngược lại).
+
+### Changed — thẻ tự chấm bản sửa iOS của chính nó
+
+Ảnh chủ máy gửi cho thấy bản 0.26.9 đã chạy: thẻ tự tắt hình để nhường tiếng. Nhưng
+thanh tiến trình vẫn `0:00`, nên **chưa kết luận được** giả thuyết đúng hay sai.
+
+Thay vì hỏi rồi chờ, nay máy tự đo: bốn giây sau khi tắt hình, nó xem đồng hồ tiếng có
+nhúc nhích không rồi nói thẳng — *"nay nghe được trên máy này"* hoặc *"tắt hình rồi mà
+vẫn chưa ra tiếng — vậy không phải do khung video"*. Lần tới là biết ngay, khỏi mất một
+vòng hỏi đáp.
+
 ## 0.26.10 - 2026-09-20
 
 ### Fixed — khởi động lại Home Assistant: nhạc vẫn chạy mà thẻ mất dấu bài và loa

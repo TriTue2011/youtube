@@ -1723,7 +1723,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            GIỮ LẠI hàng biểu tượng góc trên-phải («.stage-controls»): đó là đường thoát
            chắc chắn của card, và nó vốn đã tự mờ khi để yên (xem luật «.idle» ngay bên
            dưới) nên không choán hình. */
-        .player:is(.expanded, :fullscreen) :is(.progress, .control-bar, .nghe-hang) { display: none; }
+        /* «:not(.picture-on)» — HÌNH CỦA CHÍNH THẺ thì giữ lại thanh tiến trình và
+           hàng nút phát. Luật ẩn này sinh ra vì khung nhúng YouTube đã có bộ nút
+           riêng nên thẻ nhường chỗ (yêu cầu 18/09: "lúc này dùng bằng YouTube là
+           được"). Nhưng video Facebook chạy bằng phần tử «<video>» do thẻ dựng, và
+           «_tryPicture» dựng nó KHÔNG có bộ nút gốc — nhường chỗ cho một bộ nút
+           không tồn tại, nên phóng to là mất sạch đường tua. Chủ máy báo 20/09/2026.
+           Tua bằng thanh của thẻ còn ĐÚNG hơn bộ nút gốc: «_seekFraction» dời CẢ
+           tiếng lẫn hình nên hai thứ không lệch nhau, trong khi bộ nút gốc chỉ dời
+           mỗi hình rồi bị vòng đồng bộ kéo ngược về. */
+        .player:is(.expanded, :fullscreen):not(.picture-on) :is(.progress, .control-bar, .nghe-hang) { display: none; }
         /* Ở phóng to / toàn màn hình, BỎ NỐT hàng biểu tượng — chủ máy 18/09/2026:
            "phóng to toàn màn vẫn thấy các icon rác mà tôi kêu bỏ đi". Ở 0.20.4 tôi cố
            ý giữ lại làm đường thoát và có nói "muốn ẩn nốt thì bảo"; nay bảo rồi.
@@ -1743,7 +1752,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            «.expanded» KHÔNG áp luật này: đó là kiểu phủ kín trang dùng cho máy không
            có element fullscreen (iPhone), ở đó không có phím Esc — bỏ nốt nút đóng là
            nhốt người dùng trong một màn hình không lối ra. */
-        .player:fullscreen > .stage > .stage-controls { display: none; }
+        /* «:not(.picture-on)» — hình của CHÍNH THẺ thì giữ lại hàng biểu tượng.
+           Ba luật ẩn ở vùng này sinh ra vì KHUNG YOUTUBE có bộ nút riêng nên thẻ
+           nhường chỗ. Video Facebook chạy bằng phần tử «<video>» của thẻ, vốn dựng
+           KHÔNG có bộ nút gốc — lý do nhường chỗ không còn, mà luật vẫn áp, nên chủ
+           máy báo 20/09/2026: phóng to Facebook thì "không có nút thoát màn và chỉnh
+           thời gian". «picture-on» do «_attachPicture» đặt, đúng khi hình là của thẻ. */
+        .player:fullscreen:not(.picture-on) > .stage > .stage-controls { display: none; }
         /* Idle: the overlays fade out after a few seconds without a touch while the video
            plays; the shield catches the next touch (taps inside the YouTube frame never
            reach the card) and only brings them back. */
@@ -3763,14 +3778,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       — chép thẳng là ảnh trắng và thời lượng rỗng. */
   _ytSongToItem(song) {
     const id = song.video_id || song.id;
+    /* Bài ghim nay MANG THEO NGUỒN. Bản ghi cũ không có trường này nên rơi về
+       YouTube — đúng thứ đã lưu trước khi có Facebook, không phải đoán. Thiếu chỗ
+       này thì bài Facebook ghim xong bấm phát lại sẽ đi vào đường YouTube và chết
+       ở cửa chặn mã 11 ký tự. */
+    const nguon = song.source === "facebook" ? "facebook" : "youtube";
     return {
       id,
-      url: "https://www.youtube.com/watch?v=" + id,
+      url: nguon === "facebook"
+        ? `https://www.facebook.com/watch/?v=${id}`
+        : "https://www.youtube.com/watch?v=" + id,
       title: song.title,
       channel: song.artist,
       duration: song.duration_seconds,
       thumbnail: song.thumbnail_url,
-      source: "youtube",
+      source: nguon,
     };
   }
 
@@ -3918,8 +3940,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       Cùng phép đo đó: link Zing và link Facebook KHÔNG được nhận, nên báo thẳng thay
       vì để người dùng ngồi đoán vì sao không có gì xảy ra. */
   async _ghimTuLink() {
-    const link = (window.prompt("Dán link video YouTube để gắn vào mục gợi ý:") || "").trim();
+    const link = (window.prompt("Dán link video YouTube hoặc Facebook để gắn vào mục gợi ý:") || "").trim();
     if (!link) return;
+    /* Nguồn suy từ CHÍNH cái link, không hỏi thêm một bước: người dán link Facebook
+       thì ý đã rõ rồi. Bản trước ghi cứng «source=youtube» nên link Facebook luôn bị
+       máy phát đọc bằng bộ giải YouTube rồi trả rỗng — đó là lý do chủ máy báo
+       20/09/2026 rằng Facebook chưa có phần lưu link để sau nghe lại. */
+    const nguonLink = /facebook\.com|fb\.watch/i.test(link) ? "facebook" : "youtube";
     /* Chỉ mục CỦA NHÀ mới gắn thêm bài được; mục dựng sẵn nằm trong mã nguồn. Ưu tiên
        mục đang mở, không phải mục của nhà thì lấy mục đầu. */
     const mucNha = this._goiY?.groups || [];
@@ -3934,11 +3961,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       if (!entryId) throw new Error("Không tìm thấy config entry. Hãy tải lại integration.");
       const payload = await this._hass.callApi("GET",
         `tritue_youtube_player/search?entry_id=${encodeURIComponent(entryId)}`
-        + `&source=youtube&q=${encodeURIComponent(link)}&limit=1`);
+        + `&source=${nguonLink}&q=${encodeURIComponent(link)}&limit=1`);
       const bai = Array.isArray(payload.items) ? payload.items[0] : null;
       if (!bai) {
-        this._setStatus("Không đọc được link này. Ô này hiện chỉ nhận link YouTube;"
-          + " link Facebook và link Zing thì máy phát chưa có nguồn tương ứng.", true);
+        this._setStatus("Không đọc được link này. Ô này nhận link YouTube và Facebook"
+          + " (kể cả link chia sẻ); link Zing thì máy phát chưa có đường đọc link.", true);
         return;
       }
       if ((muc.songs || []).some((daCo) => daCo.id === bai.id)) {
@@ -3950,6 +3977,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         id: muc.id,
         item: {
           video_id: bai.id,
+          source: nguonLink,
           title: bai.title,
           artist: bai.channel,
           thumbnail_url: bai.thumbnail,
@@ -4254,7 +4282,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            tên mục chỉ nằm trong thuộc tính title, thứ điện thoại không hiện ra.
            Điều kiện «nhà đã có mục» cũng bỏ luôn: bảng chọn tạo được mục mới tại chỗ,
            nên không còn cảnh chưa có mục nào thì nút ghim không thèm hiện. */
-        if ((item.source || this._source) === "youtube") {
+        // Facebook ghim được y như YouTube — bản ghi mang theo nguồn nên phát lại
+        // vẫn đi đúng đường. Zing thì chưa, vì máy phát chưa có đường đọc link Zing.
+        if (["youtube", "facebook"].includes(item.source || this._source)) {
           const ghim = document.createElement("button");
           ghim.type = "button";
           ghim.className = "icon-button pin-suggestion";
@@ -5194,9 +5224,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            thì nó sai, và dòng nhắn nói rõ để chủ máy báo lại. */
         this._tiengChayLuc = Date.now();
         if (video.open && video.followsDevice) {
+          const tiengGio = deviceAudio.real();
+          const mocTruoc = tiengGio ? tiengGio.currentTime : 0;
           this._listenOnly();
-          deviceAudio.real()?.play().catch(() => {});
-          this._setStatus("Đã tắt hình để nhường tiếng — máy này chỉ cho một thứ phát cùng lúc.", true);
+          tiengGio?.play().catch(() => {});
+          this._setStatus("Đã tắt hình để nhường tiếng cho máy này — đang thử lại…");
+          /* TỰ CHẤM BẢN SỬA CỦA CHÍNH MÌNH. Gỡ khung video mới chỉ là GIẢ THUYẾT;
+             thay vì bắt chủ máy kể lại rồi mất một vòng hỏi đáp, để máy tự đo: bốn
+             giây sau xem đồng hồ tiếng có nhúc nhích không rồi nói thẳng kết quả.
+             Nhúc nhích ⇒ giả thuyết đúng, báo bình thường. Đứng im ⇒ giả thuyết SAI,
+             và nói rõ "không phải do khung video" để lần sau khỏi đi lại đường cũ. */
+          setTimeout(() => {
+            const gio = deviceAudio.real();
+            if (!gio || this._video.open) return;   // đã đổi bài, hoặc hình mở lại
+            if (gio.currentTime > mocTruoc + 0.3) {
+              this._setStatus("Đã tắt hình để nhường tiếng — nay nghe được trên máy này.");
+            } else {
+              this._setStatus("Tắt hình rồi mà vẫn chưa ra tiếng — vậy không phải do khung video.", true);
+            }
+          }, 4000);
           return;
         }
         this._setStatus(
@@ -5824,6 +5870,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     menu.className = "add-menu";
     const banGhi = {
       video_id: dich.item.id,
+      source: dich.item.source || this._source,
       title: dich.item.title,
       artist: dich.item.channel,
       thumbnail_url: dich.item.thumbnail,

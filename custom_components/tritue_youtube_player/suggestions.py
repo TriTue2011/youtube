@@ -28,6 +28,12 @@ MAX_URL = 500
 # YouTube video ids are a fixed 11-character alphabet; anything else is refused
 # rather than stored and played back at whoever opens the card.
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+# Facebook video ids are a plain run of digits — a different shape, so each source
+# gets its own pattern instead of one loose pattern that would let either through.
+FACEBOOK_ID = re.compile(r"^[0-9]{5,25}$")
+#: Nguồn ghim được. Bản ghi cũ không có trường này nên mặc định là YouTube — đúng
+#: những gì đã lưu trước khi có Facebook, không phải đoán.
+PINNABLE_SOURCES = ("youtube", "facebook")
 GROUP_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 
 
@@ -51,8 +57,13 @@ def normalize_song(value: Any) -> dict[str, Any] | None:
     """Return one pinned video, or None when it is malformed."""
     if not isinstance(value, dict):
         return None
+    source = _text(value.get("source"), 16).lower() or "youtube"
+    if source not in PINNABLE_SOURCES:
+        return None
     video_id = _text(value.get("video_id") or value.get("id"), 32)
-    if not VIDEO_ID.fullmatch(video_id):
+    # Mỗi nguồn một khuôn riêng: mã Facebook là chuỗi số, mã YouTube là 11 ký tự.
+    # Dùng một khuôn lỏng cho cả hai là mở cửa cho mã rác của nguồn kia lọt vào.
+    if not (FACEBOOK_ID if source == "facebook" else VIDEO_ID).fullmatch(video_id):
         return None
     title = _text(value.get("title"))
     if not title:
@@ -65,6 +76,7 @@ def normalize_song(value: Any) -> dict[str, Any] | None:
     return {
         "id": video_id,
         "video_id": video_id,
+        "source": source,
         "title": title,
         "artist": _text(value.get("artist") or value.get("channel")),
         "duration_seconds": max(0, min(seconds, 24 * 3600)),

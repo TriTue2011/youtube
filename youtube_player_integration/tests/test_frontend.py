@@ -180,7 +180,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         # (đóng hình, giữ tiếng) thay vì viết đường thứ hai.
         self.assertIn("if (video.open && video.followsDevice) {", script)
         self.assertIn("this._listenOnly();", script)
-        self.assertIn("deviceAudio.real()?.play().catch(() => {});", script)
+        self.assertIn("tiengGio?.play().catch(() => {});", script)
+        # 0.26.11: sau khi tắt hình, thẻ TỰ CHẤM bản sửa của chính nó — bốn giây sau
+        # xem đồng hồ tiếng có nhúc nhích không rồi nói thẳng đúng/sai, thay vì bắt
+        # chủ máy kể lại và mất thêm một vòng hỏi đáp.
+        self.assertIn("if (gio.currentTime > mocTruoc + 0.3) {", script)
+        self.assertIn("vậy không phải do khung video", script)
         # 0.26.6: khi bắt được tình trạng "mở được nhưng không chạy" thì phải in kèm SỐ
         # LIỆU của chính phần tử âm thanh. Không có bốn số này thì chỉ còn đường đoán,
         # mà ba nguyên nhân khả dĩ (chờ dữ liệu / bị chặn phát / lỗi giải mã) cần ba
@@ -211,6 +216,24 @@ class LovelaceCardContractTests(unittest.TestCase):
             script.index('iframe.setAttribute("src", src)'),
         )
         self.assertIn("this._toggleVideoExpanded()", script)
+        # 0.26.11: hình của CHÍNH THẺ (Facebook) thì phóng to vẫn giữ thanh tiến trình
+        # và hàng nút. Luật ẩn sinh ra vì khung nhúng YouTube có bộ nút riêng; phần tử
+        # «<video>» của thẻ thì «_tryPicture» dựng KHÔNG có bộ nút gốc, nên nhường chỗ
+        # cho một bộ nút không tồn tại = mất sạch đường tua.
+        self.assertIn(
+            ".player:is(.expanded, :fullscreen):not(.picture-on)"
+            " :is(.progress, .control-bar, .nghe-hang) { display: none; }",
+            script)
+        # 0.26.11: ghim được bài Facebook, và bản ghi MANG THEO NGUỒN — thiếu nguồn thì
+        # phát lại sẽ đi vào đường YouTube rồi chết ở cửa chặn mã 11 ký tự.
+        self.assertIn('if (["youtube", "facebook"].includes(item.source || this._source)) {', script)
+        self.assertIn('const nguon = song.source === "facebook" ? "facebook" : "youtube";', script)
+        self.assertIn("source: dich.item.source || this._source,", script)
+        # Ô "dán link để ghim": nguồn suy từ CHÍNH cái link, không còn ghi cứng youtube.
+        self.assertIn(
+            r'const nguonLink = /facebook\.com|fb\.watch/i.test(link) ? "facebook" : "youtube";',
+            script)
+        self.assertIn("source: nguonLink,", script)
         # 0.26.7: phóng to thì ẩn HẲN cả cột phải. Chủ máy gửi ảnh iPhone: hàng nguồn và
         # ô tìm kiếm đè lên video đang xoay. Lỗi KHÔNG dựng lại được trong Chrome (lớp
         # phủ che đúng khi đo), nên luật này gỡ bỏ chế độ hỏng chứ không nhắm vào cơ chế.
