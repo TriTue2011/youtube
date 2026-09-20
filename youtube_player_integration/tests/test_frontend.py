@@ -174,18 +174,19 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("const coDuLieu = audio.readyState >= 2;", script)
         self.assertIn("if (!audio.paused && coDuLieu && doiQua > 8000) {", script)
         self.assertIn("if (!audio.paused && !coDuLieu && doiQua > 12000) {", script)
-        # 0.26.9: đang tải mà không có byte nào → GỠ ĐỐI THỦ, đừng đầu hàng. Khung
-        # YouTube chiếm đường phát của iOS; đóng hình và GIỮ tiếng trên máy, vì phần
-        # tử âm thanh mới là thứ sống sót qua lúc tắt màn hình. Dùng lại «_listenOnly»
-        # (đóng hình, giữ tiếng) thay vì viết đường thứ hai.
+        # 0.26.12: người dùng bấm "xem" thì GIỮ HÌNH. Bản 0.26.9 đóng hình để nhường
+        # tiếng, và chủ máy báo ngay "bật video để xem thì không được trên iOS"; clip
+        # gửi kèm cho thấy sau khi đóng hình thì tiếng VẪN đứng ở 0:00 suốt ~30 giây,
+        # tức gỡ khung video không hề giúp gì. Chọn theo Ý ĐỊNH đã nêu, thay vì tự ý
+        # quyết thay người dùng rồi vứt mất một nửa yêu cầu.
         self.assertIn("if (video.open && video.followsDevice) {", script)
-        self.assertIn("this._listenOnly();", script)
-        self.assertIn("tiengGio?.play().catch(() => {});", script)
-        # 0.26.11: sau khi tắt hình, thẻ TỰ CHẤM bản sửa của chính nó — bốn giây sau
-        # xem đồng hồ tiếng có nhúc nhích không rồi nói thẳng đúng/sai, thay vì bắt
-        # chủ máy kể lại và mất thêm một vòng hỏi đáp.
-        self.assertIn("if (gio.currentTime > mocTruoc + 0.3) {", script)
-        self.assertIn("vậy không phải do khung video", script)
+        self.assertIn("iPhone không cho vừa xem video vừa nghe khi tắt màn hình.", script)
+        # Phần tử âm thanh phải NẰM TRONG tài liệu: «new Audio()» sinh ra phần tử đứng
+        # ngoài DOM, và WebKit có thể không bao giờ bắt đầu tải cho phần tử như vậy.
+        self.assertIn("document.body.appendChild(audio);", script)
+        # Hai số đo thêm để phân định phần còn lại: đã chọn được nguồn phát chưa, và
+        # phần tử có nằm trong trang không.
+        self.assertIn("nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}", script)
         # 0.26.6: khi bắt được tình trạng "mở được nhưng không chạy" thì phải in kèm SỐ
         # LIỆU của chính phần tử âm thanh. Không có bốn số này thì chỉ còn đường đoán,
         # mà ba nguyên nhân khả dĩ (chờ dữ liệu / bị chặn phát / lỗi giải mã) cần ba
@@ -199,7 +200,10 @@ class LovelaceCardContractTests(unittest.TestCase):
             " this._tiengChayLuc = Date.now();", script)
         # Đường phục hồi dùng CHUNG cho hai ca (lấy luồng hỏng, và luồng kẹt), không chép đôi.
         self.assertIn("_traTiengVeKhung() {", script)
-        self.assertEqual(script.count("this._traTiengVeKhung();"), 2)
+        # BA nơi gọi, không phải hai: luồng lấy hỏng, luồng có dữ liệu mà đứng im, và
+        # (từ 0.26.12) luồng chưa tải được trong lúc người dùng đang XEM — cả ba đều
+        # trả tiếng về khung thay vì chép lại đoạn xử lý.
+        self.assertEqual(script.count("this._traTiengVeKhung();"), 3)
         self.assertIn("this._speakerJoinsVideo(entityId)", script)
         # Loa tích vào khi đang xem: nguồn lấy từ CHÍNH bài đang xem. Gắn cứng "youtube"
         # thì xem Facebook rồi tích loa sẽ hỏi sai khả năng của loa và gửi địa chỉ

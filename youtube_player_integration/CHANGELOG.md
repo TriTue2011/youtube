@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.26.12 - 2026-09-20
+
+### Fixed — iOS: một gốc duy nhất cho cả ba triệu chứng
+
+Ba báo cáo trong một buổi, và chúng **không phải ba lỗi**:
+
+1. *"Nghe khi tắt màn hình không hoạt động."*
+2. *"Bật video để xem thì không được trên iOS."*
+3. *"Đang xem video chuyển sang chỉ nghe nhạc thì mất tiếng."*
+
+Tất cả quy về **một chỗ**: phần tử `<audio>` của thẻ **không bao giờ tải được** trên
+iOS. Đo hai lần độc lập đều ra `nap=0 mang=2 loi=0` — đang tải, chưa có byte nào,
+không lỗi.
+
+**Giả thuyết "khung YouTube chiếm đường" đã bị bác bỏ.** Clip 45 giây chủ máy gửi cho
+thấy bản 0.26.9 tự đóng hình đúng như thiết kế, rồi tiếng **vẫn đứng ở 0:00 suốt gần
+30 giây sau đó**. Gỡ khung video không giúp gì. Đây là giả thuyết thứ tư bị chính số
+đo bác bỏ.
+
+**Ứng viên mới, và nó giải thích được vì sao chỉ iOS hỏng:** `new Audio()` sinh ra một
+phần tử **đứng ngoài DOM**. Chrome vẫn tải bình thường nên chỗ này êm suốt từ đầu, còn
+WebKit thì có thể không bao giờ bắt đầu tải cho phần tử chưa gắn vào trang — khớp
+chính xác `nap=0 mang=2 loi=0`. Nay phần tử được gắn vào `body`; thao tác rẻ và vô
+hại, vì phần tử audio không khai `controls` thì không vẽ ra gì cả.
+
+### Changed — bấm "xem" thì GIỮ HÌNH, không tự ý đổi ý người dùng
+
+Bản 0.26.4 giữ hình nên mất tiếng lúc tắt màn; bản 0.26.9 giữ tiếng nên **mất hình**.
+Cả hai đều tự quyết thay người dùng, và mỗi lần lại hỏng nửa còn lại.
+
+Nay chọn theo **ý định đã nêu** — thứ duy nhất không phải đoán. Bấm "xem" thì giữ
+hình và trả tiếng về chính khung ấy, kèm câu nói thẳng giới hạn của máy và chỉ ra lối
+đi thay thế (nút tai nghe, đường đó đóng hình trước rồi mới phát nên không tranh chỗ).
+
+### Added — hai số đo nữa, để lần tới khỏi đoán
+
+Dòng chẩn đoán nay có thêm `nguon` (phần tử đã chọn được nguồn phát chưa — rỗng nghĩa
+là nó chưa hề bắt đầu lấy địa chỉ) và `dom` (có nằm trong trang không). Đúng hai thứ
+nghi ngờ còn lại sau khi loại bỏ khung video.
+
+Nếu bản này chạy được thì `dom` chính là nguyên nhân. Nếu vẫn hỏng, hai số ấy sẽ chỉ
+thẳng chỗ tiếp theo thay vì để tôi đoán lần thứ năm.
+
 ## 0.26.11 - 2026-09-20
 
 ### Fixed — phóng to video Facebook thì mất nút thoát và nút tua

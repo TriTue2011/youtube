@@ -201,6 +201,17 @@ const deviceAudio = {
     if (this.element) return this.element;
     const audio = new Audio();
     audio.preload = "auto";
+    /* ĐƯA PHẦN TỬ VÀO TÀI LIỆU. «new Audio()» sinh ra một phần tử ĐỨNG NGOÀI DOM;
+       Chrome vẫn tải bình thường nên chỗ này êm suốt từ đầu, còn WebKit thì có thể
+       không bao giờ bắt đầu tải cho phần tử chưa gắn vào trang — khớp đúng bộ số chủ
+       máy gửi hai lần: «nap=0 mang=2 loi=0», tức ĐANG TẢI mà không có byte nào và
+       cũng chẳng lỗi. Gắn vào «body» là thao tác rẻ và vô hại: phần tử audio không
+       khai «controls» thì không vẽ ra gì cả. */
+    try {
+      document.body.appendChild(audio);
+    } catch (_error) {
+      // Tài liệu chưa sẵn sàng: cứ dùng phần tử rời như trước, không tệ hơn.
+    }
     audio.addEventListener("play", () => this.notify());
     audio.addEventListener("pause", () => this.notify());
     audio.addEventListener("ended", () => {
@@ -5224,30 +5235,35 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            thì nó sai, và dòng nhắn nói rõ để chủ máy báo lại. */
         this._tiengChayLuc = Date.now();
         if (video.open && video.followsDevice) {
-          const tiengGio = deviceAudio.real();
-          const mocTruoc = tiengGio ? tiengGio.currentTime : 0;
-          this._listenOnly();
-          tiengGio?.play().catch(() => {});
-          this._setStatus("Đã tắt hình để nhường tiếng cho máy này — đang thử lại…");
-          /* TỰ CHẤM BẢN SỬA CỦA CHÍNH MÌNH. Gỡ khung video mới chỉ là GIẢ THUYẾT;
-             thay vì bắt chủ máy kể lại rồi mất một vòng hỏi đáp, để máy tự đo: bốn
-             giây sau xem đồng hồ tiếng có nhúc nhích không rồi nói thẳng kết quả.
-             Nhúc nhích ⇒ giả thuyết đúng, báo bình thường. Đứng im ⇒ giả thuyết SAI,
-             và nói rõ "không phải do khung video" để lần sau khỏi đi lại đường cũ. */
-          setTimeout(() => {
-            const gio = deviceAudio.real();
-            if (!gio || this._video.open) return;   // đã đổi bài, hoặc hình mở lại
-            if (gio.currentTime > mocTruoc + 0.3) {
-              this._setStatus("Đã tắt hình để nhường tiếng — nay nghe được trên máy này.");
-            } else {
-              this._setStatus("Tắt hình rồi mà vẫn chưa ra tiếng — vậy không phải do khung video.", true);
-            }
-          }, 4000);
+          /* ĐỪNG CƯỚP CÁI NGƯỜI DÙNG VỪA BẤM. Bản 0.26.9 đóng hình để nhường đường
+             cho tiếng, và chủ máy báo ngay: "bật video để xem thì không được trên
+             iOS". Ghép với báo cáo trước đó ("nghe khi tắt màn hình không chạy") thì
+             ra gốc rễ: iPhone KHÔNG cho vừa chạy khung nhúng vừa chạy phần tử âm
+             thanh riêng. Hai bản sửa trước đều tự ý quyết thay người dùng — 0.26.4
+             giữ hình nên mất tiếng lúc tắt màn, 0.26.9 giữ tiếng nên mất hình.
+             CHỌN THEO Ý ĐỊNH ĐÃ NÊU, đó là thứ duy nhất không phải đoán: họ bấm
+             "xem" thì GIỮ HÌNH và trả tiếng về chính khung ấy. Còn muốn nghe khi tắt
+             màn thì đã có nút tai nghe — đường đó «_closeVideo» trước rồi mới phát
+             nên không có gì tranh chỗ. Nói thẳng giới hạn ra, kèm lối đi thay thế,
+             thay vì lặng lẽ vứt một nửa yêu cầu.
+             Thứ tự BẮT BUỘC: trả tiếng về khung TRƯỚC, rồi mới dừng bộ phát — «stop»
+             báo ngay cho bên nghe, mà lúc ấy cờ bám-tiếng phải đã tắt, nếu không
+             «_deviceAudioChanged» lại đi đóng video. */
+          this._traTiengVeKhung();
+          deviceAudio.stop();
+          this._setStatus("iPhone không cho vừa xem video vừa nghe khi tắt màn hình."
+            + " Đang ưu tiên xem — chạm vào video để nghe."
+            + " Muốn nghe cả khi tắt màn thì bấm nút tai nghe.", true);
           return;
         }
+        /* Thêm hai số nữa vì bốn số cũ chưa đủ phân định: «nguon» cho biết phần tử
+           đã CHỌN ĐƯỢC nguồn phát chưa (rỗng ⇒ nó chưa hề bắt đầu lấy địa chỉ), và
+           «dom» cho biết nó có nằm trong trang không — đúng hai thứ nghi ngờ còn lại
+           sau khi gỡ khung video mà tiếng vẫn không chạy. */
         this._setStatus(
           `Chưa lấy được tiếng từ máy phát — vẫn đang tải. [nap=${audio.readyState}`
-          + ` mang=${audio.networkState} loi=${audio.error ? audio.error.code : 0}]`, true);
+          + ` mang=${audio.networkState} loi=${audio.error ? audio.error.code : 0}`
+          + ` nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}]`, true);
       }
       if (!audio.paused && coDuLieu && doiQua > 8000) {
         this._tiengChayLuc = undefined;
