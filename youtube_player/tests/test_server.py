@@ -878,7 +878,8 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual("video", target["kind"])
         self.assertEqual("dQw4w9WgXcQ", target["id"])
         self.assertEqual(
-            "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1",
+            "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+                "?autoplay=1&enablejsapi=1&playsinline=1&rel=0",
             target["embed_url"],
         )
 
@@ -898,7 +899,8 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         )
         self.assertEqual("playlist", playlist["kind"])
         self.assertEqual(
-            "https://www.youtube-nocookie.com/embed/videoseries?list=PL1234567890abc&autoplay=1",
+            "https://www.youtube-nocookie.com/embed/videoseries"
+                "?list=PL1234567890abc&autoplay=1&enablejsapi=1&playsinline=1&rel=0",
             playlist["embed_url"],
         )
 
@@ -932,7 +934,7 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         self.assertEqual("PL1234567890abc", target["playlist_id"])
         self.assertEqual(
             "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
-            "?list=PL1234567890abc&autoplay=1",
+            "?list=PL1234567890abc&autoplay=1&enablejsapi=1&playsinline=1&rel=0",
             target["embed_url"],
         )
 
@@ -997,9 +999,21 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         # YouTube embed without a Referer fails with Error 153, so the iframe sets
         # its own policy.
         self.assertIn('referrerpolicy="strict-origin-when-cross-origin"', page)
+        # 0.9.5: «referrerpolicy» một mình KHÔNG đủ. Chủ máy gửi ảnh iPhone
+        # 20/09/2026: hộp "Lỗi 153" của YouTube vẽ đè lên dòng "Chưa chọn video",
+        # vì trang hoàn toàn mù trước lỗi của khung nhúng. Nay có chỗ báo riêng.
+        self.assertIn('id="embed-error"', page)
+        self.assertIn('id="embed-error-link"', page)
 
         with urllib.request.urlopen(f"{self.base_url}/app.js", timeout=2) as response:
             script = response.read().decode("utf-8")
+        # Bắt được lỗi thì mới nói được gì: «enablejsapi» mở đường postMessage,
+        # «origin» phải do TRÌNH DUYỆT gắn vì chỉ nó biết trang mở bằng địa chỉ nào.
+        self.assertIn('data.event === "onError"', script)
+        self.assertIn("function themOrigin(url) {", script)
+        self.assertIn('origin=${encodeURIComponent(location.origin)}', script)
+        # Mã 153 phải nói đúng cách chữa, không chỉ kêu hỏng.
+        self.assertIn("mở bằng tên miền thường là hết", script)
         self.assertIn('api("api/history")', script)
         self.assertIn('api("api/player")', script)
 

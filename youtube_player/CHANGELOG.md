@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.9.5 - 2026-09-20
+
+### Fixed — Lỗi 153 trên iPhone: nay nói rõ chuyện gì và chữa thế nào
+
+Chủ máy gửi ảnh giao diện add-on trên iPhone: hộp **"Lỗi cấu hình trình phát video —
+Lỗi 153"** của YouTube vẽ **đè lên** dòng "Chưa chọn video hoặc playlist", vì cả hai
+cùng nằm trong khung phát.
+
+Nguyên nhân **không phải** thiếu `referrerpolicy` — thứ đó đã có sẵn từ lâu và còn có
+test ghim. Mã 153 nghĩa là YouTube không chấp nhận nguồn gốc của trang nhúng, hay gặp
+nhất khi mở Home Assistant bằng **địa chỉ IP** thay vì tên miền.
+
+Chỗ hỏng thật sự là: trang **hoàn toàn mù** trước lỗi của khung nhúng. Khung báo lỗi
+qua `postMessage`, nhưng địa chỉ nhúng thiếu `enablejsapi` nên không có đường báo, và
+trang không hề biết để nói gì với người dùng.
+
+Nay:
+
+- Địa chỉ nhúng có `enablejsapi=1` (mở đường báo lỗi), `playsinline=1` (điện thoại phát
+  ngay trong trang) và `rel=0` (hết bài không gợi ý kênh khác). Tham số `origin` do
+  **trình duyệt** gắn, vì chỉ nó biết trang đang mở bằng địa chỉ nào.
+- Có chỗ báo lỗi riêng, không còn đè lên chữ khác, và nói đúng việc cần làm theo từng
+  mã: 101/150 là chủ kênh không cho nhúng, 153 là **thử mở bằng tên miền thay vì địa
+  chỉ IP**, 100 là video đã bị gỡ.
+- Kèm nút **"Mở bài này trên YouTube"** để vẫn xem được ngay.
+
+Nói thẳng phần chưa làm: add-on **chưa** tự chuyển sang phát tiếng khi khung bị từ chối
+(thẻ thì có). Đường lấy luồng của add-on đòi token của tích hợp nên giao diện của chính
+nó không gọi được — dựng đường ấy là việc riêng, không làm mò trong bản này.
+
 ## 0.9.4 - 2026-09-20
 
 ### Fixed

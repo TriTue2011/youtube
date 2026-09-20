@@ -43,6 +43,15 @@ from streaming import (
     zing_playlist_id,
 )
 
+# Tham số BẮT BUỘC cho khung nhúng, và vì sao từng cái có mặt:
+#   enablejsapi=1  — mở đường postMessage để TRANG BIẾT khung báo lỗi. Thiếu nó
+#                    thì YouTube vẽ hộp lỗi của riêng nó và giao diện không hề
+#                    hay biết, nên không thể nói gì với người dùng. Chủ máy gửi
+#                    ảnh đúng cảnh đó 20/09/2026: hộp "Lỗi 153" đè lên chữ.
+#   playsinline=1  — điện thoại phát ngay trong trang thay vì bung toàn màn.
+#   rel=0          — hết bài không gợi ý video của kênh khác.
+EMBED_PARAMS = "enablejsapi=1&playsinline=1&rel=0"
+
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 PLAYLIST_ID = re.compile(r"^[A-Za-z0-9_-]{10,80}$")
 YOUTUBE_HOSTS = {
@@ -140,14 +149,15 @@ def normalize_target(raw_target):
             "kind": "video",
             "id": video_id,
             "embed_url": (
-                f"https://www.youtube-nocookie.com/embed/{video_id}?autoplay=1"
+                f"https://www.youtube-nocookie.com/embed/{video_id}"
+                f"?autoplay=1&{EMBED_PARAMS}"
             ),
         }
         if PLAYLIST_ID.fullmatch(playlist_id or ""):
             target["playlist_id"] = playlist_id
             target["embed_url"] = (
                 f"https://www.youtube-nocookie.com/embed/{video_id}"
-                f"?list={playlist_id}&autoplay=1"
+                f"?list={playlist_id}&autoplay=1&{EMBED_PARAMS}"
             )
         return target
 
@@ -157,7 +167,7 @@ def normalize_target(raw_target):
             "id": playlist_id,
             "embed_url": (
                 "https://www.youtube-nocookie.com/embed/videoseries"
-                f"?list={playlist_id}&autoplay=1"
+                f"?list={playlist_id}&autoplay=1&{EMBED_PARAMS}"
             ),
         }
 

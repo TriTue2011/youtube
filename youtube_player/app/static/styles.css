@@ -310,3 +310,30 @@ input::placeholder {
     align-items: center;
   }
 }
+
+/* Hộp báo lỗi khung nhúng — thay cho việc để hộp lỗi của YouTube đè lên chữ.
+   Chủ máy gửi ảnh đúng cảnh đó 20/09/2026: "Lỗi 153" chồng lên dòng "Chưa chọn
+   video hoặc playlist" vì cả hai cùng nằm trong khung phát. */
+.embed-error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  min-height: 160px;
+  border-radius: 12px;
+  background: rgba(255, 112, 69, 0.08);
+  border: 1px solid rgba(255, 112, 69, 0.35);
+}
+
+.embed-error p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.embed-error a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}

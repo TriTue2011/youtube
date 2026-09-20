@@ -22,15 +22,88 @@ async function api(path, options = {}) {
   return payload;
 }
 
+const embedError = document.querySelector("#embed-error");
+const embedErrorText = document.querySelector("#embed-error-text");
+const embedErrorLink = document.querySelector("#embed-error-link");
+let currentVideoId = "";
+
+/* Ghép «origin» vào địa chỉ khung nhúng.
+   Chỉ TRÌNH DUYỆT mới biết trang đang mở bằng địa chỉ nào, máy chủ thì không —
+   nên tham số này phải gắn ở đây. Thiếu nó thì «enablejsapi» không bắt tay được
+   và trang vẫn mù trước lỗi của khung. */
+function themOrigin(url) {
+  if (!url) return url;
+  const noi = url.includes("?") ? "&" : "?";
+  return `${url}${noi}origin=${encodeURIComponent(location.origin)}`;
+}
+
+/* YouTube báo lỗi qua postMessage của chính khung nhúng. Mã lỗi:
+     2   — tham số sai
+     5   — trình phát HTML5 không chạy được bài này
+     100 — video không tồn tại hoặc đã bị gỡ
+     101 / 150 — CHỦ KÊNH KHÔNG CHO NHÚNG ở nơi khác
+     153 — trang nhúng không gửi được thông tin nguồn gốc mà YouTube chấp nhận
+   Hai nhóm cuối là thứ chủ máy gặp, và không phải lỗi của add-on. */
+function loiNhung(ma) {
+  currentEmbedUrl = "";
+  player.hidden = true;
+  emptyPlayer.hidden = true;
+  if (!embedError) return;
+  const chung = "Không phải lỗi của add-on — YouTube từ chối nhúng bài này vào trang khác.";
+  const theoMa = {
+    2: "Địa chỉ video không hợp lệ.",
+    5: "Bài này trình phát trong trang không chạy được.",
+    100: "Video không tồn tại hoặc đã bị gỡ.",
+    101: `Chủ kênh không cho nhúng bài này ra ngoài YouTube. ${chung}`,
+    150: `Chủ kênh không cho nhúng bài này ra ngoài YouTube. ${chung}`,
+    153: "YouTube không nhận nguồn gốc của trang này. Hay gặp nhất khi mở Home "
+      + "Assistant bằng ĐỊA CHỈ IP; mở bằng tên miền thường là hết. "
+      + `${chung}`,
+  };
+  embedErrorText.textContent =
+    `${theoMa[ma] || "Khung nhúng YouTube báo lỗi."} (mã ${ma})`;
+  if (embedErrorLink && currentVideoId) {
+    embedErrorLink.href = `https://www.youtube.com/watch?v=${currentVideoId}`;
+    embedErrorLink.hidden = false;
+  }
+  embedError.hidden = false;
+}
+
+window.addEventListener("message", (event) => {
+  if (!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(event.origin)) return;
+  let data;
+  try {
+    data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+  } catch (_error) {
+    return;
+  }
+  if (data && data.event === "onError") loiNhung(Number(data.info));
+  if (data && data.event === "onReady" && embedError) embedError.hidden = true;
+});
+
 function play(target) {
   if (currentEmbedUrl === target.embed_url && !player.hidden) {
     return;
   }
+  if (embedError) embedError.hidden = true;
+  if (embedErrorLink) embedErrorLink.hidden = true;
   currentEmbedUrl = target.embed_url;
-  player.src = target.embed_url;
+  currentVideoId = target.kind === "video" ? String(target.id || "") : "";
+  player.src = themOrigin(target.embed_url);
   player.hidden = false;
   emptyPlayer.hidden = true;
   input.value = target.id;
+  // Bắt tay với khung nhúng: nó chỉ gửi sự kiện sau khi trang lên tiếng trước.
+  player.addEventListener("load", () => {
+    try {
+      player.contentWindow.postMessage(
+        JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+        "https://www.youtube-nocookie.com",
+      );
+    } catch (_error) {
+      // Khung chưa sẵn sàng thì thôi; lần phát sau sẽ thử lại.
+    }
+  }, { once: true });
 }
 
 function stopPlayer() {
@@ -38,9 +111,11 @@ function stopPlayer() {
     return;
   }
   currentEmbedUrl = "";
+  currentVideoId = "";
   player.src = "";
   player.hidden = true;
   emptyPlayer.hidden = false;
+  if (embedError) embedError.hidden = true;
 }
 
 function historyLabel(target) {

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.26.23 - 2026-09-20
+
+### Fixed — lỗi do CHÍNH bản 0.26.22 gây ra: loa và máy không còn đồng bộ
+
+Chủ máy: *"tiếng loa và thiết bị không đồng bộ nhỉ, cái trước cái sau"*.
+
+Bản 0.26.22 chặn **cả hai** vòng đồng bộ khi giây của loa không phải số đo tươi. Vòng
+kéo tiếng chính là thứ **duy nhất** giữ tiếng trên máy đi cùng loa — chặn nó đi thì hai
+bên trôi khỏi nhau, và chế độ vừa-loa-vừa-máy mất luôn lý do tồn tại.
+
+Nay chốt ấy chỉ còn áp cho vòng kéo **hình**. Hai bên trả giá khác hẳn nhau: tua khung
+YouTube là một cú nạp lại thấy được bằng mắt, nên thà để hình trôi còn hơn giật; còn
+đặt lại giây của phần tử âm thanh thì rẻ, và đó là cái người dùng thật sự cần.
+
+### Đính chính một kết luận tôi đã nói quá chắc
+
+Ở 0.26.22 tôi trình bày phép giả lập như bằng chứng rằng vòng đồng bộ gây ra cái giật.
+**Nó không chứng minh được điều đó.** Phép ấy đếm số lần *cửa mở*, không phải số lần
+thật sự tua — mà cửa mở 11/12 nhịp là chuyện bình thường của một vòng đồng bộ lành
+mạnh. Cú tua chỉ xảy ra khi lệch quá ngưỡng, và tôi chưa đo cái đó.
+
+Phần vẫn đúng và vẫn giữ: loa Google Home trong nhà báo `media_position = 3.300666` rồi
+đứng im vĩnh viễn, nên con số thẻ bám vào là phép cộng thời gian trôi. Nhưng con số ấy
+neo vào đúng lúc Home Assistant báo lần cuối, nên với một loa phát liên tục thì nó vẫn
+bám sát sự thật — đủ tốt để canh tiếng, chỉ không đủ chắc để giật hình.
+
 ## 0.26.22 - 2026-09-20
 
 ### Fixed — vừa loa vừa máy: hình giật và mất tiếng. MỘT gốc, hai triệu chứng

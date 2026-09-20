@@ -4910,9 +4910,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        chỗ kẹt ấy — cứ 4 giây một lần, tức bài tự phát lại mãi. Đúng lời chủ máy
        ngay đầu đợt này: "mặc định tắt tiếng và restart liên tục thời gian về 0". */
     if (!this._dongHoChay("tieng", nhip, speakerTime)) return;
-    /* PHẢI LÀ SỐ ĐO, KHÔNG PHẢI SUY RA — xem «_nhipDoDuoc». Thiếu chốt này thì
-       dòng dưới quăng tiếng trên máy về một vị trí bịa ra, cứ 4 giây một lần. */
-    if (!this._nhipDoDuoc(nhip)) return;
+    /* KHÔNG chốt "phải là số đo" ở đây — và đó là bài học của bản 0.26.22.
+       Bản ấy chặn cả vòng này, nên tiếng trên máy không còn được canh theo loa
+       nữa và hai bên trôi khỏi nhau: chủ máy báo ngay "tiếng loa và thiết bị
+       không đồng bộ, cái trước cái sau".
+       Vì sao vòng HÌNH chốt được mà vòng TIẾNG thì không: hai bên trả giá khác
+       hẳn nhau. Tua khung YouTube là một cú nạp lại thấy được bằng mắt, nên thà
+       để hình trôi còn hơn giật. Còn đây là thứ DUY NHẤT giữ tiếng trên máy đi
+       cùng loa — chặn nó đi thì chế độ vừa-loa-vừa-máy mất luôn lý do tồn tại.
+       Giây suy ra tuy không phải số đo, nhưng nó neo vào đúng lúc Home Assistant
+       báo lần cuối, nên với một loa phát liên tục thì nó vẫn bám sát sự thật. */
     if (Math.abs(speakerTime - audio.currentTime) > 2) {
       audio.currentTime = speakerTime;
       this._alongSeekHold = Date.now() + 4000;

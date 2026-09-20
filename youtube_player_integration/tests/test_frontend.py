@@ -233,14 +233,15 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("if (!laIOS()) return;", script)
         # iPad đời mới khai user-agent giống Mac — phải hỏi thêm màn cảm ứng.
         self.assertIn('return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;', script)
-        # SỐ ĐO, KHÔNG PHẢI SUY RA, thì mới được kéo bộ phát khác. Đo trong nhà chủ
-        # máy: loa Google Home báo media_position = 3.300666 rồi đứng im vĩnh viễn,
-        # nên con số thẻ bám vào chỉ là phép cộng thời gian trôi. Giả lập trên chính
-        # mã này: chưa có chốt thì 11/12 nhịp cho kéo (đúng cảnh hình giật và tiếng
-        # bị quăng về chỗ bịa); có chốt thì 0/12, còn loa khoẻ vẫn 11/12.
+        # 0.26.23: chốt "phải là số đo" CHỈ áp cho vòng kéo HÌNH, không áp cho vòng
+        # kéo TIẾNG. Bản 0.26.22 chốt cả hai, và chủ máy báo ngay hệ quả: "tiếng loa
+        # và thiết bị không đồng bộ, cái trước cái sau" — vì đó là thứ DUY NHẤT giữ
+        # tiếng trên máy đi cùng loa. Hai bên trả giá khác hẳn nhau: tua khung
+        # YouTube là một cú nạp lại thấy được bằng mắt, còn đặt lại giây của phần tử
+        # âm thanh thì rẻ. Đúng một nơi gọi, không phải hai.
         self.assertIn("_nhipDoDuoc(entityId) {", script)
         self.assertIn("Date.now() - luc <= 10000", script)
-        self.assertEqual(script.count("this._nhipDoDuoc("), 2)
+        self.assertEqual(script.count("this._nhipDoDuoc("), 1)
         # Hai đường nghe — nghe một mình và nghe kèm loa — mỗi đường tự canh, nên
         # có ĐÚNG hai nơi gọi. (Đợt 0.26.18 từng gộp về một qua «batDau»; bản ấy đã
         # được trả về nguyên trạng 0.26.2 vì đo trên máy thật thấy nó không nghe được.)
