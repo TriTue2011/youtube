@@ -5217,7 +5217,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _checkVideoSound() {
     const video = this._video;
     if (!video.open || video.picture || !video.soundHere || !this._soundBlocked()) return;
-    if (!video.withSpeakers) {
+    /* TRÊN iOS THÌ ĐỪNG CƯỚP TIẾNG CỦA KHUNG. «_soundFromDevice» tắt tiếng khung
+       rồi giao việc phát cho phần tử âm thanh — mà trên iOS phần tử ấy đo được là
+       KHÔNG BAO GIỜ tải (nap=0 mang=2 loi=0, thu được hai lần độc lập). Kết quả:
+       khung bị câm, phần tử im, người dùng không nghe gì. Chủ máy gửi ảnh đúng
+       cảnh đó 20/09/2026: "trên iP phải bật biểu tượng loa mới nghe được, mặc định
+       tắt tiếng" — biểu tượng loa ở đây là nút tắt/bật tiếng của chính trình phát
+       YouTube trên điện thoại.
+       Ở iOS, đường chạy được là để tiếng NẰM NGUYÊN trong khung rồi nhờ một cú
+       chạm — đúng thứ người dùng đang phải tự mò ra. Nên iOS đi cùng nhánh của ca
+       có loa: xin phát lại, rồi hiện lời nhắc chạm vào video. */
+    if (!video.withSpeakers && !laIOS()) {
       this._soundFromDevice();
       return;
     }

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.26.26 - 2026-09-20
+
+### Fixed — iPhone: video mặc định câm, phải tự bấm nút loa mới nghe
+
+Chủ máy gửi ảnh trình phát YouTube trên iPhone: bài đang chạy nhưng **câm**, phải chạm
+nút tắt/bật tiếng của chính trình phát mới có tiếng.
+
+Đây không phải YouTube làm, mà là thẻ tự tắt. Khi xem một mình (không chọn loa), thẻ
+thấy khung nhúng chưa phát được tiếng thì **tắt tiếng khung** và giao việc phát cho
+phần tử âm thanh của chính nó. Cách ấy đúng trên máy bàn và Android. Trên iOS thì
+không: phần tử âm thanh ở đó **đo được là không bao giờ tải** — `nap=0 mang=2 loi=0`,
+thu được hai lần độc lập. Thế là khung bị câm, phần tử im, và người dùng không nghe gì
+cho tới khi tự mò ra nút loa.
+
+Nay trên iOS tiếng **nằm nguyên trong khung**: thẻ xin phát lại rồi hiện lời nhắc chạm
+vào video — đúng thao tác mà chủ máy đang phải tự nghĩ ra. Đó cũng là đường duy nhất đo
+được là chạy trên iOS, vì WebKit chỉ chịu phát tiếng sau một cú chạm thật.
+
+Giả lập trên chính mã của thẻ, chạy hai lần với hai user-agent khác nhau:
+
+```
+iPhone  : cướp tiếng = false | lệnh gửi: unMute, playVideo | soundHere = true
+máy bàn : cướp tiếng = true  | lệnh gửi: (không có)        | soundHere = false
+```
+
+Tức iOS đổi, còn mọi nền tảng khác giữ nguyên hành vi cũ.
+
+### Chưa đụng tới
+
+Đường **"nghe khi tắt màn hình"** vẫn giao tiếng cho phần tử âm thanh, kể cả trên iOS.
+Đó là lựa chọn có chủ ý của người dùng và là thứ duy nhất về lý thuyết sống sót qua lúc
+tắt màn — nhưng trên iOS nó vẫn chưa chạy. Việc đó tách riêng, chưa gộp vào bản này.
+
 ## 0.26.25 - 2026-09-20
 
 ### Fixed — "ra loa thì bình thường, nghe cả hai nơi thì lỗi video"

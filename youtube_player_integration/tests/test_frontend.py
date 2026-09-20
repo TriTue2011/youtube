@@ -231,6 +231,14 @@ class LovelaceCardContractTests(unittest.TestCase):
         # hỏng oan sau 12 giây). Từ đây thứ gì riêng cho iOS phải đi qua cổng này.
         self.assertIn("const laIOS = () => {", script)
         self.assertIn("if (!laIOS()) return;", script)
+        # 0.26.26: trên iOS thì ĐỪNG cướp tiếng của khung YouTube. «_soundFromDevice»
+        # tắt tiếng khung rồi giao việc phát cho phần tử âm thanh — mà trên iOS phần
+        # tử ấy đo được là không bao giờ tải. Kết quả: khung câm, phần tử im, không
+        # nghe gì. Chủ máy gửi ảnh đúng cảnh đó: "trên iP phải bật biểu tượng loa mới
+        # nghe được, mặc định tắt tiếng".
+        # Giả lập với user-agent iPhone: không cướp tiếng, gửi unMute + playVideo,
+        # soundHere vẫn true. Với user-agent máy bàn: hành vi cũ, không đổi.
+        self.assertIn("if (!video.withSpeakers && !laIOS()) {", script)
         # iPad đời mới khai user-agent giống Mac — phải hỏi thêm màn cảm ứng.
         self.assertIn('return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;', script)
         # 0.26.25: chốt «_nhipDoDuoc» trở lại, nhưng CHỈ ở vòng kéo HÌNH, và lần này
