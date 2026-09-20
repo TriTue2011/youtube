@@ -5164,9 +5164,30 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       const coDuLieu = audio.readyState >= 2;   // HAVE_CURRENT_DATA trở lên
       if (tiengDangChay || audio.paused || this._tiengChayLuc === undefined) this._tiengChayLuc = Date.now();
       const doiQua = Date.now() - this._tiengChayLuc;
-      if (!audio.paused && !coDuLieu && doiQua > 20000) {
-        // Vẫn đang tải mà 20 giây chưa có byte nào: nói thật, KHÔNG cướp tiếng.
-        this._tiengChayLuc = Date.now();   // nói một lần mỗi 20 giây, không spam
+      if (!audio.paused && !coDuLieu && doiQua > 12000) {
+        /* ĐANG TẢI MÀ 12 GIÂY CHƯA CÓ MỘT BYTE NÀO — trong khi máy chủ giao byte
+           đầu tiên sau 0,16 giây. Đo 20/09/2026 trên CHÍNH đường trình duyệt đi,
+           gồm cả chặng vé đã ký qua Home Assistant: mã 206, Content-Range đầy đủ.
+           Và lỗi xảy ra GIỐNG HỆT ở add-on lẫn c2a, ở Safari lẫn app — máy phát
+           vô can, byte có sẵn ở đầu kia mà WebKit không kéo về.
+           Thứ duy nhất còn tranh chỗ là KHUNG YOUTUBE đang phát ngay trên trang:
+           iOS chỉ cho một phần tử phát chạy thật, nên khung video chiếm đường và
+           phần tử âm thanh xếp hàng mãi — không lỗi, không dữ liệu, đúng bộ số
+           «nap=0 mang=2 loi=0» thu được hai lần độc lập.
+           GỠ ĐỐI THỦ, ĐỪNG ĐẦU HÀNG. Bản 0.26.4 trả tiếng về cho khung, mà iOS
+           treo khung nhúng lúc tắt màn — tức nó vứt đúng thứ người dùng vừa chọn.
+           Ở đây làm ngược lại: đóng hình, giữ tiếng trên máy, vì phần tử âm thanh
+           mới là thứ sống sót qua lúc tắt màn. Dùng lại «_listenOnly» vốn đã làm
+           đúng việc đó (đóng hình, giữ tiếng) — không viết đường thứ hai.
+           BẢN SỬA NÀY TỰ CHỨNG MINH: nghe được tiếng thì giả thuyết đúng; vẫn im
+           thì nó sai, và dòng nhắn nói rõ để chủ máy báo lại. */
+        this._tiengChayLuc = Date.now();
+        if (video.open && video.followsDevice) {
+          this._listenOnly();
+          deviceAudio.real()?.play().catch(() => {});
+          this._setStatus("Đã tắt hình để nhường tiếng — máy này chỉ cho một thứ phát cùng lúc.", true);
+          return;
+        }
         this._setStatus(
           `Chưa lấy được tiếng từ máy phát — vẫn đang tải. [nap=${audio.readyState}`
           + ` mang=${audio.networkState} loi=${audio.error ? audio.error.code : 0}]`, true);

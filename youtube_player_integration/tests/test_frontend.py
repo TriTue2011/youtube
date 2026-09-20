@@ -163,7 +163,14 @@ class LovelaceCardContractTests(unittest.TestCase):
         # màn, nên chính bản sửa lại làm mất đúng tính năng người dùng cần.
         self.assertIn("const coDuLieu = audio.readyState >= 2;", script)
         self.assertIn("if (!audio.paused && coDuLieu && doiQua > 8000) {", script)
-        self.assertIn("if (!audio.paused && !coDuLieu && doiQua > 20000) {", script)
+        self.assertIn("if (!audio.paused && !coDuLieu && doiQua > 12000) {", script)
+        # 0.26.9: đang tải mà không có byte nào → GỠ ĐỐI THỦ, đừng đầu hàng. Khung
+        # YouTube chiếm đường phát của iOS; đóng hình và GIỮ tiếng trên máy, vì phần
+        # tử âm thanh mới là thứ sống sót qua lúc tắt màn hình. Dùng lại «_listenOnly»
+        # (đóng hình, giữ tiếng) thay vì viết đường thứ hai.
+        self.assertIn("if (video.open && video.followsDevice) {", script)
+        self.assertIn("this._listenOnly();", script)
+        self.assertIn("deviceAudio.real()?.play().catch(() => {});", script)
         # 0.26.6: khi bắt được tình trạng "mở được nhưng không chạy" thì phải in kèm SỐ
         # LIỆU của chính phần tử âm thanh. Không có bốn số này thì chỉ còn đường đoán,
         # mà ba nguyên nhân khả dĩ (chờ dữ liệu / bị chặn phát / lỗi giải mã) cần ba

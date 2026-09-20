@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.26.9 - 2026-09-20
+
+### Fixed — iOS: "nghe khi tắt màn hình" không chạy. Gỡ đối thủ, đừng đầu hàng
+
+Chủ máy xác nhận thêm hai điều, và chúng khoá chặt vùng nghi ngờ: lỗi xảy ra **cả khi
+nối add-on**, và **cả trên Safari** — không riêng app Home Assistant.
+
+Cộng với phép đo ở 0.26.8 (máy chủ giao byte đầu tiên sau **0,16 giây** trên chính
+đường trình duyệt đi, mã 206, `Content-Range` đầy đủ), kết luận không còn chỗ lùi:
+**máy phát vô can**, byte có sẵn ở đầu kia mà WebKit không kéo về.
+
+Thứ duy nhất còn tranh chỗ là **khung YouTube đang phát ngay trên trang**. iOS chỉ cho
+một phần tử phát chạy thật; khung video chiếm đường nên phần tử âm thanh xếp hàng mãi —
+không lỗi, không dữ liệu, đúng bộ số `nap=0 mang=2 loi=0` thu được hai lần độc lập.
+
+**Bản 0.26.4 xử sai chiều:** nó trả tiếng về cho khung YouTube. Mà iOS treo khung nhúng
+lúc tắt màn hình, nên nó vứt đúng thứ người dùng vừa chọn. Nay làm ngược lại — **đóng
+hình, giữ tiếng trên máy**, vì phần tử âm thanh mới là thứ sống sót qua lúc tắt màn.
+Dùng lại `_listenOnly` vốn đã làm đúng việc ấy, không viết đường thứ hai; đã kiểm
+`_closeVideo` không hề đụng tới bộ phát âm thanh.
+
+Ngưỡng hạ từ 20 xuống **12 giây** — gấp hơn bốn lần trường hợp chậm nhất đo được
+(xin vé 2,6 giây + byte đầu 0,16 giây), đủ rộng để không nổ oan trên mạng yếu.
+
+**Bản sửa này tự chứng minh.** Nghe được tiếng ⇒ giả thuyết đúng. Vẫn im ⇒ nó sai, và
+dòng nhắn nói rõ để báo lại — không phải đoán thêm vòng nữa. Nói thẳng: đây là giả
+thuyết thứ tư; ba cái trước đều bị chính số đo bác bỏ, nên nó được viết sao cho kết quả
+thật phán xử thay vì tôi.
+
 ## 0.26.8 - 2026-09-20
 
 ### Fixed — thẻ cướp tiếng trong lúc luồng MỚI ĐANG TẢI (lỗi của bản 0.26.4)
