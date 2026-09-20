@@ -43,6 +43,23 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const FB_VIDEO_ID = /^[0-9]{5,25}$/;
 const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
+/** Máy này có phải iOS / iPadOS không.
+ *
+ * Chủ máy chốt 20/09/2026: "xem tách riêng iP và Android ra". Đúng, vì hai nền
+ * tảng hỏng khác nhau và đã có lần một bản vá cho iOS làm hỏng luôn Android.
+ * Từ đây, thứ gì dựng riêng cho iOS thì phải đi qua cổng này, để Android chạy
+ * đúng đường vốn đã tốt.
+ *
+ * iPad đời mới khai user-agent giống máy Mac, nên phải hỏi thêm màn cảm ứng —
+ * Mac thật không có «ontouchend».
+ */
+const laIOS = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/.test(ua)) return true;
+  return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;
+};
+
 const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
 
@@ -331,6 +348,12 @@ const deviceAudio = {
   canhTieng(audio, generation) {
     clearTimeout(this.canhTimer);
     clearTimeout(this.thuLaiTimer);
+    /* CHỈ CHẠY TRÊN iOS. Cả hai hẹn giờ dưới đây dựng lên từ hành vi của WebKit;
+       Android vốn không vướng, nên ở đó chúng chỉ có thể gây hại: cú nhắc lại
+       lệnh phát có thể chen vào một luồng đang tải bình thường, còn lời nhắn 12
+       giây thì báo hỏng oan. Chủ máy chốt "xem tách riêng iP và Android ra" —
+       đây là chỗ đầu tiên áp nguyên tắc ấy, để Android chạy đúng đường 0.26.2. */
+    if (!laIOS()) return;
     const moc = audio.currentTime;
     /* THỬ LẠI MỘT LẦN sau 3 giây. Người dùng iPhone thấy "lượn qua app khác rồi quay
        lại thì lại phát" — tức lệnh phát chỉ cần được nhắc lại một lần nữa là chạy.
@@ -3422,6 +3445,30 @@ class TriTueYouTubePlayerCard extends HTMLElement {
    * danh sách không bao giờ báo giây (khá nhiều loa như vậy) là hai vòng kéo đứng
    * im hẳn, dù loa thứ hai vẫn báo đàng hoàng.
    */
+  /** Giây của loa này có phải SỐ ĐO THẬT không, hay chỉ là suy ra.
+   *
+   * «_speakerPosition» trả về «media_position» CỘNG thời gian trôi kể từ mốc Home
+   * Assistant ghi nhận. Đo trong nhà chủ máy 20/09/2026 trên loa đang phát thật:
+   *
+   *     googlehome5802:  pos = 3.300666 (KHÔNG bao giờ đổi)
+   *                      suy ra = 127 → 128 → 129 … → 138
+   *
+   * Loa báo đúng một lần rồi thôi, còn con số thẻ đang bám vào thì chỉ là phép
+   * cộng thời gian trôi — suy đoán từ một mẫu cũ, không phải số đo. Nó tiến đều
+   * 1:1 nên hàng rào «_dongHoChay» không bắt được, mà lại sai lệch tuỳ ý.
+   *
+   * Hậu quả đúng hai điều chủ máy báo ở chế độ vừa-loa-vừa-máy: hình bị kéo về
+   * theo con số ấy mỗi khi lệch quá ngưỡng — thấy giật; và tiếng trên máy bị đặt
+   * «currentTime» về chính con số ấy mỗi 4 giây — nghe như mất tiếng.
+   *
+   * Nguyên tắc: số SUY RA thì được vẽ thanh tiến trình, nhưng KHÔNG được phép
+   * dịch chuyển một bộ phát khác. Muốn kéo ai thì phải có số đo còn tươi.
+   */
+  _nhipDoDuoc(entityId) {
+    const luc = Date.parse(this._hass?.states?.[entityId]?.attributes?.media_position_updated_at || "");
+    return Number.isFinite(luc) && Date.now() - luc <= 10000;
+  }
+
   _loaDanNhip(session = this._focusedSession()) {
     const outputs = session?.output_entity_ids || [...this._selectedPlayers];
     return outputs.find((entityId) =>
@@ -4863,6 +4910,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        chỗ kẹt ấy — cứ 4 giây một lần, tức bài tự phát lại mãi. Đúng lời chủ máy
        ngay đầu đợt này: "mặc định tắt tiếng và restart liên tục thời gian về 0". */
     if (!this._dongHoChay("tieng", nhip, speakerTime)) return;
+    /* PHẢI LÀ SỐ ĐO, KHÔNG PHẢI SUY RA — xem «_nhipDoDuoc». Thiếu chốt này thì
+       dòng dưới quăng tiếng trên máy về một vị trí bịa ra, cứ 4 giây một lần. */
+    if (!this._nhipDoDuoc(nhip)) return;
     if (Math.abs(speakerTime - audio.currentTime) > 2) {
       audio.currentTime = speakerTime;
       this._alongSeekHold = Date.now() + 4000;
@@ -5575,6 +5625,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        nghe-trên-máy đã có hàng rào này từ 19/09; nhánh loa thì chưa, nên lỗi cũ
        vẫn còn nguyên một nửa. */
     if (!this._dongHoChay("hinh", nhip, speakerTime)) return;
+    // Cùng lý do như vòng kéo tiếng: suy ra thì không được kéo ai. Đây là cái
+    // làm hình "giật giật" — mỗi lần lệch quá ngưỡng là một cú tua thật.
+    if (!this._nhipDoDuoc(nhip)) return;
     if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
       this._seekPicture(speakerTime);
     }

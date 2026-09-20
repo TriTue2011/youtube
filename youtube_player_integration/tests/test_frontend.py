@@ -225,6 +225,22 @@ class LovelaceCardContractTests(unittest.TestCase):
         # số đo — chủ máy báo "chỉ nghe không chạy thanh thời gian" mà không dòng chẩn
         # đoán nào hiện ra.
         self.assertIn("canhTieng(audio, generation) {", script)
+        # 0.26.22 — TÁCH iOS KHỎI ANDROID, đúng lời chủ máy: "xem tách riêng iP và
+        # Android ra". Hai hẹn giờ của bộ canh tiếng dựng lên từ hành vi WebKit;
+        # trên Android chúng chỉ có thể gây hại (chen vào luồng đang tải, và báo
+        # hỏng oan sau 12 giây). Từ đây thứ gì riêng cho iOS phải đi qua cổng này.
+        self.assertIn("const laIOS = () => {", script)
+        self.assertIn("if (!laIOS()) return;", script)
+        # iPad đời mới khai user-agent giống Mac — phải hỏi thêm màn cảm ứng.
+        self.assertIn('return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;', script)
+        # SỐ ĐO, KHÔNG PHẢI SUY RA, thì mới được kéo bộ phát khác. Đo trong nhà chủ
+        # máy: loa Google Home báo media_position = 3.300666 rồi đứng im vĩnh viễn,
+        # nên con số thẻ bám vào chỉ là phép cộng thời gian trôi. Giả lập trên chính
+        # mã này: chưa có chốt thì 11/12 nhịp cho kéo (đúng cảnh hình giật và tiếng
+        # bị quăng về chỗ bịa); có chốt thì 0/12, còn loa khoẻ vẫn 11/12.
+        self.assertIn("_nhipDoDuoc(entityId) {", script)
+        self.assertIn("Date.now() - luc <= 10000", script)
+        self.assertEqual(script.count("this._nhipDoDuoc("), 2)
         # Hai đường nghe — nghe một mình và nghe kèm loa — mỗi đường tự canh, nên
         # có ĐÚNG hai nơi gọi. (Đợt 0.26.18 từng gộp về một qua «batDau»; bản ấy đã
         # được trả về nguyên trạng 0.26.2 vì đo trên máy thật thấy nó không nghe được.)

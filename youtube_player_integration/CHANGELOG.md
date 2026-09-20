@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.26.22 - 2026-09-20
+
+### Fixed — vừa loa vừa máy: hình giật và mất tiếng. MỘT gốc, hai triệu chứng
+
+Chủ máy: *"video vẫn bị giật giật và không nghe thấy tiếng trên thiết bị khi vừa loa
+vừa thiết bị"*. Lần này có số đo từ chính loa trong nhà, chứ không phải suy luận.
+
+Đo trên loa **đang phát thật**, lấy mẫu mỗi 1,2 giây:
+
+```
+googlehome5802:  media_position = 3.300666  (KHÔNG bao giờ đổi)
+                 giây thẻ suy ra = 127 → 128 → 129 → … → 138
+```
+
+Loa báo vị trí đúng **một lần** rồi thôi. Thứ duy nhất chuyển động là phép ngoại suy
+của thẻ: nó lấy con số cũ rồi cộng thêm thời gian đã trôi. Nghĩa là "đồng hồ loa" mà
+thẻ đang bám vào là **suy đoán từ một mẫu cũ, không phải số đo** — và vì nó tiến đều
+1:1 nên hàng rào thêm ở 0.26.16 không hề bắt được.
+
+Hậu quả đúng hai điều chủ máy thấy, từ cùng một gốc:
+
+- **Hình giật**: vòng đồng bộ kéo video về con số bịa ra mỗi khi lệch quá ngưỡng. Nó
+  không bao giờ tự hiệu chỉnh nên cứ lệch lại — mỗi lần là một cú tua thật, thấy giật.
+- **Mất tiếng trên máy**: vòng kia đặt thẳng `currentTime` của phần tử âm thanh về
+  chính con số ấy, cứ 4 giây một lần. Tiếng bị quăng đi quăng lại nên nghe như không có.
+
+**Nguyên tắc sửa**: số *suy ra* thì được phép vẽ thanh tiến trình, nhưng **không được
+phép dịch chuyển một bộ phát khác**. Muốn kéo ai thì phải có số đo còn tươi (trong
+vòng 10 giây). Loa nào Home Assistant không làm mới thì hình cứ chạy êm theo nhịp của
+chính nó — lệch một chút còn hơn giật liên tục.
+
+### Tự dựng lại để kiểm, không bắt chủ máy thử
+
+Chủ máy: *"bạn tự giả lập xem nào"*. Đúng. Giả lập chạy trên **chính mã của thẻ**, nạp
+đúng số đo ở trên:
+
+```
+1) Loa kẹt, CHƯA có chốt (trước bản sửa):  12 nhịp → cho kéo 11
+2) Loa kẹt, CÓ chốt      (sau bản sửa)  :  12 nhịp → cho kéo  0
+3) Loa khoẻ, CÓ chốt                     :  12 nhịp → cho kéo 11
+```
+
+Phép 1 dựng lại được đúng lỗi, phép 2 cho thấy chốt chặn được, phép 3 cho thấy ca lành
+mạnh không bị chặn nhầm. Giây suy ra của loa kẹt là **135,7** trong khi loa khoẻ là
+**11,7** — chênh lệch ấy chính là quãng mà hình và tiếng bị kéo về sai.
+
+### Tách iOS khỏi Android
+
+Chủ máy: *"xem tách riêng iP và Android ra"*. Đúng, vì hai nền tảng hỏng khác nhau, và
+đã có lần một bản vá cho iOS làm hỏng luôn Android.
+
+Nay có một cổng nhận dạng nền tảng, và chỗ đầu tiên đi qua nó là bộ canh tiếng: hai hẹn
+giờ trong đó (nhắc lại lệnh phát sau 3 giây, báo chẩn đoán sau 12 giây) đều dựng lên từ
+hành vi của WebKit. Trên Android chúng chỉ có thể gây hại — cú nhắc lại có thể chen vào
+một luồng đang tải bình thường, còn lời nhắn 12 giây thì báo hỏng oan. Từ nay Android
+chạy đúng đường 0.26.2, không dính một dòng vá iOS nào.
+
+(iPad đời mới khai user-agent giống máy Mac, nên cổng này hỏi thêm màn cảm ứng — Mac
+thật không có.)
+
 ## 0.26.21 - 2026-09-20
 
 ### Trả đường tiếng về đúng bản 0.26.2 — bản mà chủ máy đo là chạy được
