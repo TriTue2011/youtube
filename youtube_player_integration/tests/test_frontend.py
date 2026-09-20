@@ -184,6 +184,23 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Phần tử âm thanh phải NẰM TRONG tài liệu: «new Audio()» sinh ra phần tử đứng
         # ngoài DOM, và WebKit có thể không bao giờ bắt đầu tải cho phần tử như vậy.
         self.assertIn("document.body.appendChild(audio);", script)
+        # 0.26.13: đoạn im lặng mở khoá phải LẶP VÒNG, để phần tử luôn đang phát suốt
+        # lúc chờ địa chỉ luồng (1,5–2,6 giây). Hết vòng lặp thì nó ở trạng thái "đã
+        # kết thúc", và WebKit không cho chạy lại ngoài cú chạm — đúng mô tả của người
+        # dùng iPhone: mới bật thì không phát, lượn qua app khác quay lại thì lại phát.
+        self.assertIn("audio.loop = true;", script)
+        # Và phải TẮT lặp trước khi gán bài thật, ở cả hai đường, nếu không bài tự
+        # phát lại mãi.
+        self.assertEqual(script.count("audio.loop = false;"), 2)
+        # Lưới an toàn: quay lại trang thì thử phát lại — chính là cái mẹo thủ công
+        # mà người dùng tự tìm ra, nay làm tự động.
+        self.assertIn("} else if (this.item && this.real() && audio.paused) {", script)
+        # Canh tiếng phải nằm trong «deviceAudio», KHÔNG phải trong vòng đồng bộ video:
+        # vòng ấy thoát ngay khi không có video, nên đúng ca "chỉ nghe" lại mất sạch
+        # số đo — chủ máy báo "chỉ nghe không chạy thanh thời gian" mà không dòng chẩn
+        # đoán nào hiện ra.
+        self.assertIn("canhTieng(audio, generation) {", script)
+        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 2)
         # Hai số đo thêm để phân định phần còn lại: đã chọn được nguồn phát chưa, và
         # phần tử có nằm trong trang không.
         self.assertIn("nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}", script)

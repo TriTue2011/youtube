@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.26.13 - 2026-09-20
+
+### Fixed — chỗ chẩn đoán đặt sai chỗ, nên ca quan trọng nhất không có số đo
+
+Chủ máy: *"Chỉ nghe không chạy thanh thời gian nên không có tiếng"* — và **không dòng
+chẩn đoán nào hiện ra**.
+
+Đó là lỗi trong chính phần chẩn đoán của tôi: bộ bắt lỗi nằm trong vòng đồng bộ video,
+mà vòng ấy **thoát ngay khi không có video mở**. Nên đúng ca "chỉ nghe" — ca quan trọng
+nhất, và là ca chủ máy đang kẹt — lại chẳng đo được gì.
+
+Nay việc canh tiếng nằm ở **chính bộ phát tiếng**, độc lập với video: 12 giây sau khi
+bảo nó phát, nếu đồng hồ không nhúc nhích thì nói thẳng kèm năm số đo.
+
+### Fixed — GỐC RỄ: phần tử mất trạng thái "đang phát" trong lúc chờ địa chỉ luồng
+
+Người dùng iPhone mô tả đúng cơ chế, và bốn câu của họ đáng giá hơn cả đêm đo đạc:
+
+> *"Chỉ nghe mới bật thì ko phát, nhưng lượn qua app khác rồi quay lại thì lại phát."*
+> *"Khi phát rồi thì khoá màn vẫn phát được."*
+> *"Nhưng chuyển bài khác là lại tịt."*
+
+Đó là dấu vân tay của **mất trạng thái đang phát**, không phải của lỗi mạng hay lỗi
+giải mã:
+
+1. Bấm nghe → `unlock()` cho phần tử phát **nửa giây im lặng** trong chính cú chạm.
+2. Thẻ đi xin địa chỉ luồng — đo thật mất **1,5–2,6 giây**.
+3. Tới lúc gán địa chỉ, đoạn im lặng **đã kết thúc từ lâu**; phần tử đang ở trạng thái
+   "đã phát xong", và WebKit không cho nó tự chạy lại ngoài cú chạm. Chrome không đòi
+   thế, nên chỗ này êm suốt từ đầu.
+4. Quay lại trang từ app khác chính là lúc WebKit chịu thi hành lệnh phát đang treo —
+   nên "lượn qua app khác rồi quay lại thì lại phát".
+5. Đã chạy rồi thì khoá màn vẫn chạy (không có gì làm nó dừng), nhưng **chuyển bài là
+   lặp lại toàn bộ vũ điệu trên** nên tịt tiếp.
+
+**Sửa:** cho đoạn im lặng **lặp vòng**, để phần tử luôn đang phát suốt lúc chờ. Khi ấy
+việc gán bài thật chỉ là phát tiếp một thứ người dùng **đã cho phép**, không phải xin
+phép lại. Tắt lặp ngay trước khi gán bài thật, ở **cả hai** đường dùng chung khuôn này
+(`listen` và `loadAlong`) — không chỉ đường đang có báo lỗi.
+
+**Kèm một lưới an toàn** dựng thẳng từ mẹo mà chính người dùng tìm ra: quay lại trang
+mà có bài nhưng đang dừng thì thử phát lại. Nếu bản sửa lặp-vòng đã đủ thì nhánh này
+không bao giờ chạy tới.
+
+### Đã loại trừ thêm hai nghi can, đo được hẳn hoi
+
+- **Phần tử nằm ngoài DOM** (bản 0.26.12 gắn vào `body`): đã gắn rồi mà vẫn im.
+- **Cloudflare chặn luồng**: tên miền ngoài trả `403 error code 1010` với lời gọi
+  script trần, nhưng giả dạng Safari iPhone thì **chạy tốt** — `206`, `Content-Range`
+  đầy đủ, `audio/mp4`, 0,23 giây. Đường giao luồng sạch từ mọi góc đo được: nội bộ,
+  qua Home Assistant, và qua Cloudflare.
+
+### Xác nhận — xem video trên iOS đã chạy
+
+Ảnh chủ máy gửi cho thấy thanh tiến trình chạy tới **0:20**: bản 0.26.12 thôi tự đóng
+hình, và xem video có tiếng bình thường. Phần còn kẹt chỉ là bộ phát tiếng riêng.
+
 ## 0.26.12 - 2026-09-20
 
 ### Fixed — iOS: một gốc duy nhất cho cả ba triệu chứng

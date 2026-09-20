@@ -229,6 +229,13 @@ const deviceAudio = {
       } else if (this.pausedByHide) {
         this.pausedByHide = false;
         audio.play().catch(() => {});
+      } else if (this.item && this.real() && audio.paused) {
+        /* LƯỚI AN TOÀN dựng thẳng từ quan sát của người dùng iPhone: "lượn qua app
+           khác rồi quay lại thì lại phát". Quay lại trang chính là lúc WebKit chịu
+           thi hành lệnh phát đang treo. Thử lại ở đây biến cái mẹo thủ công ấy thành
+           tự động — và nếu bản sửa lặp-vòng ở «unlock» đã đủ thì nhánh này không bao
+           giờ chạy tới, vì lúc ấy tiếng đã chạy rồi. */
+        audio.play().catch(() => {});
       }
     });
     this.element = audio;
@@ -249,6 +256,17 @@ const deviceAudio = {
   /** Call inside the tap, before any await. */
   unlock() {
     const audio = this.audio();
+    /* ĐOẠN IM LẶNG PHẢI LẶP VÒNG. Người dùng iPhone mô tả chính xác cơ chế
+       (20/09/2026): "chỉ nghe mới bật thì ko phát, nhưng lượn qua app khác rồi quay
+       lại thì lại phát", "đã phát rồi thì khoá màn vẫn chạy", "chuyển bài khác là
+       lại tịt".
+       Đó là dấu vân tay của MẤT TRẠNG THÁI ĐANG PHÁT: đoạn im lặng chỉ dài nửa giây,
+       mà địa chỉ luồng thật về sau 1,5–2,6 giây (đo thật) — tới lúc gán địa chỉ mới
+       thì phần tử ĐÃ KẾT THÚC, và WebKit không cho nó tự chạy lại ngoài cú chạm.
+       Chrome không đòi thế nên chỗ này êm suốt từ đầu.
+       Cho lặp vòng thì phần tử LUÔN đang phát suốt lúc chờ, và lệnh phát sau đó chỉ
+       là phát tiếp một thứ đã được người dùng cho phép — không phải xin phép lại. */
+    audio.loop = true;
     audio.src = SILENCE;
     audio.play().catch(() => {});
     return audio;
@@ -285,10 +303,37 @@ const deviceAudio = {
       this.notify("Không lấy được tiếng bài này.", true);
       return;
     }
+    // Tắt lặp vòng của đoạn im lặng mở khoá TRƯỚC khi gán bài thật, nếu không bài sẽ
+    // tự phát lại mãi. Xem lý do lặp vòng ở «unlock».
+    audio.loop = false;
     audio.src = url;
     if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
     audio.play().catch((error) => this.playRefused(error));
+    this.canhTieng(audio, generation);
     this.notify();
+  },
+
+  /** Canh xem tiếng có THẬT SỰ chạy không, sau 12 giây kể từ lúc bảo nó phát.
+   *
+   * Phải nằm Ở ĐÂY chứ không phải trong vòng đồng bộ video: vòng ấy thoát ngay khi
+   * không có video mở, nên đúng ca "chỉ nghe" — ca quan trọng nhất — lại chẳng có
+   * số đo nào. Chủ máy báo 20/09/2026: "chỉ nghe không chạy thanh thời gian nên
+   * không có tiếng", mà dòng chẩn đoán thì không bao giờ hiện ra.
+   *
+   * Luồng MỞ ĐƯỢC NHƯNG KHÔNG CHẢY không bắn sự kiện nào — phần tử chỉ có
+   * play/pause/ended/error — nên không tự canh thì hỏng hoàn toàn im lặng.
+   */
+  canhTieng(audio, generation) {
+    clearTimeout(this.canhTimer);
+    const moc = audio.currentTime;
+    this.canhTimer = setTimeout(() => {
+      if (generation !== this.generation || !this.item) return;
+      if (audio.paused || audio.currentTime > moc + 0.3) return;   // đang chạy, yên tâm
+      this.notify("Máy này không phát được tiếng."
+        + ` [nap=${audio.readyState} mang=${audio.networkState}`
+        + ` loi=${audio.error ? audio.error.code : 0}`
+        + ` nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}]`, true);
+    }, 12000);
   },
 
   /** Next (+1) / previous (-1) song of the queue; false at either end. */
@@ -354,8 +399,10 @@ const deviceAudio = {
       return;
     }
     const audio = this.audio();
+    audio.loop = false;   // cùng lý do như trong «listen» — xem chú thích ở «unlock»
     audio.src = url;
     audio.play().catch(() => this.notify("Trình duyệt chặn tự phát có tiếng — bấm lại “Nghe trên máy này”.", true));
+    this.canhTieng(audio, generation);
   },
 
   mediaSession(item, controls = true) {
