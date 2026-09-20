@@ -280,7 +280,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('navigator.wakeLock.request("screen")', script)
         # Và đường iOS phải GIỮ TIẾNG TRONG KHUNG, không chuyển sang phần tử âm thanh
         # — đó là chỗ mọi bản trước hỏng.
-        self.assertIn("if (on && laTao() && video.open && !video.withSpeakers && video.item) {", script)
+        # 0.26.34: điều kiện là NỀN TẢNG, không phải "có loa hay không". Có loa hay
+        # không thì WebKit vẫn không tải nổi phần tử âm thanh, nên vừa ra loa vừa nghe
+        # trên máy nhà Táo cũng phải giữ tiếng trong khung.
+        self.assertIn("if (on && laTao() && video.open && video.soundHere && video.item) {", script)
+        # Và đường nhanh phải NHƯỜNG khi máy không phải nhà Táo mà đang bật nghe-khi-
+        # tắt-màn: khung nhúng bị treo lúc trang ẩn, chỉ phần tử âm thanh còn chạy.
+        self.assertIn("if (listenScreenOff() && !laTao()) return false;", script)
         # 0.26.27: lời nhắn phải ĐÚNG MÁY ĐANG CẦM. Chủ máy gửi ảnh điện thoại
         # Android mà hiện câu nói về iPhone — vừa sai vừa khiến người đọc đi tìm
         # nhầm chỗ. Giới hạn "một luồng một lúc" là của iOS; trên Android mà nhánh
@@ -335,7 +341,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._supportsSource(entityId, nguon)", script)
         self.assertIn("source: nguon,", script)
         self.assertIn('"media_player", "media_seek"', script)
-        self.assertIn("https://www.youtube-nocookie.com/embed/${id}", script)
+        self.assertIn("${EMBED_ORIGIN}/embed/${id}", script)
+        # 0.26.34 — khung nhúng lấy từ www.youtube.com. Chrome xét quyền tự phát
+        # KÈM TIẾNG theo mức gắn bó với chính tên miền ấy, mà nocookie thì không
+        # máy nào có. Thẻ phicomm-r1-card dùng youtube.com và nghe được ngay.
+        self.assertIn('const EMBED_ORIGIN = "https://www.youtube.com";', script)
+        # Chỉ cấm ĐỊA CHỈ nhúng cũ; phần chú thích vẫn kể lại vì sao đã đổi.
+        self.assertNotIn("youtube-nocookie.com/embed", script)
         # HA pages send "Referrer-Policy: no-referrer" -> YouTube Error 153
         # unless the iframe carries its own policy, set before src.
         self.assertLess(
@@ -405,9 +417,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         #     về nút play của YouTube. Phần tử âm thanh thì chạy.
         #   - Safari/iOS: phần tử âm thanh không tải (mang=3 / mang=2). Khung thì chạy.
         # Nên nhánh khung phải gác bằng laTao(), KHÔNG phải bằng công tắc tắt màn hình.
+        # 0.26.34 — HAI NỀN TẢNG NHẬP LẠI LÀM MỘT. Chỗ tách ở trên có từ 20/09/2026,
+        # khi khung còn lấy từ youtube-nocookie.com và Chrome không cho nó tự phát
+        # kèm tiếng. Nay khung lấy từ www.youtube.com nên cả hai nền tảng đi chung
+        # đường khung; giả thuyết ấy sai thì _checkVideoSound tự trả việc về phần
+        # tử âm thanh, nên không ai mất tiếng.
         self.assertIn(
-            "} else if (video.open && video.withSpeakers && !video.picture && laTao()) {",
+            "} else if (video.open && video.withSpeakers && !video.picture) {",
             script)
+        self.assertIn("} else if (this._ngheBangKhung()) {", script)
+        self.assertIn("if (video.soundOnly) {", script)
         # Ràng buộc cũ đã bỏ: chủ máy báo "Phải bật nghe khi tắt màn hình kèm theo
         # thì mới bật được nghe trên máy này".
         self.assertNotIn("!video.picture && !listenScreenOff()", script)
@@ -490,7 +509,9 @@ class LovelaceCardContractTests(unittest.TestCase):
         # đường chọn một kiểu, nên hình bám loa này còn thanh tiến trình chạy theo loa
         # kia; và loa đầu danh sách không báo giây là hai vòng kéo đứng im hẳn.
         self.assertIn("_loaDanNhip(session = this._focusedSession()) {", script)
-        self.assertEqual(script.count("this._loaDanNhip("), 2)
+        # 0.26.34: thêm một nơi gọi — «_ngheBangKhung» lấy giây của loa để mở khung
+        # vào đúng chỗ ấy. Vẫn là CÙNG một hàm chọn loa dẫn nhịp, đúng ý luật này.
+        self.assertEqual(script.count("this._loaDanNhip("), 3)
         # 0.26.11: ghim được bài Facebook, và bản ghi MANG THEO NGUỒN — thiếu nguồn thì
         # phát lại sẽ đi vào đường YouTube rồi chết ở cửa chặn mã 11 ký tự.
         self.assertIn('if (["youtube", "facebook"].includes(item.source || this._source)) {', script)

@@ -82,7 +82,18 @@ const laSafari = () => {
 /** Máy nhà Táo chạy WebKit: iPhone, iPad, và Safari trên macOS. */
 const laTao = () => laIOS() || laSafari();
 
-const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
+/* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
+   Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
+   người dùng với CHÍNH tên miền ấy (Media Engagement Index). Máy nào cũng xem
+   YouTube nên «youtube.com» có điểm cao, còn «youtube-nocookie.com» gần như không
+   ai mở bao giờ nên điểm bằng không — cùng một đoạn mã, khung nocookie bị chặn
+   tiếng còn khung youtube.com thì không. Đây đúng là điểm khác về địa chỉ giữa thẻ
+   này và thẻ «phicomm-r1-card» chủ máy đưa 20/09/2026 (thẻ ấy dùng www.youtube.com
+   và nghe được ngay trên cả Android lẫn iPhone), và nó khớp với thứ đo được cùng
+   ngày: dựng khung có tiếng trên Android thì rơi về nút play của YouTube.
+   ĐÂY LÀ GIẢ THUYẾT CHƯA ĐO TRỰC TIẾP, nên mọi đường bật tiếng đều phải có lối
+   lùi tự động — xem «_checkVideoSound». */
+const EMBED_ORIGIN = "https://www.youtube.com";
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
 
 /* Tên nguồn để GHI RA dòng đang phát. Hàng nút YouTube / Zing MP3 chỉ đổi nơi TÌM
@@ -766,7 +777,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _idleVideo() {
-    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, moUL: 0, withSpeakers: false, followsDevice: false, soundHere: true, muted: null, picture: null, pictureEl: null };
+    return { open: false, ready: false, item: null, state: -1, time: 0, timeAt: 0, moUL: 0, withSpeakers: false, followsDevice: false, soundHere: true, soundOnly: false, muted: null, picture: null, pictureEl: null };
   }
 
   /* Hai hàm này là hợp đồng của Home Assistant: có chúng thì bấm "Sửa thẻ" trên
@@ -1311,6 +1322,24 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .video-frame.no-embed { background: #000 var(--poster, none) center / contain no-repeat; }
         .video-frame.no-embed iframe { visibility: hidden; }
         .video-frame video.picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+        /* KHUNG CHỈ MANG TIẾNG: thu còn một điểm ảnh. KHÔNG được dùng «display: none»
+           hay thuộc tính «hidden» — cả hai làm trình duyệt dừng phát, tức mất đúng
+           thứ khung này sinh ra để làm. Cách thu nhỏ chép của thẻ «phicomm-r1-card»
+           (khối «.video-theater-stage.is-hidden» bên ấy). */
+        .video-frame.chi-tieng {
+          /* Thu bằng «max-width/max-height», KHÔNG bằng «width/height»: bề rộng của
+             khung do một luật sáu lớp của bố cục hai cột đặt, luật một lớp ở đây thua
+             — đo trong Chrome 20/09/2026: đặt «width: 1px» mà khung vẫn rộng 497px.
+             Chặn trên là thuộc tính KHÁC nên không phải tranh độ ưu tiên với nó. */
+          position: absolute;
+          max-width: 1px;
+          max-height: 1px;
+          margin: 0;
+          opacity: 0.001;
+          pointer-events: none;
+          overflow: hidden;
+          clip-path: inset(50%);
+        }
         .picture-note {
           position: absolute;
           left: 8px;
@@ -3806,8 +3835,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const nhanNguon = this.shadowRoot.querySelector(".nghe-nguon");
     nhanNguon.textContent = TEN_NGUON[nguonDangPhat] || "";
     nhanNguon.hidden = !nhanNguon.textContent;
-    this.shadowRoot.querySelector(".player").classList.toggle("video-on", video.open);
-    this.shadowRoot.querySelector(".video-frame").hidden = !video.open;
+    /* «soundOnly» = khung mở ra CHỈ để mang tiếng: nó phải còn nằm trong trang và
+       còn chạy, nhưng thẻ phải trông y như lúc chưa mở hình. Nên mọi thứ thuộc về
+       phần NHÌN đi theo «hienHinh», còn phần SỐNG của khung đi theo «video.open». */
+    const hienHinh = video.open && !video.soundOnly;
+    this.shadowRoot.querySelector(".player").classList.toggle("video-on", hienHinh);
+    const khungHinh = this.shadowRoot.querySelector(".video-frame");
+    khungHinh.hidden = !video.open;
+    khungHinh.classList.toggle("chi-tieng", video.open && !!video.soundOnly);
     /* «.video-rotate» PHẢI có trong danh sách này. Thẻ của nó khai sẵn `hidden`, mà
        trước đây không chỗ nào gỡ ra — nên nút xoay ngang KHÔNG BAO GIỜ hiện. Thiếu
        sót có sẵn, không phải do lần sửa nào gây ra; chủ máy báo 18/09/2026 "làm mất
@@ -3815,7 +3850,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        xoay thêm là vô nghĩa. */
     for (const selector of [".video-listen", ".video-rotate", ".video-expand",
       ".video-fullscreen", ".video-close"]) {
-      this.shadowRoot.querySelector(selector).hidden = !video.open;
+      this.shadowRoot.querySelector(selector).hidden = !hienHinh;
     }
     // "Nghe trên máy này": speakers play, and this device plays the sound too (the
     // picture's own sound, or an audio element following the speakers).
@@ -3839,7 +3874,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._lastVideoSeekAt = 0;
         this._openVideo(
           { id: session.id, url: session.url, title: session.title, channel: session.artist, duration: session.duration },
-          { withSpeakers: true },
+          // Loa đổi bài thì giữ nguyên vai của khung: đang mang tiếng thì vẫn mang tiếng.
+          { withSpeakers: true, soundHere: video.soundHere, soundOnly: video.soundOnly },
         );
         return;
       }
@@ -3847,7 +3883,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._setStatus("Loa này đang phát Zing/link audio — không có video.");
       return;
     }
-    if (video.open) {
+    if (hienHinh) {
       // The video replaces the cover; its caption is the now-playing line.
       const speakers = video.withSpeakers ? names(session?.output_entity_ids || this._activeSpeakers()) : [];
       titleNode.textContent = video.item.title;
@@ -3893,7 +3929,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     metaNode.textContent = title
       ? [stateText, TEN_NGUON[session?.source] || "", session.artist,
         this._formatDuration(session.duration), queuePosition,
-        names(outputs).join(", ") + (deviceAudio.along ? " và máy này" : "")]
+        names(outputs).join(", ") + (soundOn ? " và máy này" : "")]
         .filter(Boolean).join(" · ")
       : this._selectedPlayers.size
         ? "Chọn một bài trong kết quả để phát ra loa."
@@ -4823,7 +4859,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return !!left && !!right && ((left.url || left.id) === (right.url || right.id) || (!!left.id && left.id === right.id));
   }
 
-  _openVideo(item, { withSpeakers, followsDevice = false, startSeconds = 0 }) {
+  _openVideo(item, { withSpeakers, followsDevice = false, startSeconds = 0, soundHere = null, soundOnly = false }) {
     /* MỘT CỬA VÀO duy nhất cho việc mở hình. Nguồn Facebook rẽ ngay tại đây, KHÔNG vá
        ở từng chỗ gọi: hàm này được gọi từ sáu nơi (hàng kết quả, hàng đợi, nút xem,
        khôi phục phiên…), sửa theo danh sách thì sót một nơi là bấm vào đó hỏng, mà
@@ -4868,6 +4904,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // Following this device's audio element (screen-off listening): the picture stays muted.
     this._video.followsDevice = followsDevice;
     if (followsDevice) this._video.soundHere = false;
+    /* NGƯỜI GỌI NÓI RÕ THÌ LỜI ẤY THẮNG. Hai dòng suy đoán bên trên chỉ đúng cho
+       đường xem video; đường «nghe trên máy này bằng khung» cần khung CÓ TIẾNG dù
+       loa đang phát, nên phải nói thẳng ra được. «soundOnly» giữ khung ở dạng thu
+       bé một điểm ảnh: có tiếng mà thẻ trông y như lúc chưa mở hình. */
+    if (soundHere !== null) this._video.soundHere = Boolean(soundHere);
+    this._video.soundOnly = Boolean(soundOnly) && this._video.soundHere;
     const start = Math.max(0, Math.floor(Number(startSeconds) || 0));
     /* Đường nhanh (đổi bài trong cùng trình phát) giữ được toàn màn hình, nhưng
        CHỈ dùng khi không phải bật tiếng cho một khung đang câm: động tác ấy làm
@@ -4915,7 +4957,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._syncNowPlaying();
     this._updateTransportState();
     const player = this.shadowRoot.querySelector(".player");
-    if (!player.classList.contains("expanded")) player.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    // Khung chỉ mang tiếng thì không có gì để nhìn, đừng kéo màn hình của người dùng.
+    if (!this._video.soundOnly && !player.classList.contains("expanded")) {
+      player.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    }
   }
 
   /** Địa chỉ khung nhúng — một chỗ duy nhất, để mọi đường dựng khung giống nhau. */
@@ -4936,7 +4981,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     });
     if (muted) params.set("mute", "1");
     if (start) params.set("start", String(Math.max(0, Math.floor(start))));
-    return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
+    return `${EMBED_ORIGIN}/embed/${id}?${params}`;
   }
 
   /** THÚC TIẾNG SAU KHI KHUNG VỪA NẠP — bậc thang 0 / 300 / 800 / 2000 mili giây.
@@ -5017,32 +5062,85 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (deviceAudio.along || pictureSound) {
       if (deviceAudio.along) deviceAudio.stopAlong();
       if (pictureSound) {
+        if (video.soundOnly) {
+          // Khung mở ra chỉ để mang tiếng: tắt tiếng là đóng hẳn, đừng để nó chạy câm.
+          this._closeVideo();
+          this._syncSoundHint();
+          this._syncNowPlaying();
+          return;
+        }
         video.soundHere = false;
         this._videoCommand("mute");
       }
-    } else if (video.open && video.withSpeakers && !video.picture && laTao()) {
-      /* MÁY NHÀ TÁO đi đường KHUNG. Đo 20/09/2026 trên Safari của iMac: phần tử
-         âm thanh dừng ở «mang=3» (NETWORK_NO_SOURCE), tức nó bỏ cuộc không tìm
-         được nguồn — nên ở đây tiếng phải nằm nguyên trong khung. */
+    } else if (video.open && video.withSpeakers && !video.picture) {
+      /* ĐANG MỞ HÌNH THÌ BẬT TIẾNG NGAY TẠI KHUNG — không còn tách Android với máy
+         nhà Táo nữa. Chỗ tách ấy có từ 20/09/2026 vì khung nhúng khi đó lấy từ
+         «youtube-nocookie.com» và Chrome không cho nó tự phát kèm tiếng; nay khung
+         lấy từ «www.youtube.com» như thẻ «phicomm-r1-card», xem «EMBED_ORIGIN».
+         Nếu giả thuyết ấy sai thì «_checkVideoSound» tự trả việc về phần tử âm
+         thanh sau 1,5 giây, nên không ai mất tiếng. */
       this._batTiengKhung();
       clearTimeout(this._soundCheckTimer);
       this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
+    } else if (this._ngheBangKhung()) {
+      // Đã nhận việc bên trong; xem «_ngheBangKhung».
     } else if (this._focusedSession()?.title) {
-      /* ANDROID đi đường PHẦN TỬ ÂM THANH — ngược hẳn với máy nhà Táo, và đây là
-         chỗ hai nền tảng phải tách.
-         Đo 20/09/2026, chủ máy gửi ảnh Android: dựng lại khung có tiếng thì Chrome
-         KHÔNG cho tự phát, nó rơi về nút play của YouTube ("Chạm vào video để phát
-         có tiếng"). Còn phần tử âm thanh thì chạy — chủ máy xác nhận, chỉ phàn nàn
-         là chậm (nay đã lấy sẵn địa chỉ luồng, xem «chuanBi»).
-         Trước đây nhánh này chỉ mở khi công tắc "nghe khi tắt màn hình" đang bật,
-         nên chủ máy phải bật kèm mới nghe được: "Phải bật nghe khi tắt màn hình
-         kèm theo thì mới bật được nghe trên máy này". Ràng buộc ấy bỏ đi. */
+      /* CÒN LẠI (Zing MP3, link audio) thì khung YouTube không phát được, nên vẫn đi
+         đường phần tử âm thanh: hỏi máy chủ lấy luồng rồi tự canh theo loa. */
       deviceAudio.entryId = this._entryId();
       deviceAudio.startAlong();
       this._syncAlong();
     }
     this._syncSoundHint();
     this._syncNowPlaying();
+  }
+
+  /** NGHE BÀI CỦA LOA BẰNG CHÍNH KHUNG YOUTUBE — đường nhanh, chép cách thẻ
+   *  «phicomm-r1-card» làm (chủ máy đưa thẻ ấy 20/09/2026 kèm một câu đo được:
+   *  "card này thì quá nhanh").
+   *
+   *  VÌ SAO KHÔNG DÙNG PHẦN TỬ ÂM THANH: đường ấy phải hỏi máy chủ lấy địa chỉ
+   *  luồng, rồi tải tiếng QUA máy chủ nhà mình, rồi tua tới giây của loa — mỗi cú
+   *  tua là một lượt xin lại dữ liệu và nạp đệm lại từ chỗ mới. Chủ máy đo
+   *  20/09/2026: "mất 4s đến 10s mới có tiếng", rồi "đồng bộ quá lâu". Khung YouTube
+   *  lấy thẳng từ Google và vào đúng giây ngay trong địa chỉ nhúng («start»), nên
+   *  không còn bước nào để chậm. Thẻ «phicomm-r1-card» KHÔNG BAO GIỜ phát nhạc bằng
+   *  thẻ «audio» — phần tử âm thanh duy nhất của nó là một dòng im lặng để iOS coi
+   *  trang là đang có tiếng.
+   *
+   *  Trả về true nếu đã nhận việc; false thì người gọi đi đường cũ. */
+  _ngheBangKhung() {
+    const session = this._focusedSession();
+    const id = String(session?.id || "");
+    if (!session?.title || session.source !== "youtube" || !VIDEO_ID.test(id)) return false;
+    /* TẮT MÀN HÌNH LÀ RÀNG BUỘC MẠNH HƠN TỐC ĐỘ. Trang bị ẩn thì Chrome trên Android
+       treo khung nhúng, nên máy không phải nhà Táo mà đang bật "nghe khi tắt màn hình"
+       thì vẫn phải đi phần tử âm thanh — chậm hơn, nhưng là thứ duy nhất còn chạy khi
+       màn hình đã tắt. Máy nhà Táo thì ngược lại: phần tử ấy đo được là không bao giờ
+       tải, còn khung thì sống tiếp nếu có một dòng im lặng giữ trang («_giuTiengNen»). */
+    if (listenScreenOff() && !laTao()) return false;
+    // Vào thẳng giây loa đang ở, nên không cần vòng tua nào để "đồng bộ" nữa.
+    const nhip = this._loaDanNhip(session);
+    const giay = nhip ? this._speakerPosition(nhip, session) : null;
+    this._openVideo(
+      {
+        id,
+        url: session.url,
+        title: session.title,
+        channel: session.artist,
+        duration: session.duration,
+        thumbnail: session.thumbnail,
+      },
+      {
+        withSpeakers: true,
+        soundHere: true,
+        soundOnly: true,
+        startSeconds: Math.max(0, Math.floor(Number(giay) || 0)),
+      },
+    );
+    // Máy nhà Táo có bật nghe-khi-tắt-màn: giữ trang "đang có tiếng" cho khung khỏi bị cắt.
+    if (listenScreenOff()) this._giuTiengNen();
+    return true;
   }
 
   /** GIỮ TRANG "ĐANG CÓ TIẾNG" CHO iOS — chép từ một bản cài ĐÃ CHẠY ĐƯỢC.
@@ -5117,7 +5215,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const on = !listenScreenOff();
     setListenScreenOff(on);
     const video = this._video;
-    if (on && laTao() && video.open && !video.withSpeakers && video.item) {
+    /* ĐIỀU KIỆN LÀ NỀN TẢNG, KHÔNG PHẢI "CÓ LOA HAY KHÔNG". Trước đây nhánh này còn
+       đòi «!video.withSpeakers», nên đang vừa phát ra loa vừa nghe trên máy nhà Táo mà
+       bật nghe-khi-tắt-màn là rơi xuống nhánh giao tiếng cho phần tử âm thanh — đúng
+       thứ không bao giờ tải trên WebKit, tức mất tiếng. Có loa hay không thì WebKit vẫn
+       thế. */
+    if (on && laTao() && video.open && video.soundHere && video.item) {
       /* iOS: GIỮ TIẾNG TRONG KHUNG, đừng chuyển sang phần tử âm thanh.
          Đó là chỗ mọi bản trước hỏng — đo được phần tử ấy không bao giờ tải trên
          iOS. Thẻ «phicomm-r1-card» của chủ máy chạy được chính vì nó không bao giờ
@@ -5139,6 +5242,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       video.soundHere = false;
       this._videoCommand("mute");
     } else if (on && video.open && video.withSpeakers && video.soundHere) {
+      // Khung mở ra chỉ để mang tiếng: giao việc cho phần tử âm thanh xong là đóng hẳn,
+      // để lại một khung câm vô hình thì vòng đồng bộ vẫn tua nó mà chẳng ai nghe.
+      if (video.soundOnly) this._closeVideo();
       video.soundHere = false;
       this._videoCommand("mute");
       deviceAudio.entryId = this._entryId();
@@ -5374,7 +5480,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       enablejsapi: "1", rel: "0", playsinline: "1",
       cc_load_policy: "0", iv_load_policy: "3", origin: location.origin,
     });
-    iframe.setAttribute("src", "https://www.youtube-nocookie.com/embed/?" + params);
+    iframe.setAttribute("src", `${EMBED_ORIGIN}/embed/?` + params);
   }
 
   /** Tua hinh ve dung moc tieng. Gom tu hai cho von lam y het trong _syncVideo. */
@@ -5504,6 +5610,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _checkVideoSound() {
     const video = this._video;
     if (!video.open || video.picture || !video.soundHere || !this._soundBlocked()) return;
+    /* LỐI LÙI CỦA ĐƯỜNG NHANH. Khung thu bé không có gì để người dùng chạm vào, nên
+       bị chặn tiếng ở đây là hết đường — trả việc về phần tử âm thanh (chậm hơn,
+       nhưng còn nghe được). Nhờ vậy giả thuyết "đổi sang www.youtube.com thì Chrome
+       cho tự phát" sai cũng chỉ mất vài giây, không mất tiếng. */
+    if (video.soundOnly) {
+      this._closeVideo();
+      deviceAudio.entryId = this._entryId();
+      deviceAudio.startAlong();
+      this._syncAlong();
+      this._setStatus("Trình duyệt chặn tiếng tự phát của khung; đang lấy tiếng qua máy chủ.");
+      this._syncNowPlaying();
+      return;
+    }
     /* TRÊN iOS THÌ ĐỪNG CƯỚP TIẾNG CỦA KHUNG. «_soundFromDevice» tắt tiếng khung
        rồi giao việc phát cho phần tử âm thanh — mà trên iOS phần tử ấy đo được là
        KHÔNG BAO GIỜ tải (nap=0 mang=2 loi=0, thu được hai lần độc lập). Kết quả:
@@ -5933,7 +6052,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // Số NGOẠI SUY thì không được tua hình — xem «_nhipDoDuoc». Thiếu chốt này,
     // giả lập cho thấy hình đang ở giây 1–8 bị quăng tới giây 91 rồi 97.
     if (!this._nhipDoDuoc(nhip)) return;
-    if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
+    /* KHUNG ĐANG MANG TIẾNG thì mỗi cú tua là một lần tiếng nhảy trong tai người
+       nghe. Khung câm lệch 2 giây thì tua cho khớp môi; khung có tiếng chỉ chữa khi
+       lệch tới mức nghe ra là hai nơi đang ở hai chỗ khác nhau. */
+    const nguongLech = video.soundHere ? 5 : 2;
+    if (Math.abs(speakerTime - this._videoTimeNow()) > nguongLech) {
       this._seekPicture(speakerTime);
     }
   }

@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.26.34 - 2026-09-20
+
+### Nghe trên máy này: lấy tiếng thẳng từ YouTube, không đi vòng qua máy chủ nữa
+
+> *"mở nhạc trên loa, sau đó tích vào nghe trên thiết bị này cũng mãi mới có tiếng, đồng bộ
+> quá lâu, trong khi card này thì quá nhanh"* — chủ máy 20/09/2026, kèm mã nguồn thẻ
+> `phicomm-r1-card`.
+
+Đọc thẻ ấy thì ra điều quyết định: **nó không bao giờ phát nhạc bằng thẻ `<audio>`**. Nhạc
+luôn nằm trong khung nhúng YouTube; phần tử âm thanh duy nhất của nó là một dòng im lặng,
+chỉ để iOS coi trang là đang có tiếng.
+
+Thẻ này thì đi đường dài, và đây là toàn bộ chỗ mất thời gian:
+
+| Chặng | Đường cũ (thẻ `<audio>`) | Đường mới (khung YouTube) |
+|---|---|---|
+| Lấy địa chỉ luồng | hỏi máy chủ giải bài — đo 1,5–2,6 giây | không có chặng này |
+| Tải tiếng | qua máy chủ nhà mình | thẳng từ Google |
+| Vào đúng giây của loa | tua sau khi đã tải, tức xin lại dữ liệu và nạp đệm lại | `start=` ngay trong địa chỉ nhúng |
+| Giữ cho khớp loa | vòng tua mỗi giây | không cần |
+
+Từ bản này, bấm **"Nghe trên máy này"** trong lúc loa đang phát một bài YouTube sẽ mở một
+khung YouTube **thu bé còn một điểm ảnh**, vào thẳng giây loa đang ở. Thẻ trông y như cũ —
+không hiện video, không thêm nút nào — chỉ là có tiếng gần như ngay.
+
+Zing MP3 và link audio thì khung YouTube không phát được, nên vẫn đi đường cũ.
+
+### Tắt màn hình vẫn nghe — ai giữ tiếng thì theo NỀN TẢNG, không theo "có loa hay không"
+
+| Máy | Khi màn hình tắt | Nên ai mang tiếng |
+|---|---|---|
+| iPhone / iPad / Safari | khung nhúng sống tiếp **nếu** trang còn một dòng im lặng đang chạy | khung YouTube + `_giuTiengNen()` |
+| Android và máy khác | Chrome treo khung nhúng lúc trang ẩn | phần tử `<audio>` |
+
+Nên đường nhanh **tự nhường**: máy không phải nhà Táo mà đang bật "nghe khi tắt màn hình"
+thì vẫn đi phần tử âm thanh như trước — chậm hơn, nhưng là thứ duy nhất còn chạy khi màn
+hình đã tắt. Bật công tắc ấy giữa chừng cũng vậy: thẻ giao tiếng lại cho phần tử âm thanh
+rồi đóng hẳn khung.
+
+Đồng thời sửa một lỗ hổng có sẵn: nhánh giữ-tiếng-trong-khung của máy nhà Táo trước đây còn
+đòi **không có loa nào đang phát**, nên vừa ra loa vừa nghe trên iPhone mà bật nghe-khi-tắt-
+màn là rơi xuống nhánh phần tử âm thanh — đúng thứ WebKit không tải nổi, tức mất tiếng. Có
+loa hay không thì WebKit vẫn thế, nên điều kiện ấy bỏ đi.
+
+### Safari im tiếng
+
+Trên Safari (iPhone, iPad, cả Mac) phần tử âm thanh đo được là **không bao giờ tải**
+(`mang=3`, tức không tìm được nguồn). Đó chính là chuyện "dùng Safari không có tiếng mà
+phicomm có tiếng": thẻ phicomm không hề dùng phần tử ấy. Nay mọi đường YouTube của thẻ này
+cũng vậy, nên Safari đi chung một đường đã chạy được với mọi máy khác.
+
+### Khung nhúng chuyển sang `www.youtube.com`
+
+Chrome quyết định cho một khung tự phát **kèm tiếng** hay không theo mức gắn bó của người
+dùng với chính tên miền ấy. `youtube-nocookie.com` thì gần như không máy nào từng mở nên
+điểm bằng không — khớp với thứ đo được 20/09: dựng khung có tiếng trên Android thì rơi về
+nút play của YouTube. `phicomm-r1-card` dùng `www.youtube.com` và nghe được ngay.
+
+Giả thuyết này **chưa đo trực tiếp được**, nên có lối lùi: khung bị chặn tiếng thì 1,5 giây
+sau thẻ tự trả việc về đường cũ — chậm như trước, chứ không mất tiếng.
+
+### Hai nền tảng nhập lại làm một
+
+Chỗ tách Android với máy nhà Táo trong "Nghe trên máy này" (mới thêm hôm qua) nay bỏ đi: cả
+hai đi chung đường khung.
+
+### Đo trên máy, không chỉ chạy test
+
+Dựng thẻ trong Chrome không cần Home Assistant, bật chế độ chỉ-mang-tiếng rồi đọc kích
+thước thật:
+
+| Trạng thái | Khung hình | Lớp `video-on` | Nút phóng to / đóng |
+|---|---|---|---|
+| Chỉ mang tiếng | **1 × 1** điểm ảnh, vẫn nằm trong trang | không | ẩn |
+| Xem video như cũ | 477 × 268 | có | hiện |
+
+Một bẫy CSS đã dính và đã chữa: đặt `width: 1px` thì khung **vẫn rộng 497px**, vì bề rộng
+do một luật sáu lớp của bố cục hai cột đặt. Phải chặn bằng `max-width` — thuộc tính khác
+nên không phải tranh độ ưu tiên.
+
 ## 0.26.33 - 2026-09-20
 
 ### Bấm "Nghe (chỉ tiếng)" mà vẫn ra video
