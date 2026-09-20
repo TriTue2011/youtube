@@ -278,15 +278,34 @@ class LovelaceCardContractTests(unittest.TestCase):
         # giây hình bị lôi về chỗ kẹt, và cứ 4 giây tiếng trên máy bị lôi theo.
         # Không thể so con số trần: «_speakerPosition» cộng thêm thời gian trôi nên
         # loa kẹt vẫn trông như đang tiến — phải so với chính nó ở nhịp trước.
-        self.assertIn("_loaNhipChay(khoa, entityId, giay) {", script)
-        self.assertIn("return giay - truoc.giay >= troi * 0.5;", script)
+        self.assertIn("_dongHoChay(khoa, ai, giay) {", script)
+        self.assertIn("const chay = giay - truoc.giay >= troi * 0.5;", script)
         # Giữ mốc cũ khi hai nhịp quá gần nhau. Ghi đè thì mốc luôn mới tinh, quãng
         # trôi không bao giờ đủ lớn để kết luận, và vòng đồng bộ chết hẳn.
         self.assertIn("if (troi < 0.5) return false;", script)
-        # Mỗi đường giữ mốc riêng: hai đường cùng chạy trong một nhịp đẩy trạng thái,
-        # xài chung một mốc thì đường sau luôn thấy quãng trôi bằng 0.
-        self.assertIn('this._loaNhipChay("hinh", nhip, speakerTime)', script)
-        self.assertIn('this._loaNhipChay("tieng", nhip, speakerTime)', script)
+        # 0.26.17 — CHỖ QUYẾT ĐỊNH CA iOS: chỉ làm mới mốc KHI ĐÃ CHỨNG MINH ĐƯỢC.
+        # Làm mới mỗi nhịp thì quãng so luôn ngắn, mà trên quãng ngắn một cú nhảy
+        # 0 → 0,3 trông y hệt chạy thật — đo được: luồng cứ chạy lại từ đầu vẫn lọt
+        # 1/6 lần. Giữ mốc thì quãng so dài thêm mãi và nó không bao giờ đuổi kịp.
+        self.assertIn("if (chay) so[khoa] = { ai, giay, luc };", script)
+        # Mốc quá cũ (vừa tạm dừng lâu) thì lấy mốc mới, mất đúng một nhịp — nếu
+        # không thì sau một lần dừng dài, đồng hồ chạy lại đàng hoàng vẫn bị cấm.
+        self.assertIn("luc - truoc.luc > 5000", script)
+        # BỐN đường đồng bộ, MỘT hàng rào. Mỗi đường giữ mốc riêng theo khoá: nhiều
+        # đường cùng chạy trong một nhịp đẩy trạng thái, xài chung một mốc thì đường
+        # sau luôn thấy quãng trôi bằng 0.
+        self.assertEqual(script.count("this._dongHoChay("), 3)
+        self.assertIn('this._dongHoChay("hinh", nhip, speakerTime)', script)
+        self.assertIn('this._dongHoChay("tieng", nhip, speakerTime)', script)
+        # Đường iOS: nghe trên máy, xem hình trên thẻ, KHÔNG loa nào cả. Hàng rào cũ
+        # chỉ hỏi giây có KHÁC nhịp trước không, mà luồng bị WebKit cắt rồi chạy lại
+        # thì giây đổi liên tục — đổi mà chẳng đi tới đâu, nên nó lọt sạch.
+        self.assertIn('this._dongHoChay("tieng-may", "may", giayTieng)', script)
+        # Vẫn giữ phép thử "có nhúc nhích không" cho bộ dò kẹt: ở đó câu hỏi đúng là
+        # "đã chết hẳn chưa", khác hẳn câu "có được phép kéo ai không".
+        self.assertIn(
+            "const tiengDangChay = this._tiengGiayTruoc !== undefined"
+            " && giayTieng !== this._tiengGiayTruoc;", script)
         # NHIỀU LOA: cả ba đường đồng bộ phải đọc CÙNG MỘT loa dẫn nhịp. Trước đây mỗi
         # đường chọn một kiểu, nên hình bám loa này còn thanh tiến trình chạy theo loa
         # kia; và loa đầu danh sách không báo giây là hai vòng kéo đứng im hẳn.

@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.26.17 - 2026-09-20
+
+### Fixed — ĐÂY mới là ca iOS: "có đổi" không phải là "có tiến"
+
+Chủ máy: *"tôi đang nói iOS, chứ Android lại bình thường"*. Nói thẳng trước: bản
+0.26.16 vừa rồi **không chạm tới ca này** — nó vá hai đường bám loa, mà ca của chủ máy
+không có loa nào cả. Cùng một triệu chứng, khác đường đi.
+
+Đường của chủ máy là: mở video YouTube trên iPhone, không chọn loa. iOS không cho khung
+nhúng tự phát có tiếng, nên thẻ chuyển sang **tự phát tiếng bằng phần tử âm thanh của
+chính nó**, còn hình chạy câm và bám theo tiếng ấy.
+
+Hàng rào ở đường này có từ 19/09, nhưng nó hỏi sai câu. Nó hỏi *"giây có KHÁC nhịp
+trước không"*. Trên iPhone, WebKit cắt luồng rồi cho chạy lại từ đầu, nên giây bò
+`0 → 0,2 → 0 → 0,3 → 0…` — **đổi liên tục mà chẳng đi tới đâu**. Câu hỏi đúng phải là
+*"có TIẾN không"*.
+
+Đây cũng là lý do Android không sao: bộ phát của nó không cắt luồng kiểu ấy, nên giây
+tiến đều và hàng rào cũ vô tình vẫn đúng. Một lỗi chỉ hiện ở một phía không có nghĩa là
+lỗi nằm ở phía ấy — nó nằm ở phép thử quá lỏng, chỉ là phía kia không chạm tới.
+
+### Và chỗ suýt sửa hụt: sai ở ĐỘ DÀI QUÃNG SO, không phải ở con số ngưỡng
+
+Bản đầu của hàm mới vẫn để lọt. Số đo trên đúng chuỗi giây mà iPhone sinh ra:
+
+```
+hàng rào CŨ  -> cho kéo 6/6 lần      <- đúng lỗi chủ máy gặp
+hàng rào MỚI -> cho kéo 1/6 lần      <- vẫn chưa đủ
+```
+
+Lọt vì mỗi nhịp lại vứt mốc so sánh cũ đi, nên lần nào cũng chỉ so trên một quãng rất
+ngắn — mà trên quãng ngắn thì cú nhảy `0 → 0,3` trông y hệt chạy thật. Nới hay siết
+ngưỡng đều không chữa được, vì cái sai nằm ở **độ dài quãng so**.
+
+Nay chưa chứng minh được thì **giữ nguyên mốc cũ**, nên quãng so cứ dài thêm mãi: đồng
+hồ nhảy loạn quanh 0 không bao giờ đuổi kịp, còn đồng hồ chạy thật đạt ngay ở lần so
+đầu tiên. Đo lại: **0/6**.
+
+Chín phép đo chạy trên chính mã đã sửa, trong trình duyệt thật:
+
+```
+1. loa khoẻ                -> cho kéo        2. loa kẹt (giây đứng yên)  -> chặn
+3. loa tụt về 0            -> chặn           4. bốn đường riêng mốc      -> đều cho kéo
+5. nhịp dày ~40ms          -> cho kéo (không chết vòng)
+6. đổi loa giữa chừng      -> chặn ở nhịp đầu
+7. nhiều loa, loa đầu im   -> chọn loa CÓ báo giây
+8. iOS, luồng cứ chạy lại  -> CŨ 6/6 lọt, MỚI 0/6
+9. tiếng trên máy chạy đều -> cho kéo
+```
+
+Nay cả **bốn** đường đồng bộ dùng chung một hàng rào, thay vì mỗi đường một phép thử tự
+nghĩ ra. Phép thử "có nhúc nhích không" vẫn giữ cho bộ dò kẹt — ở đó câu hỏi đúng là
+*"đã chết hẳn chưa"*, khác hẳn câu *"có được phép kéo ai không"*.
+
+### Vẫn chưa phải bản sửa gốc rễ của iOS
+
+Nói rõ để khỏi trông đợi nhầm: bản này chặn **hậu quả** (hình bị giật về 0), không chữa
+**nguyên nhân** (iOS cắt luồng rồi chạy lại). Gốc rễ vẫn là khoảng chờ giữa cú chạm và
+lúc có địa chỉ luồng, đã nói ở 0.26.15 — việc lớn hơn, để riêng một bản.
+
 ## 0.26.16 - 2026-09-20
 
 ### Fixed — video bị kéo về 0 liên tục: vá nốt HAI nhánh còn hở

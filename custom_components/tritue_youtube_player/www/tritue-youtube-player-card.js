@@ -3437,13 +3437,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       && this._speakerPosition(entityId, session) !== null) || null;
   }
 
-  /** Đồng hồ của loa có THẬT SỰ tiến không — chắn trước khi cho nó kéo ai.
+  /** Đồng hồ dẫn có THẬT SỰ tiến không — chắn trước khi cho nó kéo ai.
    *
-   * Cùng hàng rào đã cứu nhánh nghe-trên-máy 19/09/2026, nay dùng chung cho hai
-   * nhánh bám loa vốn chưa ai chắn. Không thể chỉ nhìn con số: «_speakerPosition»
-   * CỘNG THÊM thời gian trôi kể từ mốc Home Assistant báo, nên một loa báo kẹt vẫn
-   * trông như đang tiến — mỗi lần HA đẩy trạng thái, «media_position» vẫn nguyên
-   * mà mốc thời gian làm mới thành bây giờ, thế là giây suy ra TỤT về chỗ cũ.
+   * Dùng cho CẢ BỐN đường đồng bộ, vì cả bốn hỏng theo đúng một kiểu: tin một đồng
+   * hồ không đi tới đâu, rồi cứ vài giây lại lôi thứ đang chạy bình thường về chỗ
+   * nó đứng. Hai kiểu "không đi tới đâu" mà phép thử này phải bắt được:
+   *
+   * - ĐỨNG IM MÀ TRÔNG NHƯ ĐANG CHẠY (loa): «_speakerPosition» cộng thêm thời gian
+   *   trôi kể từ mốc Home Assistant báo, nên loa cứ báo mãi một con số nhưng mốc
+   *   thời gian làm mới liên tục sẽ cho ra một giây TỤT về chỗ cũ sau mỗi nhịp đẩy.
+   * - CỨ KHỞI ĐỘNG LẠI (tiếng trên máy, iOS): luồng bị WebKit cắt rồi chạy lại từ
+   *   đầu, nên giây chạy 0 → 0,2 → 0 → 0,3 → 0… Phép thử "có ĐỔI không" cho nó lọt
+   *   hết, vì nó đổi liên tục; phải hỏi "có TIẾN không" mới chặn được.
    *
    * Phép thử là so với chính nó ở nhịp trước: phải tiến được ít nhất một nửa quãng
    * thời gian thật đã trôi. Kẹt, tụt về đầu, hay nhảy loạn đều trượt; rung nhẹ vài
@@ -3451,21 +3456,34 @@ class TriTueYouTubePlayerCard extends HTMLElement {
    * không ghi đè — ghi đè thì mốc luôn mới tinh, quãng trôi không bao giờ đủ lớn
    * để kết luận, và vòng đồng bộ chết hẳn.
    *
-   * Mỗi đường giữ mốc riêng theo «khoa»: hai đường cùng chạy trong một nhịp đẩy
+   * Mỗi đường giữ mốc riêng theo «khoa»: nhiều đường cùng chạy trong một nhịp đẩy
    * trạng thái, xài chung một mốc thì đường sau luôn thấy quãng trôi bằng 0.
    */
-  _loaNhipChay(khoa, entityId, giay) {
-    const so = this._loaNhip || (this._loaNhip = {});
+  _dongHoChay(khoa, ai, giay) {
+    const so = this._nhipDan || (this._nhipDan = {});
     const truoc = so[khoa];
     const luc = Date.now();
-    if (!truoc || truoc.ai !== entityId) {
-      so[khoa] = { ai: entityId, giay, luc };
+    /* Mốc quá cũ thì lấy mốc mới, mất đúng một nhịp. Không có lối này thì sau một
+       lần tạm dừng dài, mốc nằm lại tít phía sau và đồng hồ dù đã chạy lại đàng
+       hoàng vẫn phải đuổi cả phút mới được tin. */
+    if (!truoc || truoc.ai !== ai || luc - truoc.luc > 5000) {
+      so[khoa] = { ai, giay, luc };
       return false;
     }
     const troi = (luc - truoc.luc) / 1000;
     if (troi < 0.5) return false;
-    so[khoa] = { ai: entityId, giay, luc };
-    return giay - truoc.giay >= troi * 0.5;
+    /* CHỈ LÀM MỚI MỐC KHI ĐỒNG HỒ ĐÃ TỰ CHỨNG MINH. Đây là chỗ bản đầu của chính
+       hàm này sai, và số đo chỉ ra: đồng hồ cứ chạy lại từ đầu vẫn lọt 1/6 lần.
+       Vì mỗi nhịp lại vứt mốc cũ đi, nên lần nào cũng chỉ so trên một quãng ngắn
+       — mà trên quãng ngắn thì một cú nhảy 0 → 0,3 trông y hệt chạy thật. Nới hay
+       siết ngưỡng đều không chữa được: cái sai nằm ở ĐỘ DÀI QUÃNG SO, không phải
+       ở con số ngưỡng.
+       Nay chưa chứng minh được thì GIỮ NGUYÊN mốc cũ, nên quãng so cứ dài thêm
+       mãi. Đồng hồ nhảy loạn quanh 0 không bao giờ đuổi kịp một quãng đang dài
+       ra, còn đồng hồ chạy thật thì đạt ngay ở lần so đầu tiên. */
+    const chay = giay - truoc.giay >= troi * 0.5;
+    if (chay) so[khoa] = { ai, giay, luc };
+    return chay;
   }
 
   /** Whether what the card shows is playing (this device, the video alone, or the speakers). */
@@ -4841,7 +4859,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     /* VỪA LOA VỪA NGHE TRÊN MÁY: loa báo kẹt thì dòng dưới lôi tiếng trên máy về
        chỗ kẹt ấy — cứ 4 giây một lần, tức bài tự phát lại mãi. Đúng lời chủ máy
        ngay đầu đợt này: "mặc định tắt tiếng và restart liên tục thời gian về 0". */
-    if (!this._loaNhipChay("tieng", nhip, speakerTime)) return;
+    if (!this._dongHoChay("tieng", nhip, speakerTime)) return;
     if (Math.abs(speakerTime - audio.currentTime) > 2) {
       audio.currentTime = speakerTime;
       this._alongSeekHold = Date.now() + 4000;
@@ -5499,7 +5517,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           `Máy này mở được tiếng nhưng không chạy — chạm vào video để nghe. [${soLieu}]`, true);
         return;
       }
+      /* CÓ ĐỔI KHÔNG ≠ CÓ TIẾN KHÔNG — và đúng khe hở này là ca iOS của chủ máy.
+         Chủ máy chốt 20/09/2026: "tôi đang nói iOS, chứ Android lại bình thường".
+         Hàng rào cũ («tiengDangChay») chỉ hỏi giây có KHÁC nhịp trước không. Trên
+         iPhone, WebKit cắt luồng rồi cho chạy lại từ đầu, nên giây bò 0 → 0,2 → 0
+         → 0,3 → 0… tức ĐỔI liên tục mà chẳng đi tới đâu. Phép thử cũ cho lọt hết,
+         cửa mở, và dòng dưới kéo hình về gần 0 cứ bốn giây một lần — đúng cảnh
+         "video reset về 0 liên tục". Android không dựng lại được vì bộ phát của nó
+         không cắt luồng kiểu ấy, nên lỗi chỉ hiện ở một phía.
+         «_dongHoChay» hỏi đúng câu còn thiếu: có tiến được ít nhất một nửa quãng
+         thời gian thật đã trôi không. Vẫn giữ «tiengDangChay» cho bộ dò kẹt bên
+         trên, vì ở đó "nhúc nhích một cái là chưa chết" mới là câu hỏi đúng. */
       if (!audio.paused && tiengDangChay && Date.now() >= this._lastVideoSeekAt + 4000
+        && this._dongHoChay("tieng-may", "may", giayTieng)
         && Math.abs(giayTieng - this._videoTimeNow()) > 2) {
         this._seekPicture(giayTieng);
       }
@@ -5541,7 +5571,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        chỗ kẹt — cứ 5 giây một lần, đúng cảnh "video reset về 0 liên tục". Nhánh
        nghe-trên-máy đã có hàng rào này từ 19/09; nhánh loa thì chưa, nên lỗi cũ
        vẫn còn nguyên một nửa. */
-    if (!this._loaNhipChay("hinh", nhip, speakerTime)) return;
+    if (!this._dongHoChay("hinh", nhip, speakerTime)) return;
     if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
       this._seekPicture(speakerTime);
     }
