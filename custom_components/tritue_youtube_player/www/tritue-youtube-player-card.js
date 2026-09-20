@@ -290,6 +290,14 @@ const deviceAudio = {
     audio.autoplay = true;                   // HA dùng đúng thuộc tính này
     audio.playsInline = true;
     audio.controls = hienNut;
+    /* CHƯA CHẠY LẦN NÀO thì "đang tạm dừng" KHÔNG có nghĩa là người dùng dừng.
+       Phần tử vừa dựng xong luôn ở trạng thái tạm dừng cho tới khi «autoplay»
+       kịp khởi động. Vòng đồng bộ video soi đúng cờ ấy để gương trạng thái sang
+       khung YouTube, nên nếu không phân biệt thì vừa bấm "Nghe trên máy này" là
+       video bị ra lệnh dừng ngay — chủ máy báo đúng thế 20/09/2026: "kích nghe
+       trên máy này bị lỗi, không nghe thấy và dừng video".
+       Bản cũ vô tình không vấp vì đoạn im lặng mở khoá đã chạy sẵn từ trước. */
+    this.daChay = false;
     /* ĐỊA CHỈ NẰM TRONG «<source>», KÈM KIỂU — sao y Home Assistant:
          <audio controls autoplay><source src=… type=… /></audio>
        «type» là gợi ý thật cho WebKit: có nó thì trình duyệt biết ngay có phát được
@@ -298,7 +306,7 @@ const deviceAudio = {
     nguon.src = url;
     if (kieu) nguon.type = kieu;
     audio.append(nguon);                     // CÓ SẴN trước khi vào trang
-    audio.addEventListener("play", () => this.notify());
+    audio.addEventListener("play", () => { this.daChay = true; this.notify(); });
     audio.addEventListener("pause", () => this.notify());
     audio.addEventListener("ended", () => {
       if (this.real() && this.item && !this.next(1)) this.notify("Đã nghe hết hàng đợi.");
@@ -405,10 +413,21 @@ const deviceAudio = {
   batDau(url, startAt, generation, { hienNut = false, kieu = "" } = {}) {
     const audio = this.moi(url, { hienNut, kieu });
     if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
-    /* «autoplay» đã lo việc phát — đây chỉ là cú thúc thêm cho các trình duyệt
-       coi lệnh gọi tường minh là mạnh hơn. Hỏng thì im, vì «autoplay» hoặc bộ
-       nút gốc vẫn còn đó; báo lỗi ở đây chỉ dựng lên một lỗi không có thật. */
-    audio.play().catch((error) => { if (!audio.autoplay) this.playRefused(error); });
+    /* BỊ TỪ CHỐI THÌ PHẢI ĐƯA RA MỘT NÚT THẬT, KHÔNG ĐƯỢC IM.
+       Đo trong Chrome 20/09/2026: phần tử dựng xong với «autoplay» vẫn báo
+       «paused = true» sau 400ms dù «readyState = 4» — tức chỉ mỗi thuộc tính
+       «autoplay» KHÔNG đủ để khởi động. Bản đầu nuốt im lặng lỗi của «play()»
+       (vì «audio.autoplay» luôn đúng), nên ở đường nhanh — vốn không hiện bộ
+       nút gốc — người dùng không có tiếng, không có lỗi, và không có gì để bấm.
+       Nay hỏng thì bật bộ nút gốc của chính phần tử: đó là lối thoát mà trình
+       duyệt Media của Home Assistant dùng, và một cú chạm vào nút phát của phần
+       tử là cử chỉ mà không trình duyệt nào từ chối. */
+    audio.play().catch((error) => {
+      if (this.generation !== generation) return;
+      audio.controls = true;
+      this.notify("Trình duyệt chặn tự phát — chạm nút ▶ ngay trên thanh phát để nghe."
+        + ` (${error?.name || "không rõ"})`, true);
+    });
     this.canhTieng(audio, generation);
     /* LẤY SẴN BÀI KẾ TIẾP. Người dùng iPhone tả đúng lỗ hổng này: "khi phát rồi thì
        khoá màn vẫn phát được, nhưng chuyển bài khác là lại tịt" — chuyển bài là một
@@ -4559,8 +4578,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        Có sẵn thì «deviceAudio.listen» dựng phần tử ngay, không chờ gì.
        Chỉ ba bài đầu: đủ cho thao tác thường gặp mà không nã máy chủ cả trang. */
     deviceAudio.entryId = this._entryId();
+    /* Lấy sẵn cho CẢ bài video, đừng lọc ra. Bài video vẫn có nút "Nghe trên máy
+       này" — mà đó đúng là đường hay bị chờ nhất, vì người dùng đang xem rồi mới
+       chuyển sang nghe. Lọc chúng ra là bỏ sót đúng ca cần nhất. */
     this._results.slice(0, 3)
-      .filter((item) => !this._isVideoItem(item, item.source || this._source))
       .forEach((item) => deviceAudio.chuanBi({ ...item, source: item.source || this._source }));
     // Gợi ý hiện khi chưa có kết quả, tự ẩn khi có — xem `_renderSuggestions`.
     this._renderSuggestions();
@@ -5513,7 +5534,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       // The muted picture follows this device's sound.
       const audio = deviceAudio.real();
       if (!audio) return;
-      if (audio.paused && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
+      /* CHỈ GƯƠNG TRẠNG THÁI DỪNG KHI TIẾNG ĐÃ TỪNG CHẠY. Phần tử mới dựng luôn
+         "đang tạm dừng" trong khoảnh khắc chờ «autoplay» khởi động, mà đó không
+         phải ý người dùng — gương sang khung YouTube là dừng đúng cái video họ
+         đang xem, ngay lúc vừa bấm "Nghe trên máy này". */
+      if (audio.paused && deviceAudio.daChay && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
       if (!audio.paused && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
       /* ĐỒNG HỒ DẪN PHẢI ĐANG CHẠY thì mới được kéo đồng hồ theo. Đo trên clip
          quay màn hình iPhone 19/09/2026: phần tử âm thanh báo "không tạm dừng"

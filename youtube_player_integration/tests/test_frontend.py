@@ -213,6 +213,21 @@ class LovelaceCardContractTests(unittest.TestCase):
         # bài KẾ TIẾP có sẵn — "chuyển bài khác là lại tịt" chính là chỗ này).
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
         self.assertIn("if (ke) this.chuanBi(ke);", script)
+        # 0.26.20: phần tử VỪA DỰNG luôn "đang tạm dừng" trong khoảnh khắc chờ
+        # «autoplay» khởi động — đó KHÔNG phải ý người dùng. Vòng đồng bộ gương
+        # trạng thái ấy sang khung YouTube, nên thiếu hàng rào này là vừa bấm
+        # "Nghe trên máy này" đã dừng đúng cái video đang xem (chủ máy báo
+        # 20/09/2026: "không nghe thấy và dừng video"). Bản cũ vô tình không vấp
+        # vì đoạn im lặng mở khoá đã chạy sẵn từ trước.
+        self.assertIn("this.daChay = false;", script)
+        self.assertIn('audio.addEventListener("play", () => { this.daChay = true; this.notify(); });', script)
+        self.assertIn("audio.paused && deviceAudio.daChay && [1, 3].includes(video.state)", script)
+        # Đo được: «autoplay» một mình KHÔNG đủ khởi động (paused vẫn true sau 400ms
+        # dù readyState = 4). Nên «play()» bị từ chối thì phải đưa ra một nút THẬT,
+        # không được im — bản đầu nuốt lỗi nên đường nhanh không tiếng, không lỗi,
+        # không có gì để bấm.
+        self.assertIn("audio.controls = true;", script)
+        self.assertIn("chạm nút ▶ ngay trên thanh phát để nghe", script)
         # MỘT LUỒNG MỘT LÚC: Apple giới hạn iOS ở đúng một luồng tiếng hoặc hình. Phần
         # tử cũ còn trong trang là còn giữ chỗ, nên phải gỡ HẲN chứ không chỉ tạm dừng.
         # Thứ tự bắt buộc: dừng, bỏ nguồn, load() để WebKit buông, rồi mới gỡ.

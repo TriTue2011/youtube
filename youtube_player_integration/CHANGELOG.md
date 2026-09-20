@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.26.20 - 2026-09-20
+
+### Fixed — lỗi do CHÍNH bản 0.26.19 gây ra: bấm "Nghe trên máy này" thì dừng video
+
+Chủ máy: *"kích nghe trên máy này bị lỗi, không nghe thấy và dừng video"*. Đây là lỗi
+tôi làm ra ở bản trước, không phải lỗi cũ.
+
+Vòng đồng bộ có một dòng gương trạng thái tạm dừng của tiếng sang khung YouTube:
+
+```js
+if (audio.paused && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
+```
+
+Trước 0.26.19, lúc bấm nút thì đoạn im lặng mở khoá **đã chạy sẵn từ trước**, nên
+`paused` là `false` và dòng này không đụng tới video. Bản 0.26.19 bỏ đoạn im lặng và
+dựng phần tử mới — mà phần tử vừa dựng thì **luôn đang tạm dừng** trong khoảnh khắc chờ
+khởi động. Thế là vừa bấm "Nghe trên máy này" là thẻ lập tức ra lệnh **dừng đúng cái
+video đang xem**, trong khi tiếng cũng chưa kịp vào. Đúng hai triệu chứng.
+
+Nay chỉ gương trạng thái dừng **sau khi tiếng đã từng chạy ít nhất một lần**. Phần tử
+chưa chạy lần nào thì "đang tạm dừng" không có nghĩa là người dùng muốn dừng.
+
+### Fixed — và một lỗ im lặng nữa lộ ra khi đo
+
+Đo trong Chrome để kiểm tiền đề của chẩn đoán trên, và số đo lòi thêm chuyện khác:
+
+```
+ngay sau khi dựng  : paused = true
+ngay sau khi vào trang : paused = true
+sau 400ms          : paused = true, readyState = 4
+```
+
+`readyState = 4` nghĩa là dữ liệu đã đủ, vậy mà vẫn chưa chạy — tức **chỉ mỗi thuộc
+tính `autoplay` không đủ để khởi động**. Mà bản 0.26.19 lại nuốt im lặng mọi lỗi của
+`play()` (điều kiện `if (!audio.autoplay)` không bao giờ đúng). Hậu quả ở đường nhanh,
+vốn cố ý không hiện bộ nút gốc: **không tiếng, không lỗi, không có gì để bấm**.
+
+Nay bị từ chối thì bật luôn bộ nút gốc của chính phần tử và nói rõ phải làm gì. Một cú
+chạm vào nút phát của phần tử là cử chỉ không trình duyệt nào từ chối — đúng lối thoát
+mà trình duyệt Media của Home Assistant dùng.
+
+### Đổi thêm — lấy sẵn địa chỉ cho CẢ bài video
+
+Bản trước lọc bài video ra khỏi danh sách lấy sẵn, nghĩ rằng chúng sẽ được xem chứ
+không nghe. Sai: bài video vẫn có nút "Nghe trên máy này", và đó đúng là đường hay phải
+chờ nhất, vì người ta đang xem rồi mới chuyển sang nghe. Nay lấy sẵn cả ba bài đầu,
+không lọc.
+
 ## 0.26.19 - 2026-09-20
 
 ### Fixed — gỡ HẲN mô hình cũ, và sao đúng hình dạng của Home Assistant
