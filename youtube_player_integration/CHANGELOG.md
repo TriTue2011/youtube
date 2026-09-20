@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.26.19 - 2026-09-20
+
+### Fixed — gỡ HẲN mô hình cũ, và sao đúng hình dạng của Home Assistant
+
+Bản 0.26.18 dựng mô hình mới nhưng **để sót mô hình cũ nằm lại**. Đọc kỹ mã thật của
+Home Assistant (`hui-dialog-web-browser-play-media.ts`) thì thấy hai chỗ chưa khớp, và
+một chỗ còn **có hại**.
+
+**Sao đúng hình dạng.** HA viết:
+
+```html
+<audio controls autoplay>
+  <source src=${sourceUrl} type=${sourceType} />
+</audio>
+```
+
+Địa chỉ nằm trong `<source>` **kèm `type`**, chứ không gắn thẳng lên phần tử. `type` là
+gợi ý thật cho WebKit — có nó thì trình duyệt biết ngay có phát được không, khỏi tự đánh
+hơi byte đầu. Máy phát vốn đã trả `media_content_type` nên không tốn thêm lượt hỏi nào;
+số đo trên máy chủ cho thấy đó là `audio/mp4`.
+
+**Chỗ có hại.** Lúc mở video YouTube, thẻ vẫn gọi cú "mở khoá" cũ — tức dựng một phần tử
+tiếng **ngay trước khi khung video mở**. Apple giới hạn iOS ở đúng một luồng tại một
+thời điểm, nên đó là tự tay giành chỗ của chính cái video vừa bấm. Đã bỏ.
+
+**Dọn hết phần còn lại**: đoạn im lặng mở khoá, hàm `unlock()`, hàm dựng phần tử cũ, và
+số đo `mo_khoa=…`. Số đo ấy đã làm xong việc của nó — chính `mo_khoa=ok` đi kèm `nap=0`
+là bằng chứng bác bỏ mô hình cũ; mô hình chết thì số đo của nó cũng bỏ, chứ không giữ
+lại một con số không còn đo điều gì. Có `assertNotIn` ghim để không ai vô tình dựng lại.
+
+**Dừng là gỡ hẳn.** Trước đây dừng nhạc chỉ bỏ địa chỉ rồi để phần tử nằm lại trong
+trang — mà còn nằm lại là còn giữ chỗ phát duy nhất của iOS, khiến bài sau phải xếp hàng
+sau một thứ đã im từ lâu. Nay: dừng, bỏ nguồn, `load()` cho WebKit thật sự buông, rồi
+gỡ khỏi trang.
+
+### Android có đổi gì không
+
+Không xấu đi, và có lợi một phần. Android/Chrome chưa bao giờ vướng luật một-luồng hay
+luật cử chỉ, nên phần đó với nó là vô hại. Cái nó được hưởng là **lấy sẵn địa chỉ
+luồng**: bấm một bài trong ba bài đầu, hoặc chuyển sang bài kế tiếp, thì không còn phải
+chờ 1,5–2,6 giây hỏi máy chủ nữa — nhạc vào gần như tức thì.
+
+### Kiểm chứng
+
+Bộ test của thẻ 15/15 đạt, và thẻ được **nạp thật trong trình duyệt** để chắc bản dọn
+không làm vỡ gì: đăng ký thành phần thành công, các hàm đều còn, **không một lỗi nào lúc
+nạp**. Vẫn chưa thử trên iPhone thật — không có máy iOS ở đây.
+
 ## 0.26.18 - 2026-09-20
 
 ### Fixed — iOS: bỏ hẳn mô hình cũ, làm y như trình duyệt Media của Home Assistant

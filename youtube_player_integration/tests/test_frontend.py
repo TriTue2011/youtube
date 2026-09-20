@@ -191,7 +191,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         # không tải, không báo lỗi, nằm im ở «đang tải»: đúng «nap=0 mang=2 loi=0».
         # Trình duyệt Media của HA chạy được trên iPhone vì nó dựng phần tử MỚI mang
         # sẵn địa chỉ, để «autoplay» lo việc phát, và có «controls» làm lối thoát.
-        self.assertIn('audio.setAttribute("src", url);', script)
+        # Sao y hình dạng của HA: <audio controls autoplay><source src type /></audio>.
+        # «type» là gợi ý thật cho WebKit, khỏi phải tự đánh hơi byte đầu; máy phát đã
+        # trả sẵn kiểu nên không tốn thêm lượt hỏi nào.
+        self.assertIn('const nguon = document.createElement("source");', script)
+        self.assertIn("nguon.src = url;", script)
+        self.assertIn("if (kieu) nguon.type = kieu;", script)
+        self.assertIn('String(payload?.media_content_type || "")', script)
         self.assertIn("audio.autoplay = true;", script)
         self.assertIn("audio.playsInline = true;", script)
         self.assertIn("audio.controls = hienNut;", script)
@@ -208,18 +214,24 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
         self.assertIn("if (ke) this.chuanBi(ke);", script)
         # MỘT LUỒNG MỘT LÚC: Apple giới hạn iOS ở đúng một luồng tiếng hoặc hình. Phần
-        # tử cũ còn trong trang là còn giữ chỗ, nên phải gỡ hẳn chứ không chỉ tạm dừng.
-        self.assertIn('cu.removeAttribute("src");', script)
-        self.assertIn("cu.remove();", script)
-        # Mô hình im-lặng-lặp-vòng đã bị THAY, không được để sót lại nửa vời.
+        # tử cũ còn trong trang là còn giữ chỗ, nên phải gỡ HẲN chứ không chỉ tạm dừng.
+        # Thứ tự bắt buộc: dừng, bỏ nguồn, load() để WebKit buông, rồi mới gỡ.
+        self.assertIn("goPhanTu(audio) {", script)
+        self.assertIn("audio.replaceChildren();", script)
+        self.assertIn("audio.remove();", script)
+        # Mô hình im-lặng-mở-khoá phải bị gỡ HẲN, không để sót nửa vời: chính nó là
+        # cái sai gốc (đổi «src» trên một phần tử đang sống = tải ngoài cú chạm).
         self.assertEqual(script.count("audio.loop = false;"), 0)
+        self.assertNotIn("const SILENCE =", script)
+        self.assertNotIn("unlock()", script)
+        self.assertNotIn("moKhoa", script)
         # Lưới an toàn: quay lại trang thì thử phát lại — chính là cái mẹo thủ công
         # mà người dùng tự tìm ra, nay làm tự động.
         self.assertIn("} else if (this.item && this.real() && audio.paused) {", script)
-        # 0.26.14: GHI LẠI kết quả cú mở khoá. Bản cũ nuốt im lặng mọi lỗi ở đó, nên
-        # nếu chính cú mở khoá hỏng thì không ai biết — mà mọi thứ sau đều dựa vào nó.
-        self.assertIn('this.moKhoa = "dang-thu";', script)
-        self.assertIn("mo_khoa=${this.moKhoa", script)
+        # 0.26.14 từng ghi lại kết quả cú mở khoá («mo_khoa=…»). Số đo ấy ĐÃ LÀM XONG
+        # việc của nó: «mo_khoa=ok» kèm «nap=0» chính là bằng chứng bác bỏ mô hình
+        # mở-khoá-một-lần-rồi-đổi-nguồn. Mô hình chết thì số đo của nó cũng bỏ, chứ
+        # không giữ lại một con số không còn đo điều gì — xem assertNotIn bên dưới.
         # Và thử phát lại một lần sau 3 giây, đúng cái mẹo người dùng tự tìm ra.
         self.assertIn("this.thuLaiTimer = setTimeout(() => {", script)
         # 0.26.15: số đo «mo_khoa=ok» chứng minh phần tử ĐÃ được phép phát mà vẫn
