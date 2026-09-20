@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.29 - 2026-09-20
+
+### Changed — bấm nghe bài PHÁT TRỰC TIẾP thì mở hình, không bỏ qua nữa
+
+Chủ máy: *"thì sẽ không phải bỏ qua"*. Đúng. Bản 0.26.28 nhận ra bài trực tiếp rồi báo
+một câu và đứng im — biết lỗi thì tốt hơn mã lỗi thô, nhưng nhạc vẫn không chạy.
+
+Đo thêm trên bản kê luồng của bài trực tiếp thật:
+
+```
+Content-Type thật : application/vnd.apple.mpegurl
+bản kê chứa       : địa chỉ TUYỆT ĐỐI tới googlevideo.com
+```
+
+Hai điều rút ra. Một: **loa không vướng gì** — bản kê dùng địa chỉ tuyệt đối nên loa
+Cast tự đi lấy từng đoạn, đường ra loa vẫn đi như cũ. Hai: chỉ thẻ `<audio>` của Chrome
+là không phát được HLS, còn **khung YouTube thì phát tốt**.
+
+Nên nay bấm nghe một bài trực tiếp sẽ **mở hình lên** kèm lời giải thích, thay vì đứng
+im. Có tiếng ngay, chỉ là kèm hình.
+
+Đo lại sau khi sửa, cả bốn thao tác:
+
+```
+nghe bài thường      → phát luồng bình thường
+nghe bài trực tiếp   → mở hình, không đặt nguồn, không lỗi
+next sang trực tiếp  → không đặt nguồn, không lỗi
+xem bài trực tiếp    → mở hình bình thường
+```
+
+### Fixed — máy chủ khai sai kiểu nội dung cho bài trực tiếp
+
+Bảng tra kiểu không có đuôi `m3u8` nên nó rơi về mặc định `audio/mp4` — một lời khai
+sai khiến bên nhận tưởng phát được rồi mới hỏng. Nay khai đúng
+`application/vnd.apple.mpegurl`.
+
+Sửa ở **cả hai bản song song** (add-on và c2a) và đã đối chiếu khớp từng dòng.
+
 ## 0.26.28 - 2026-09-20
 
 ### Fixed — bấm sang bài PHÁT TRỰC TIẾP thì báo "NotSupportedError"

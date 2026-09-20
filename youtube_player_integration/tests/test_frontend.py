@@ -216,6 +216,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("return !Number(item?.duration);", script)
         self.assertIn("đang phát trực tiếp nên không nghe riêng", script)
         self.assertIn("|| this.laTrucTiep(item)) return;", script)
+        # 0.26.29: bấm NGHE một bài trực tiếp thì CHUYỂN SANG XEM, đừng bỏ qua — chủ
+        # máy chốt "thì sẽ không phải bỏ qua". Bài trực tiếp chỉ có bản kê HLS mà thẻ
+        # <audio> không phát được, nhưng KHUNG YOUTUBE thì phát tốt, nên mở hình lên
+        # là có tiếng ngay. Đường ra loa không vướng gì: đo được bản kê dùng địa chỉ
+        # tuyệt đối nên loa Cast tự lấy từng đoạn.
+        self.assertIn("if (!watch && isVideo && deviceAudio.laTrucTiep(item)) {", script)
+        self.assertIn("đã mở hình để nghe", script)
         self.assertIn("async layLuong(item) {", script)
         self.assertIn("if (ban && Date.now() - ban.luc <= 240000) return ban.url;", script)
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)

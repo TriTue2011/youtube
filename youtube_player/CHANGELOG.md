@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.6 - 2026-09-20
+
+### Fixed — khai sai kiểu nội dung cho bài phát trực tiếp
+
+Bài trực tiếp không có tệp nhạc, chỉ có một bản kê luồng HLS (`…/index.m3u8`). Bảng tra
+kiểu không có đuôi `m3u8` nên nó rơi về mặc định `audio/mp4` — một lời khai sai khiến
+bên nhận tưởng phát được rồi mới hỏng. Đo trên máy chủ gốc: nơi đó trả đúng
+`application/vnd.apple.mpegurl`.
+
+Nay khai đúng. Sửa ở **cả hai bản song song** (add-on và c2a), đã đối chiếu khớp từng
+dòng — để hai bản trôi khỏi nhau là lớp lỗi đã cắn dự án này nhiều lần.
+
 ## 0.9.5 - 2026-09-20
 
 ### Fixed — Lỗi 153 trên iPhone: nay nói rõ chuyện gì và chữa thế nào

@@ -5796,6 +5796,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._watchCurrent();
         return;
       }
+      /* BÀI TRỰC TIẾP: bấm nghe thì CHUYỂN SANG XEM, đừng bỏ qua.
+         Chủ máy chốt 20/09/2026: "thì sẽ không phải bỏ qua". Đúng — bài trực tiếp
+         chỉ có bản kê luồng HLS, mà thẻ «audio» của Chrome không phát được, nhưng
+         KHUNG YOUTUBE thì phát tốt. Nên thay vì báo lỗi rồi đứng im, mở hình lên là
+         có tiếng ngay.
+         (Loa thì không vướng gì: đo 20/09/2026, bản kê dùng địa chỉ TUYỆT ĐỐI nên
+         loa Cast tự đi lấy từng đoạn được — đường ra loa vẫn đi như cũ.) */
+      if (!watch && isVideo && deviceAudio.laTrucTiep(item)) {
+        this._queue = queue;
+        this._queueIndex = position;
+        if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
+        this._openVideo(item, { withSpeakers: false });
+        this._setStatus(`“${name}” đang phát trực tiếp nên không nghe riêng tiếng`
+          + " được — đã mở hình để nghe.");
+        return;
+      }
       if (watch && isVideo) {
         this._queue = queue;
         this._queueIndex = position;
