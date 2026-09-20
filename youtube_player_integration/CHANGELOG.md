@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.26.36 - 2026-09-21
+
+### Tích loa lúc đang nghe trên máy: hết quãng im lặng ở giữa
+
+Soát lại cả bốn nước đi của tiếng thì lộ ra một quãng chết không ai để ý: bấm tích loa
+trong lúc đang nghe (hoặc đang xem) trên máy thì thẻ **tắt tiếng máy ngay lập tức**, trong
+khi loa còn phải chờ máy chủ giải bài rồi mới nạp đệm.
+
+Đo trên máy chủ 20/09/2026: riêng việc giải một bài YouTube mất **1,59 giây**, và loa Cast
+còn vài giây nữa mới thật sự kêu — chính vì thế thẻ đã có sẵn thang tua 1,2 / 2,4 / 3,8 /
+6 giây để chờ loa. Cộng lại là vài giây **không có tiếng ở đâu cả**.
+
+Nay tiếng trên máy chạy tiếp cho tới **nhịp đầu tiên loa thật sự báo "playing"** rồi mới
+tắt. Nếu quá 15 giây loa vẫn im thì thẻ không nhường nữa — loa hỏng thì ít nhất người dùng
+còn nghe được trên máy, thay vì mất cả hai.
+
+| Nước đi | Trước | Nay |
+|---|---|---|
+| Đang nghe (chỉ tiếng) trên máy → tích loa | im lặng vài giây rồi loa kêu | nghe liên tục, máy tắt đúng lúc loa kêu |
+| Đang xem video trên máy → tích loa | khung câm ngay, chờ loa | khung giữ tiếng tới khi loa kêu |
+| Đang nghe loa → bật "nghe trên máy này" | 4–10 giây (bản trước) | khung YouTube vào thẳng giây của loa (0.26.34) |
+| Chọn một bài KHÁC để phát ra loa | dừng ngay | vẫn dừng ngay — vừa chọn bài mới mà còn nghe bài cũ mới là lạ |
+
 ## 0.26.35 - 2026-09-21
 
 ### Lớp tiếp sức luồng nay trả lời cả HEAD

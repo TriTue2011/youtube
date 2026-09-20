@@ -968,6 +968,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._progressTimer = null;
     clearInterval(this._waveTimer);
     this._waveTimer = null;
+    clearInterval(this._henNhuongTieng);
+    this._henNhuongTieng = null;
     if (this._onFullscreenChange) {
       document.removeEventListener("fullscreenchange", this._onFullscreenChange);
       this._onFullscreenChange = null;
@@ -6146,6 +6148,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _closeVideo() {
     if (this._video.picture) this._leavePicture();
     this._awayPictureOk = false;
+    clearInterval(this._henNhuongTieng);
+    this._henNhuongTieng = null;
     this._dungThucTieng();
     clearTimeout(this._soundCheckTimer);
     this._soundHintShown = false;
@@ -6368,13 +6372,41 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         entity_id: [entityId],
       });
       this._dongBoLoaVeGiay(entityId, giay, moc);
-      deviceAudio.stop();
+      // Tiếng trên máy chạy tiếp tới lúc loa kêu — xem «_nhuongTiengChoLoa».
+      this._nhuongTiengChoLoa(entityId, () => {
+        deviceAudio.stop();
+        this._syncNowPlaying();
+        this._updateTransportState();
+      });
       this._syncNowPlaying();
       this._updateTransportState();
       this._setStatus(`${name} đang phát “${ten}” tiếp từ chỗ đang nghe.`);
     } catch (error) {
       this._setStatus(error?.message || `Không phát được ra ${name}.`, true);
     }
+  }
+
+  /** NHƯỜNG TIẾNG CHO LOA ĐÚNG LÚC LOA LÊN TIẾNG, ĐỪNG CẮT TRƯỚC.
+   *
+   *  Gửi bài cho loa xong mà tắt tiếng trên máy ngay thì sinh một quãng IM LẶNG: máy
+   *  chủ còn giải bài, loa còn nạp đệm. Đo trên máy chủ 20/09/2026: riêng việc giải
+   *  một bài YouTube đã mất 1,59 giây, chưa kể loa Cast còn vài giây nữa mới kêu. Với
+   *  người nghe thì quãng ấy đúng là "mất tiếng".
+   *
+   *  Nên giữ tiếng trên máy tới nhịp ĐẦU TIÊN loa thật sự báo "playing". Quá 15 giây
+   *  loa vẫn chưa lên tiếng thì thôi, không nhường nữa — loa hỏng thì ít nhất người
+   *  dùng còn nghe được trên máy, thay vì mất cả hai.
+   */
+  _nhuongTiengChoLoa(entityId, nhuong) {
+    clearInterval(this._henNhuongTieng);
+    const batDau = Date.now();
+    this._henNhuongTieng = setInterval(() => {
+      const trangThai = this._hass?.states?.[entityId]?.state;
+      if (trangThai !== "playing" && Date.now() - batDau < 15000) return;
+      clearInterval(this._henNhuongTieng);
+      this._henNhuongTieng = null;
+      if (trangThai === "playing") nhuong();
+    }, 400);
   }
 
   /** Đưa loa về đúng giây người dùng đang nghe — MỘT cú tua, ở nhịp đầu tiên loa
@@ -6436,12 +6468,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._pendingSpeakerSeek = { entityId, from: videoTime, at: Date.now() };
       this._video.withSpeakers = true;
       this._video.followsDevice = false;
-      this._video.soundHere = false;
-      this._videoCommand("mute");
-      if (deviceAudio.item) deviceAudio.stop();
+      // Khung giữ tiếng tới lúc loa kêu rồi mới câm — xem «_nhuongTiengChoLoa».
+      this._nhuongTiengChoLoa(entityId, () => {
+        this._video.soundHere = false;
+        this._videoCommand("mute");
+        if (deviceAudio.item) deviceAudio.stop();
+        this._syncNowPlaying();
+      });
       this._syncNowPlaying();
       this._updateTransportState();
-      this._setStatus(`${name} phát tiếng; video trên thẻ tắt tiếng và chạy theo loa.`);
+      this._setStatus(`${name} sắp phát; tiếng giữ trên thẻ tới khi loa kêu rồi tự tắt.`);
     } catch (error) {
       this._setStatus(error?.message || `Không phát được ra ${name}.`, true);
     }
