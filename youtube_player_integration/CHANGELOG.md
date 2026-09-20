@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.26.33 - 2026-09-20
+
+### Bấm "Nghe (chỉ tiếng)" mà vẫn ra video
+
+> *"À giờ chọn chỉ nghe, hình tai nghe, nó lại ra mặc định video."*
+
+Đúng, và đây là lỗi có sẵn chứ không phải mới. Khi có loa được tích, dòng quyết định mở
+hình hay không gộp hai ý làm một:
+
+```js
+if ((watch && isVideo) || this._video.open) { … }
+```
+
+Vế thứ hai nghĩa là: **hễ đang mở hình thì bài mới cũng mở hình** — bất kể người dùng vừa
+bấm nút nào. Nên đang xem một bài, bấm nút tai nghe cho bài khác, thì hình lại hiện lên.
+
+Ý định đã nêu rõ ở nút bấm thì không được đoán lại. Nay bấm nút tai nghe là **đóng hình**.
+
+Đo lại trên trình duyệt, cùng một cảnh (đang mở hình, loa "Phòng khách" đã tích):
+
+| Bấm | Thẻ làm gì |
+|---|---|
+| Xem video | mở hình |
+| Nghe (chỉ tiếng) | **đóng hình** |
+
 ## 0.26.32 - 2026-09-20
 
 ### Safari trên máy Mac bị xếp nhầm vào nhóm Android

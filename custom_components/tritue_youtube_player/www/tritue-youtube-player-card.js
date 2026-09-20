@@ -6152,11 +6152,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         ...(playlist ? { playlist_id: playlist.id } : {}),
       });
       if (deviceAudio.item) deviceAudio.stop();
-      if ((watch && isVideo) || this._video.open) {
-        // The picture follows the speakers: the next video synced, or closed
-        // when the speakers now play an audio-only source.
-        if (isVideo) this._openVideo(item, { withSpeakers: true });
-        else this._closeVideo();
+      if (watch && isVideo) {
+        // The picture follows the speakers: the next video synced.
+        this._openVideo(item, { withSpeakers: true });
+      } else if (this._video.open) {
+        /* BẤM "NGHE (CHỈ TIẾNG)" LÀ NÓI RÕ KHÔNG MUỐN HÌNH — đóng hình lại.
+           Trước đây dòng điều kiện gộp cả hai ý làm một: hễ đang mở hình thì bài
+           mới cũng mở hình, bất kể người dùng bấm nút nào. Kết quả đúng như chủ
+           máy báo 20/09/2026: "giờ chọn chỉ nghe, hình tai nghe, nó lại ra mặc
+           định video". Ý định đã nêu rõ ở nút bấm thì không được đoán lại. */
+        this._closeVideo();
       }
       const ignored = requestedCount - entityIds.length;
       this._setStatus(

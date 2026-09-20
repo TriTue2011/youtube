@@ -421,6 +421,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         # ĐANG PHÁT thì lúc bấm không còn lượt hỏi nào.
         self.assertIn("if (session?.title && !deviceAudio.item) {", script)
         self.assertIn("deviceAudio.chuanBi({", script)
+        # 0.26.33 — bấm "Nghe (chỉ tiếng)" là nói rõ KHÔNG muốn hình. Điều kiện cũ
+        # gộp hai ý làm một («(watch && isVideo) || this._video.open»): hễ đang mở
+        # hình thì bài mới cũng mở hình, bất kể người dùng bấm nút nào. Chủ máy báo
+        # 20/09/2026: "giờ chọn chỉ nghe, hình tai nghe, nó lại ra mặc định video".
+        # Ý định đã nêu rõ ở nút bấm thì không được đoán lại.
+        self.assertNotIn("if ((watch && isVideo) || this._video.open) {", script)
+        self.assertIn('BẤM "NGHE (CHỈ TIẾNG)" LÀ NÓI RÕ KHÔNG MUỐN HÌNH', script)
         self.assertIn("this._toggleVideoExpanded()", script)
         # 0.26.11: hình của CHÍNH THẺ (Facebook) thì phóng to vẫn giữ thanh tiến trình
         # và hàng nút. Luật ẩn sinh ra vì khung nhúng YouTube có bộ nút riêng; phần tử
