@@ -248,7 +248,9 @@ class LovelaceCardContractTests(unittest.TestCase):
         # trên Android chúng chỉ có thể gây hại (chen vào luồng đang tải, và báo
         # hỏng oan sau 12 giây). Từ đây thứ gì riêng cho iOS phải đi qua cổng này.
         self.assertIn("const laIOS = () => {", script)
-        self.assertIn("if (!laIOS()) return;", script)
+        # 0.26.32: cổng này nay là «laTao» — iPhone, iPad VÀ Safari trên máy Mac,
+        # vì cả ba cùng chạy WebKit. Xem phần 0.26.32 bên dưới để biết số đo.
+        self.assertIn("if (!laTao()) return;", script)
         # 0.26.26: trên iOS thì ĐỪNG cướp tiếng của khung YouTube. «_soundFromDevice»
         # tắt tiếng khung rồi giao việc phát cho phần tử âm thanh — mà trên iOS phần
         # tử ấy đo được là không bao giờ tải. Kết quả: khung câm, phần tử im, không
@@ -256,7 +258,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # nghe được, mặc định tắt tiếng".
         # Giả lập với user-agent iPhone: không cướp tiếng, gửi unMute + playVideo,
         # soundHere vẫn true. Với user-agent máy bàn: hành vi cũ, không đổi.
-        self.assertIn("if (!video.withSpeakers && !laIOS()) {", script)
+        self.assertIn("if (!video.withSpeakers && !laTao()) {", script)
         # 0.26.30 — CHÉP TỪ MỘT BẢN CÀI ĐÃ CHẠY ĐƯỢC. Chủ máy đưa thẻ phicomm-r1-card
         # kèm "dùng trên iPhone nghe nhạc, xem video trên iPhone bình thường". Đọc mã
         # nó thì ra điều tìm cả ngày: nó KHÔNG phát nhạc bằng thẻ <audio> bao giờ.
@@ -278,7 +280,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('navigator.wakeLock.request("screen")', script)
         # Và đường iOS phải GIỮ TIẾNG TRONG KHUNG, không chuyển sang phần tử âm thanh
         # — đó là chỗ mọi bản trước hỏng.
-        self.assertIn("if (on && laIOS() && video.open && !video.withSpeakers && video.item) {", script)
+        self.assertIn("if (on && laTao() && video.open && !video.withSpeakers && video.item) {", script)
         # 0.26.27: lời nhắn phải ĐÚNG MÁY ĐANG CẦM. Chủ máy gửi ảnh điện thoại
         # Android mà hiện câu nói về iPhone — vừa sai vừa khiến người đọc đi tìm
         # nhầm chỗ. Giới hạn "một luồng một lúc" là của iOS; trên Android mà nhánh
@@ -386,6 +388,39 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('<button class="results-toggle"', script)
         self.assertIn("_thuGonKetQua(item) {", script)
         self.assertIn("this._thuGonKetQua(item);", script)
+        # 0.26.32 — SAFARI TRÊN MÁY MAC đi cùng luật với iPhone. Chủ máy đo trên
+        # Safari của iMac 20/09/2026 và gửi kèm số: nap=0 mang=3 loi=0 nguon=1 dom=0.
+        # «mang=3» là NETWORK_NO_SOURCE — phần tử âm thanh đã BỎ CUỘC không tìm được
+        # nguồn phát, dù địa chỉ đã có và không báo lỗi nào. Cùng họ hỏng với iPhone
+        # vì cùng là WebKit. Trước đây máy Mac để bàn lọt ra ngoài vì «laIOS» phải
+        # hỏi thêm màn cảm ứng để phân biệt iPad với Mac, mà Mac để bàn thì không có
+        # — nên nó bị xếp vào nhóm Android và đi đúng con đường đã hỏng.
+        self.assertIn("const laSafari = () => {", script)
+        self.assertIn("const laTao = () => laIOS() || laSafari();", script)
+        # Chrome trên Android cũng khai chuỗi "Safari" trong user-agent, nên phải loại
+        # ra — nếu không thì Android bị kéo sang đường của máy nhà Táo.
+        self.assertIn('!/Chrome|Chromium|Android|Edg\\//.test(ua)', script)
+        # HAI NỀN TẢNG NGƯỢC NHAU, và đây là chỗ chúng tách. Đo 20/09/2026:
+        #   - Android: dựng lại khung có tiếng thì Chrome KHÔNG cho tự phát, nó rơi
+        #     về nút play của YouTube. Phần tử âm thanh thì chạy.
+        #   - Safari/iOS: phần tử âm thanh không tải (mang=3 / mang=2). Khung thì chạy.
+        # Nên nhánh khung phải gác bằng laTao(), KHÔNG phải bằng công tắc tắt màn hình.
+        self.assertIn(
+            "} else if (video.open && video.withSpeakers && !video.picture && laTao()) {",
+            script)
+        # Ràng buộc cũ đã bỏ: chủ máy báo "Phải bật nghe khi tắt màn hình kèm theo
+        # thì mới bật được nghe trên máy này".
+        self.assertNotIn("!video.picture && !listenScreenOff()", script)
+        # Bấm XEM trong lúc công tắc tắt-màn-hình đang bật: máy nhà Táo giữ tiếng
+        # trong khung thay vì giao cho phần tử âm thanh — đúng đường đã đưa chủ máy
+        # vào cảnh trong ảnh chụp Safari trên iMac.
+        self.assertIn("if (listenScreenOff() && !laTao()) {", script)
+        self.assertIn("if (listenScreenOff() && laTao()) {", script)
+        # "mất 4s đến 10s mới có tiếng" trên Android: phần lớn quãng ấy là một lượt
+        # hỏi máy chủ xin địa chỉ luồng (đo trước: 1,5-2,6 giây). Lấy sẵn cho bài LOA
+        # ĐANG PHÁT thì lúc bấm không còn lượt hỏi nào.
+        self.assertIn("if (session?.title && !deviceAudio.item) {", script)
+        self.assertIn("deviceAudio.chuanBi({", script)
         self.assertIn("this._toggleVideoExpanded()", script)
         # 0.26.11: hình của CHÍNH THẺ (Facebook) thì phóng to vẫn giữ thanh tiến trình
         # và hàng nút. Luật ẩn sinh ra vì khung nhúng YouTube có bộ nút riêng; phần tử

@@ -60,6 +60,28 @@ const laIOS = () => {
   return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;
 };
 
+/** Safari — KỂ CẢ trên máy Mac để bàn, không riêng iPhone.
+ *
+ * Chủ máy đo 20/09/2026 trên Safari của iMac và gửi kèm số:
+ *     nap=0  mang=3  loi=0  nguon=1  dom=0
+ * «mang=3» là NETWORK_NO_SOURCE — phần tử âm thanh đã BỎ CUỘC, không tìm được
+ * nguồn phát, dù địa chỉ đã có («nguon=1») và không báo lỗi nào («loi=0»). Đây
+ * cùng một họ hỏng với iPhone, vì Safari trên máy Mac cũng chạy WebKit.
+ *
+ * Vì sao trước đây nó rơi ra ngoài: «laIOS» phải hỏi thêm màn cảm ứng để phân
+ * biệt iPad đời mới với máy Mac (hai máy khai user-agent giống nhau). Máy Mac để
+ * bàn không có «ontouchend» nên bị xếp vào nhóm Android và đi đúng con đường đã
+ * hỏng. Chủ máy chốt: "tối ưu hết cả cho android và ios, macos".
+ */
+const laSafari = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /Safari/.test(ua) && !/Chrome|Chromium|Android|Edg\//.test(ua) && !/OPR\//.test(ua);
+};
+
+/** Máy nhà Táo chạy WebKit: iPhone, iPad, và Safari trên macOS. */
+const laTao = () => laIOS() || laSafari();
+
 const EMBED_ORIGIN = "https://www.youtube-nocookie.com";
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
 
@@ -372,12 +394,13 @@ const deviceAudio = {
   canhTieng(audio, generation) {
     clearTimeout(this.canhTimer);
     clearTimeout(this.thuLaiTimer);
-    /* CHỈ CHẠY TRÊN iOS. Cả hai hẹn giờ dưới đây dựng lên từ hành vi của WebKit;
-       Android vốn không vướng, nên ở đó chúng chỉ có thể gây hại: cú nhắc lại
-       lệnh phát có thể chen vào một luồng đang tải bình thường, còn lời nhắn 12
-       giây thì báo hỏng oan. Chủ máy chốt "xem tách riêng iP và Android ra" —
-       đây là chỗ đầu tiên áp nguyên tắc ấy, để Android chạy đúng đường 0.26.2. */
-    if (!laIOS()) return;
+    /* CHỈ CHẠY TRÊN MÁY NHÀ TÁO. Cả hai hẹn giờ dưới đây dựng lên từ hành vi của
+       WebKit; Android vốn không vướng, nên ở đó chúng chỉ có thể gây hại: cú nhắc
+       lại lệnh phát có thể chen vào một luồng đang tải bình thường, còn lời nhắn
+       12 giây thì báo hỏng oan. Chủ máy chốt "xem tách riêng iP và Android ra" —
+       đây là chỗ đầu tiên áp nguyên tắc ấy, để Android chạy đúng đường 0.26.2.
+       0.26.32: mở rộng sang Safari trên máy Mac, cũng là WebKit — xem «laSafari». */
+    if (!laTao()) return;
     const moc = audio.currentTime;
     /* THỬ LẠI MỘT LẦN sau 3 giây. Người dùng iPhone thấy "lượn qua app khác rồi quay
        lại thì lại phát" — tức lệnh phát chỉ cần được nhắc lại một lần nữa là chạy.
@@ -3757,6 +3780,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const titleNode = this.shadowRoot.querySelector(".nghe-ten");
     const metaNode = this.shadowRoot.querySelector(".nghe-phu");
     const session = this._focusedSession();
+    /* LẤY SẴN ĐỊA CHỈ LUỒNG CỦA BÀI LOA ĐANG PHÁT.
+       Chủ máy đo 20/09/2026 trên Android: bấm "nghe trên máy này" thì "mất 4s đến
+       10s mới có tiếng". Phần lớn quãng ấy là một lượt hỏi máy chủ xin địa chỉ
+       luồng (đo trước đó: 1,5–2,6 giây) rồi mới tới lúc tải dữ liệu. Lấy trước thì
+       lúc bấm «streamUrl» trả ra ngay từ bộ nhớ, không còn lượt hỏi nào.
+       Gọi mỗi lần vẽ lại không tốn gì: «chuanBi» tự bỏ qua bài đã có trong bộ nhớ,
+       nên mỗi bài chỉ hỏi máy chủ đúng một lần. */
+    if (session?.title && !deviceAudio.item) {
+      deviceAudio.entryId = this._entryId();
+      deviceAudio.chuanBi({
+        source: session.source,
+        id: session.id,
+        url: session.url,
+        duration: session.duration,
+      });
+    }
     /* Nhãn nguồn (YouTube / Zing MP3 / Link) đặt ở ĐÚNG MỘT chỗ, lấy theo thứ đang
        phát thật — ba nhánh dưới đều thoát sớm nên rải ra đó là kiểu chắc chắn sót. */
     const nguonDangPhat = video.open
@@ -4981,15 +5020,23 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         video.soundHere = false;
         this._videoCommand("mute");
       }
-    } else if (video.open && video.withSpeakers && !video.picture && !listenScreenOff()) {
-      // With speakers the picture starts muted (the speakers carry the sound); this
-      // lets the device showing the card play the sound too.
+    } else if (video.open && video.withSpeakers && !video.picture && laTao()) {
+      /* MÁY NHÀ TÁO đi đường KHUNG. Đo 20/09/2026 trên Safari của iMac: phần tử
+         âm thanh dừng ở «mang=3» (NETWORK_NO_SOURCE), tức nó bỏ cuộc không tìm
+         được nguồn — nên ở đây tiếng phải nằm nguyên trong khung. */
       this._batTiengKhung();
       clearTimeout(this._soundCheckTimer);
       this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
     } else if (this._focusedSession()?.title) {
-      // No picture, or screen-off listening: an audio element plays the speakers'
-      // song in step with them (it goes on with the screen off when that is on).
+      /* ANDROID đi đường PHẦN TỬ ÂM THANH — ngược hẳn với máy nhà Táo, và đây là
+         chỗ hai nền tảng phải tách.
+         Đo 20/09/2026, chủ máy gửi ảnh Android: dựng lại khung có tiếng thì Chrome
+         KHÔNG cho tự phát, nó rơi về nút play của YouTube ("Chạm vào video để phát
+         có tiếng"). Còn phần tử âm thanh thì chạy — chủ máy xác nhận, chỉ phàn nàn
+         là chậm (nay đã lấy sẵn địa chỉ luồng, xem «chuanBi»).
+         Trước đây nhánh này chỉ mở khi công tắc "nghe khi tắt màn hình" đang bật,
+         nên chủ máy phải bật kèm mới nghe được: "Phải bật nghe khi tắt màn hình
+         kèm theo thì mới bật được nghe trên máy này". Ràng buộc ấy bỏ đi. */
       deviceAudio.entryId = this._entryId();
       deviceAudio.startAlong();
       this._syncAlong();
@@ -5017,7 +5064,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
    *     WebKit bỏ qua phần tử media bị ẩn hẳn.
    */
   async _giuTiengNen() {
-    if (!laIOS()) return;
+    if (!laTao()) return;
     try {
       if (!this._nenAudio) {
         let dong = null;
@@ -5070,7 +5117,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const on = !listenScreenOff();
     setListenScreenOff(on);
     const video = this._video;
-    if (on && laIOS() && video.open && !video.withSpeakers && video.item) {
+    if (on && laTao() && video.open && !video.withSpeakers && video.item) {
       /* iOS: GIỮ TIẾNG TRONG KHUNG, đừng chuyển sang phần tử âm thanh.
          Đó là chỗ mọi bản trước hỏng — đo được phần tử ấy không bao giờ tải trên
          iOS. Thẻ «phicomm-r1-card» của chủ máy chạy được chính vì nó không bao giờ
@@ -5096,6 +5143,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._videoCommand("mute");
       deviceAudio.entryId = this._entryId();
       deviceAudio.startAlong();
+      // Nạp NGAY, đừng chờ nhịp đồng bộ sau — mỗi nhịp là 2 giây chờ thêm vô ích.
+      this._syncAlong();
     }
     this._setStatus(on
       ? "Bật nghe khi tắt màn hình: tắt màn hình hay chuyển ứng dụng vẫn nghe tiếp trên máy này."
@@ -5465,7 +5514,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        Ở iOS, đường chạy được là để tiếng NẰM NGUYÊN trong khung rồi nhờ một cú
        chạm — đúng thứ người dùng đang phải tự mò ra. Nên iOS đi cùng nhánh của ca
        có loa: xin phát lại, rồi hiện lời nhắc chạm vào video. */
-    if (!video.withSpeakers && !laIOS()) {
+    if (!video.withSpeakers && !laTao()) {
       this._soundFromDevice();
       return;
     }
@@ -6032,12 +6081,30 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       if (watch && isVideo) {
         this._queue = queue;
         this._queueIndex = position;
-        if (listenScreenOff()) {
+        if (listenScreenOff() && !laTao()) {
           // The sound comes from the audio element (it goes on with the screen off),
           // the picture follows it muted.
           deviceAudio.listen(queue[position], queue, position);
           this._openVideo(item, { withSpeakers: false, followsDevice: true });
           this._setStatus(`Đang xem “${name}”, tiếng phát trên máy này cả khi tắt màn hình.`);
+          return;
+        }
+        /* MÁY NHÀ TÁO: bấm XEM trong lúc công tắc "nghe khi tắt màn hình" đang bật
+           thì ĐỪNG giao tiếng cho phần tử âm thanh — giữ nguyên trong khung.
+           Đây chính là đường đã đưa chủ máy vào cảnh trong ảnh chụp Safari trên
+           iMac ngày 20/09/2026: hình chạy, phần tử âm thanh đứng ở «mang=3»
+           (NETWORK_NO_SOURCE) nên không có tiếng, và thẻ phải xin một cú chạm.
+           Xem «laSafari» để biết vì sao máy Mac để bàn trước đây lọt ra ngoài. */
+        if (listenScreenOff() && laTao()) {
+          /* KHÔNG gọi «deviceAudio.unlock» ở đây, dù nhánh xem thường có gọi: nó
+             phát một dòng im lặng qua phần tử âm thanh, mà iOS chỉ cho MỘT luồng
+             chạy một lúc (Apple ghi rõ) — đúng thứ sẽ tranh chỗ với tiếng trong
+             khung. Dòng im lặng duy nhất được phép chạy là của «_giuTiengNen»,
+             vì nó lặp vô hạn và là thứ giữ cho trang không bị cắt khi tắt màn. */
+          if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
+          this._openVideo(item, { withSpeakers: false });
+          this._giuTiengNen();
+          this._setStatus(`Đang xem “${name}”; tiếng giữ trong video nên tắt màn hình vẫn nghe tiếp.`);
           return;
         }
         if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();

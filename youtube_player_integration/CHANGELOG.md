@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.26.32 - 2026-09-20
+
+### Safari trên máy Mac bị xếp nhầm vào nhóm Android
+
+Chủ máy mở thẻ bằng Safari trên iMac, không nghe được gì, và gửi kèm dòng số của thẻ:
+
+```
+nap=0  mang=3  loi=0  nguon=1  dom=0
+```
+
+`mang=3` là **NETWORK_NO_SOURCE**: phần tử âm thanh đã **bỏ cuộc**, không tìm được nguồn
+phát — dù địa chỉ đã có (`nguon=1`) và không có lỗi nào (`loi=0`). Đây cùng một họ hỏng
+với iPhone, vì Safari trên máy Mac cũng chạy WebKit.
+
+Vì sao nó lọt ra ngoài suốt: hàm nhận dạng máy nhà Táo phải hỏi thêm **màn cảm ứng** để
+phân biệt iPad đời mới với máy Mac — hai máy khai chuỗi nhận dạng giống hệt nhau. Máy Mac
+để bàn không có màn cảm ứng, nên bị xếp vào nhóm Android và đi đúng con đường đã hỏng.
+
+Nay có thêm `laSafari`, và cổng chung `laTao` gồm iPhone, iPad **và** Safari trên macOS.
+Chrome trên Android cũng khai chuỗi "Safari" nên phải loại ra, nếu không Android lại bị
+kéo sang nhầm đường.
+
+### Hai nền tảng ngược nhau — và đây là chỗ chúng tách
+
+Bản 0.26.31 cho mọi máy dựng lại khung để bật tiếng. Chủ máy thử trên Android và gửi ảnh:
+khung dựng lại **không tự phát được**, Chrome đưa về nút play của YouTube kèm dòng "Chạm
+vào video để phát có tiếng". Nên bản sửa ấy đúng cho máy nhà Táo nhưng sai cho Android.
+
+Gộp hai phép đo lại thì ra bảng này, và từ đây thẻ đi theo đúng nó:
+
+| Máy | Phần tử `<audio>` | Khung YouTube dựng lại có tiếng |
+|---|---|---|
+| Android (Chrome) | **chạy** — chủ máy xác nhận | không tự phát được, rơi về nút play |
+| iPhone / iPad | không tải (`mang=2`) | **chạy** |
+| Safari trên máy Mac | bỏ cuộc (`mang=3`) | **chạy** |
+
+Nên nút "nghe trên máy này" lúc đang xem video kèm loa: máy nhà Táo giữ tiếng **trong
+khung**, Android dùng **phần tử âm thanh**.
+
+Đo lại trên ba chuỗi nhận dạng thật: Safari-Mac → đường khung; iPhone → đường khung;
+Android → đường phần tử âm thanh, ở **cả hai** vị trí của công tắc tắt-màn-hình.
+
+### Bỏ ràng buộc "phải bật nghe khi tắt màn hình mới nghe được trên máy"
+
+> *"Phải bật nghe khi tắt màn hình kèm theo thì mới bật được nghe trên máy này."*
+
+Đúng như vậy, và đó là lỗi của tôi: nhánh phần tử âm thanh trước đây chỉ mở khi công tắc
+tắt-màn-hình đang bật. Hai thứ ấy không liên quan gì đến nhau. Nay nhánh nào chạy là do
+**máy** quyết, không do công tắc.
+
+### Bấm xem trong lúc công tắc tắt-màn-hình đang bật
+
+Đây chính là đường đã đưa chủ máy vào cảnh trong ảnh chụp Safari: thẻ giao tiếng cho phần
+tử âm thanh, phần tử ấy đứng ở `mang=3`, nên hình chạy mà không có tiếng và thẻ phải xin
+một cú chạm. Nay trên máy nhà Táo, đường này **giữ tiếng trong khung** và bật dòng im lặng
+giữ trang — tắt màn hình vẫn nghe tiếp.
+
+Ở đây cố ý **không** gọi bước mở khoá phần tử âm thanh, dù nhánh xem thường có gọi: nó
+phát một dòng im lặng qua phần tử ấy, mà Apple ghi rõ iOS chỉ cho **một** luồng chạy một
+lúc — đúng thứ sẽ tranh chỗ với tiếng trong khung.
+
+### "mất 4s đến 10s mới có tiếng"
+
+Phần lớn quãng ấy là **một lượt hỏi máy chủ** xin địa chỉ luồng — đo trước đây là 1,5–2,6
+giây — rồi mới tới lúc tải dữ liệu. Nay thẻ lấy sẵn địa chỉ luồng của **bài loa đang
+phát**, nên lúc bấm không còn lượt hỏi nào. Mỗi bài chỉ hỏi máy chủ đúng một lần.
+
+Và nhánh "nghe khi tắt màn hình" nạp **ngay** thay vì chờ nhịp đồng bộ kế tiếp — mỗi nhịp
+là 2 giây chờ thêm vô ích.
+
 ## 0.26.31 - 2026-09-20
 
 ### Lỗi dừng video: thủ phạm là lệnh bật tiếng, không phải phần tử âm thanh
