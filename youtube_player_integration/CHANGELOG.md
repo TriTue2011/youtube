@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.26.16 - 2026-09-20
+
+### Fixed — video bị kéo về 0 liên tục: vá nốt HAI nhánh còn hở
+
+Chủ máy: *"bị lại lỗi video reset về 0 liên tục"*, và ngay sau đó: *"xem xét hết các
+trường hợp, không chỉ phát trên thiết bị — xem cả phát ra loa, vừa loa vừa thiết bị,
+nhiều loa"*. Câu thứ hai đúng chỗ, và nó chỉ ra rằng bản sửa hôm 19/09 mới xong **một
+phần ba**.
+
+Thẻ có **ba đường đồng bộ đồng hồ**, và cả ba đều có thể kéo thứ khác về theo mình:
+
+| Đường | Ai dẫn | Ai bị kéo | Hàng rào trước bản này |
+|---|---|---|---|
+| Nghe trên máy, xem hình trên thẻ | tiếng trên máy | hình | **có** (19/09) |
+| Xem hình trong khi loa phát | loa | hình | **không có** |
+| Nghe trên máy cùng lúc với loa | loa | tiếng trên máy | **không có** |
+
+Hàng rào ấy trả lời đúng một câu: *đồng hồ dẫn có thật sự đang chạy không?* Thiếu nó
+thì một đồng hồ **đứng im** vẫn được tin, và cứ vài giây nó lại lôi thứ đang chạy
+bình thường về chỗ nó đứng. Đó chính là cảnh giật về 0 lặp mãi.
+
+Vì sao đồng hồ loa đứng im mà nhìn vẫn như đang chạy: thẻ không đọc thẳng con số loa
+báo, mà **cộng thêm khoảng thời gian trôi** kể từ mốc Home Assistant ghi nhận. Loa nào
+cứ báo mãi một con số nhưng mốc thời gian thì làm mới liên tục — khá nhiều loa làm thế
+— sẽ cho ra một giây **tụt về chỗ cũ sau mỗi lần Home Assistant đẩy trạng thái**, trong
+khi công thức trông vẫn "đang tiến". Nên phép thử phải là so **với chính nó ở nhịp
+trước**: tiến được ít nhất một nửa quãng thời gian thật đã trôi thì mới tin.
+
+Bảy phép đo chạy trên chính mã đã sửa:
+
+```
+1. loa khoẻ                  -> cho kéo = true     2. loa kẹt (giây đứng yên)   -> false
+3. loa tụt về 0              -> false              4. hai đường riêng mốc       -> cả hai true
+5. nhịp dày ~40ms            -> true (không chết vòng)
+6. đổi sang loa khác         -> false ở nhịp đầu
+7. nhiều loa, loa đầu im     -> chọn loa_phong_khach (loa CÓ báo giây)
+```
+
+Phép đo 5 chắn một bẫy tự đặt ra: nếu mỗi nhịp đều ghi đè mốc so sánh thì mốc luôn mới
+tinh, quãng trôi không bao giờ đủ lớn để kết luận, và vòng đồng bộ **chết hẳn** thay vì
+được chắn. Nay hai nhịp quá gần nhau thì giữ nguyên mốc cũ.
+
+### Fixed — NHIỀU LOA: ba đường đồng bộ từng đọc ba cái đồng hồ khác nhau
+
+Tìm ra trong lúc rà theo yêu cầu *"nhiều loa"*. Mỗi đường tự chọn loa dẫn nhịp một kiểu:
+thanh tiến trình lấy loa đầu tiên **có báo giây**; vòng kéo hình lấy loa đầu danh sách
+đang chạy, báo giây hay không cũng lấy; vòng kéo tiếng lấy loa đầu danh sách rồi thấy
+giây rỗng là lặng lẽ thoát.
+
+Hai hệ quả trong một phiên nhiều loa: hình bám loa này trong khi thanh tiến trình chạy
+theo loa kia; và chỉ cần loa đầu danh sách không bao giờ báo giây là **cả hai vòng kéo
+đứng im hẳn**, dù loa thứ hai vẫn báo đàng hoàng. Nay cả ba đọc chung một loa dẫn nhịp.
+
+### Đã kiểm gì, và CHƯA kiểm được gì
+
+Kiểm được: bảy phép đo ở trên chạy trên mã thật trong trình duyệt thật, cộng bộ test
+của thẻ. Nói thẳng phần chưa kiểm: **chưa dựng lại được đúng cảnh của chủ máy** — lúc đo
+trong nhà không loa nào đang phát, nên tôi chưa bắt tận tay một loa cụ thể báo kẹt. Cái
+chắc chắn là hai nhánh trên **thiếu hàng rào mà nhánh thứ ba đã phải có**, và thiếu nó
+thì một đồng hồ đứng im sẽ kéo được thứ khác — đó là cơ chế, không phải suy đoán.
+
 ## 0.26.15 - 2026-09-20
 
 ### Fixed — toàn màn hình Facebook: hình lấp kín, điều khiển nổi lên trên

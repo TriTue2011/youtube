@@ -3419,6 +3419,55 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ["playing", "paused", "buffering"].includes(this._hass?.states?.[entityId]?.state));
   }
 
+  /** Loa DẪN NHỊP: loa đầu tiên đang chạy MÀ CÓ báo giây.
+   *
+   * Một chỗ chọn cho mọi đường đồng bộ. Trước đây mỗi đường tự chọn một kiểu, và
+   * với NHIỀU LOA thì ba kiểu ấy ra ba loa khác nhau trên cùng một phiên:
+   *   - thanh tiến trình: loa đầu tiên CÓ báo giây;
+   *   - vòng kéo hình  : loa đầu danh sách đang chạy, có báo giây hay không cũng lấy;
+   *   - vòng kéo tiếng : loa đầu danh sách, rồi thấy giây rỗng là thoát.
+   * Nên hình bám loa này còn thanh tiến trình chạy theo loa kia; và chỉ cần loa đầu
+   * danh sách không bao giờ báo giây (khá nhiều loa như vậy) là hai vòng kéo đứng
+   * im hẳn, dù loa thứ hai vẫn báo đàng hoàng.
+   */
+  _loaDanNhip(session = this._focusedSession()) {
+    const outputs = session?.output_entity_ids || [...this._selectedPlayers];
+    return outputs.find((entityId) =>
+      ["playing", "paused", "buffering"].includes(this._hass?.states?.[entityId]?.state)
+      && this._speakerPosition(entityId, session) !== null) || null;
+  }
+
+  /** Đồng hồ của loa có THẬT SỰ tiến không — chắn trước khi cho nó kéo ai.
+   *
+   * Cùng hàng rào đã cứu nhánh nghe-trên-máy 19/09/2026, nay dùng chung cho hai
+   * nhánh bám loa vốn chưa ai chắn. Không thể chỉ nhìn con số: «_speakerPosition»
+   * CỘNG THÊM thời gian trôi kể từ mốc Home Assistant báo, nên một loa báo kẹt vẫn
+   * trông như đang tiến — mỗi lần HA đẩy trạng thái, «media_position» vẫn nguyên
+   * mà mốc thời gian làm mới thành bây giờ, thế là giây suy ra TỤT về chỗ cũ.
+   *
+   * Phép thử là so với chính nó ở nhịp trước: phải tiến được ít nhất một nửa quãng
+   * thời gian thật đã trôi. Kẹt, tụt về đầu, hay nhảy loạn đều trượt; rung nhẹ vài
+   * phần mười giây thì vẫn qua. Chưa đủ nửa giây giữa hai nhịp thì GIỮ mốc cũ chứ
+   * không ghi đè — ghi đè thì mốc luôn mới tinh, quãng trôi không bao giờ đủ lớn
+   * để kết luận, và vòng đồng bộ chết hẳn.
+   *
+   * Mỗi đường giữ mốc riêng theo «khoa»: hai đường cùng chạy trong một nhịp đẩy
+   * trạng thái, xài chung một mốc thì đường sau luôn thấy quãng trôi bằng 0.
+   */
+  _loaNhipChay(khoa, entityId, giay) {
+    const so = this._loaNhip || (this._loaNhip = {});
+    const truoc = so[khoa];
+    const luc = Date.now();
+    if (!truoc || truoc.ai !== entityId) {
+      so[khoa] = { ai: entityId, giay, luc };
+      return false;
+    }
+    const troi = (luc - truoc.luc) / 1000;
+    if (troi < 0.5) return false;
+    so[khoa] = { ai: entityId, giay, luc };
+    return giay - truoc.giay >= troi * 0.5;
+  }
+
   /** Whether what the card shows is playing (this device, the video alone, or the speakers). */
   _playingNow() {
     if (deviceAudio.item) return deviceAudio.playing();
@@ -4783,8 +4832,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!speaker || !this._speakerPlaysItem(speaker, session)) return;
     if (speaker.state === "paused" && !audio.paused) audio.pause();
     if (speaker.state === "playing" && audio.paused) audio.play().catch(() => {});
-    const speakerTime = this._speakerPosition(lead, session);
+    /* ĐỒNG HỒ có thể nằm ở loa KHÁC loa dẫn trạng thái — xem «_loaDanNhip». Đọc
+       giây của đúng loa đầu danh sách rồi thấy rỗng là thoát, nghĩa là cả phiên
+       nhiều loa mất canh tiếng chỉ vì loa đầu không báo giây. */
+    const nhip = this._loaDanNhip(session);
+    const speakerTime = nhip ? this._speakerPosition(nhip, session) : null;
     if (speaker.state !== "playing" || speakerTime === null || Date.now() < this._alongSeekHold) return;
+    /* VỪA LOA VỪA NGHE TRÊN MÁY: loa báo kẹt thì dòng dưới lôi tiếng trên máy về
+       chỗ kẹt ấy — cứ 4 giây một lần, tức bài tự phát lại mãi. Đúng lời chủ máy
+       ngay đầu đợt này: "mặc định tắt tiếng và restart liên tục thời gian về 0". */
+    if (!this._loaNhipChay("tieng", nhip, speakerTime)) return;
     if (Math.abs(speakerTime - audio.currentTime) > 2) {
       audio.currentTime = speakerTime;
       this._alongSeekHold = Date.now() + 4000;
@@ -5473,10 +5530,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (Date.now() < this._mirrorHoldUntil || !this._speakerPlaysItem(speaker, this._focusedSession())) return;
     if (speaker.state === "paused" && [1, 3].includes(video.state)) this._videoCommand("pauseVideo");
     if (speaker.state === "playing" && [-1, 2, 5].includes(video.state)) this._videoCommand("playVideo");
-    const speakerTime = this._speakerPosition(primary);
+    // Đồng hồ lấy ở loa DẪN NHỊP, cùng một loa mà thanh tiến trình đang đọc.
+    const nhip = this._loaDanNhip();
+    const speakerTime = nhip ? this._speakerPosition(nhip) : null;
     if (speaker.state !== "playing" || speakerTime === null || Date.now() < this._lastVideoSeekAt + 5000) return;
     // The speaker starts a few seconds after the picture (its stream is prepared
     // server-side), so the muted picture follows the speaker's reported position.
+    /* NHƯNG CHỈ KHI ĐỒNG HỒ LOA THẬT SỰ CHẠY. Loa báo kẹt (hoặc báo mãi một con
+       số) thì hình đang chạy tới 0:03 là lệch quá 2 giây, và dòng dưới kéo nó về
+       chỗ kẹt — cứ 5 giây một lần, đúng cảnh "video reset về 0 liên tục". Nhánh
+       nghe-trên-máy đã có hàng rào này từ 19/09; nhánh loa thì chưa, nên lỗi cũ
+       vẫn còn nguyên một nửa. */
+    if (!this._loaNhipChay("hinh", nhip, speakerTime)) return;
     if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
       this._seekPicture(speakerTime);
     }

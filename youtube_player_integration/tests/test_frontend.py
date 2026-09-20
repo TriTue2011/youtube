@@ -272,6 +272,26 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Nút X ở toàn màn hình là THOÁT TOÀN MÀN, không đóng video (đóng xong tiếng
         # vẫn chạy nên người dùng rơi vào chế độ chỉ-nghe mà họ không hề chọn).
         self.assertIn('} else if (player.classList.contains("expanded")) {', script)
+        # 0.26.16: ĐỒNG HỒ DẪN PHẢI THẬT SỰ CHẠY thì mới được kéo ai. Hàng rào này có
+        # ở nhánh nghe-trên-máy từ 19/09 («tiengDangChay») nhưng HAI nhánh bám loa thì
+        # chưa, nên lỗi "kéo về 0 liên tục" còn nguyên một nửa: loa báo kẹt thì cứ 5
+        # giây hình bị lôi về chỗ kẹt, và cứ 4 giây tiếng trên máy bị lôi theo.
+        # Không thể so con số trần: «_speakerPosition» cộng thêm thời gian trôi nên
+        # loa kẹt vẫn trông như đang tiến — phải so với chính nó ở nhịp trước.
+        self.assertIn("_loaNhipChay(khoa, entityId, giay) {", script)
+        self.assertIn("return giay - truoc.giay >= troi * 0.5;", script)
+        # Giữ mốc cũ khi hai nhịp quá gần nhau. Ghi đè thì mốc luôn mới tinh, quãng
+        # trôi không bao giờ đủ lớn để kết luận, và vòng đồng bộ chết hẳn.
+        self.assertIn("if (troi < 0.5) return false;", script)
+        # Mỗi đường giữ mốc riêng: hai đường cùng chạy trong một nhịp đẩy trạng thái,
+        # xài chung một mốc thì đường sau luôn thấy quãng trôi bằng 0.
+        self.assertIn('this._loaNhipChay("hinh", nhip, speakerTime)', script)
+        self.assertIn('this._loaNhipChay("tieng", nhip, speakerTime)', script)
+        # NHIỀU LOA: cả ba đường đồng bộ phải đọc CÙNG MỘT loa dẫn nhịp. Trước đây mỗi
+        # đường chọn một kiểu, nên hình bám loa này còn thanh tiến trình chạy theo loa
+        # kia; và loa đầu danh sách không báo giây là hai vòng kéo đứng im hẳn.
+        self.assertIn("_loaDanNhip(session = this._focusedSession()) {", script)
+        self.assertEqual(script.count("this._loaDanNhip("), 2)
         # 0.26.11: ghim được bài Facebook, và bản ghi MANG THEO NGUỒN — thiếu nguồn thì
         # phát lại sẽ đi vào đường YouTube rồi chết ở cửa chặn mã 11 ký tự.
         self.assertIn('if (["youtube", "facebook"].includes(item.source || this._source)) {', script)
