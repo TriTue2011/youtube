@@ -239,6 +239,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Giả lập với user-agent iPhone: không cướp tiếng, gửi unMute + playVideo,
         # soundHere vẫn true. Với user-agent máy bàn: hành vi cũ, không đổi.
         self.assertIn("if (!video.withSpeakers && !laIOS()) {", script)
+        # 0.26.27: lời nhắn phải ĐÚNG MÁY ĐANG CẦM. Chủ máy gửi ảnh điện thoại
+        # Android mà hiện câu nói về iPhone — vừa sai vừa khiến người đọc đi tìm
+        # nhầm chỗ. Giới hạn "một luồng một lúc" là của iOS; trên Android mà nhánh
+        # này nổ thì nguyên nhân khác, nên phải nói khác VÀ kèm số đo để lần sau
+        # biết ngay vì sao, thay vì lại đoán.
+        self.assertIn("this._setStatus(laIOS()", script)
+        self.assertIn("Chưa lấy được tiếng để nghe khi tắt màn hình", script)
         # iPad đời mới khai user-agent giống Mac — phải hỏi thêm màn cảm ứng.
         self.assertIn('return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;', script)
         # 0.26.25: chốt «_nhipDoDuoc» trở lại, nhưng CHỈ ở vòng kéo HÌNH, và lần này

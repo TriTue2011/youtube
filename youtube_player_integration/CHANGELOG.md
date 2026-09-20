@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.26.27 - 2026-09-20
+
+### Fixed — máy Android mà hiện lời nhắn nói về iPhone
+
+Chủ máy gửi ảnh điện thoại Android đang hiện dòng đỏ:
+
+> *"iPhone không cho vừa xem video vừa nghe khi tắt màn hình. Đang ưu tiên xem — chạm
+> vào video để nghe…"*
+
+Đây là chỗ tách nền tảng còn sót sau 0.26.22. Giới hạn "một luồng một lúc" là của iOS;
+trên Android mà nhánh này nổ thì **nguyên nhân khác hẳn**, nên nói câu của iOS vừa sai
+vừa đẩy người đọc đi tìm nhầm chỗ.
+
+Nay lời nhắn chia theo máy đang cầm. Và bản Android **mang theo số đo** —
+`nap`, `mang`, `loi`, `nguon`, `dom` — để nếu nó còn hiện thì lần sau biết ngay vì sao,
+thay vì lại đoán.
+
+Đã soát toàn bộ file: đây là chuỗi người dùng thấy **duy nhất** còn nhắc tên iPhone;
+mọi chỗ khác chỉ là chú thích trong mã.
+
 ## 0.26.26 - 2026-09-20
 
 ### Fixed — iPhone: video mặc định câm, phải tự bấm nút loa mới nghe

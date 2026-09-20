@@ -5542,9 +5542,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              «_deviceAudioChanged» lại đi đóng video. */
           this._traTiengVeKhung();
           deviceAudio.stop();
-          this._setStatus("iPhone không cho vừa xem video vừa nghe khi tắt màn hình."
-            + " Đang ưu tiên xem — chạm vào video để nghe."
-            + " Muốn nghe cả khi tắt màn thì bấm nút tai nghe.", true);
+          /* LỜI NHẮN PHẢI ĐÚNG MÁY ĐANG CẦM. Chủ máy gửi ảnh 20/09/2026: điện thoại
+             Android mà hiện câu nói về iPhone — vừa sai vừa làm người đọc đi tìm
+             nhầm chỗ. Giới hạn "một luồng một lúc" là của iOS; trên Android mà nhánh
+             này nổ thì nguyên nhân KHÁC, nên phải nói khác và phải kèm số đo.
+             Đây là chỗ tách nền tảng còn sót lại sau 0.26.22 — xem «laIOS». */
+          this._setStatus(laIOS()
+            ? "iPhone không cho vừa xem video vừa nghe khi tắt màn hình."
+              + " Đang ưu tiên xem — chạm vào video để nghe."
+              + " Muốn nghe cả khi tắt màn thì bấm nút tai nghe."
+            : "Chưa lấy được tiếng để nghe khi tắt màn hình — đang trả tiếng về video."
+              + " Chạm vào video để nghe."
+              + ` [nap=${audio.readyState} mang=${audio.networkState}`
+              + ` loi=${audio.error ? audio.error.code : 0}`
+              + ` nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}]`, true);
           return;
         }
         /* Thêm hai số nữa vì bốn số cũ chưa đủ phân định: «nguon» cho biết phần tử
