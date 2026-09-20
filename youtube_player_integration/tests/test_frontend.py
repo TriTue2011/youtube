@@ -184,14 +184,35 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Phần tử âm thanh phải NẰM TRONG tài liệu: «new Audio()» sinh ra phần tử đứng
         # ngoài DOM, và WebKit có thể không bao giờ bắt đầu tải cho phần tử như vậy.
         self.assertIn("document.body.appendChild(audio);", script)
-        # 0.26.13: đoạn im lặng mở khoá phải LẶP VÒNG, để phần tử luôn đang phát suốt
-        # lúc chờ địa chỉ luồng (1,5–2,6 giây). Hết vòng lặp thì nó ở trạng thái "đã
-        # kết thúc", và WebKit không cho chạy lại ngoài cú chạm — đúng mô tả của người
-        # dùng iPhone: mới bật thì không phát, lượn qua app khác quay lại thì lại phát.
-        self.assertIn("audio.loop = true;", script)
-        # Và phải TẮT lặp trước khi gán bài thật, ở cả hai đường, nếu không bài tự
-        # phát lại mãi.
-        self.assertEqual(script.count("audio.loop = false;"), 2)
+        # 0.26.18 — ĐỔI HẲN MÔ HÌNH, theo đúng tài liệu Apple và mã của chính Home
+        # Assistant. Apple: trên iOS "no data is loaded until the user initiates it",
+        # và play()/load() vô tác dụng nếu không do người dùng khởi động. Giữ MỘT phần
+        # tử sống rồi ĐỔI «src» cho bài mới là mở một lượt tải NGOÀI cú chạm — iOS
+        # không tải, không báo lỗi, nằm im ở «đang tải»: đúng «nap=0 mang=2 loi=0».
+        # Trình duyệt Media của HA chạy được trên iPhone vì nó dựng phần tử MỚI mang
+        # sẵn địa chỉ, để «autoplay» lo việc phát, và có «controls» làm lối thoát.
+        self.assertIn('audio.setAttribute("src", url);', script)
+        self.assertIn("audio.autoplay = true;", script)
+        self.assertIn("audio.playsInline = true;", script)
+        self.assertIn("audio.controls = hienNut;", script)
+        # Địa chỉ phải lấy TRƯỚC cú chạm, nếu không thì dù dựng phần tử mới, lượt tải
+        # vẫn rơi ra ngoài cử chỉ người dùng. Có sẵn thì «listen» chạy THẲNG, không
+        # một «await» nào chen vào — đó là điều kiện bắt buộc, không phải tối ưu.
+        self.assertIn("listen(item, queue, index, startAt = 0) {", script)
+        self.assertIn("const san = this.luongSan(item);", script)
+        self.assertIn("async chuanBi(item) {", script)
+        # ĐẤU NỐI, không chỉ có hàm. Viết đúng hàm rồi không gọi nó ở đâu là kiểu hỏng
+        # im lặng nhất: mã trông đầy đủ mà đường nhanh không bao giờ chạy. Hai nơi gọi:
+        # lúc hiện kết quả (để cú chạm đầu tiên có sẵn), và lúc bắt đầu một bài (để
+        # bài KẾ TIẾP có sẵn — "chuyển bài khác là lại tịt" chính là chỗ này).
+        self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
+        self.assertIn("if (ke) this.chuanBi(ke);", script)
+        # MỘT LUỒNG MỘT LÚC: Apple giới hạn iOS ở đúng một luồng tiếng hoặc hình. Phần
+        # tử cũ còn trong trang là còn giữ chỗ, nên phải gỡ hẳn chứ không chỉ tạm dừng.
+        self.assertIn('cu.removeAttribute("src");', script)
+        self.assertIn("cu.remove();", script)
+        # Mô hình im-lặng-lặp-vòng đã bị THAY, không được để sót lại nửa vời.
+        self.assertEqual(script.count("audio.loop = false;"), 0)
         # Lưới an toàn: quay lại trang thì thử phát lại — chính là cái mẹo thủ công
         # mà người dùng tự tìm ra, nay làm tự động.
         self.assertIn("} else if (this.item && this.real() && audio.paused) {", script)
@@ -212,7 +233,11 @@ class LovelaceCardContractTests(unittest.TestCase):
         # số đo — chủ máy báo "chỉ nghe không chạy thanh thời gian" mà không dòng chẩn
         # đoán nào hiện ra.
         self.assertIn("canhTieng(audio, generation) {", script)
-        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 2)
+        # 0.26.18: nay chỉ còn MỘT nơi gọi. Hai đường nghe (nghe một mình và nghe kèm
+        # loa) trước đây mỗi đường tự dựng phần tử rồi tự canh; nay cả hai đi qua
+        # «batDau», nên chỗ dựng phần tử và chỗ canh tiếng chỉ có một bản.
+        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 1)
+        self.assertIn("batDau(url, startAt, generation,", script)
         # Hai số đo thêm để phân định phần còn lại: đã chọn được nguồn phát chưa, và
         # phần tử có nằm trong trang không.
         self.assertIn("nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}", script)

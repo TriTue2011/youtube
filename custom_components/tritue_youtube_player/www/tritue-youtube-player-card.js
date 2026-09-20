@@ -284,6 +284,10 @@ const deviceAudio = {
     return audio;
   },
 
+  khoaLuong(item) {
+    return `${item.source}:${item.url || item.id}`;
+  },
+
   async streamUrl(item) {
     if (item.source === "http") return String(item.url || item.id || "");
     try {
@@ -298,13 +302,131 @@ const deviceAudio = {
     }
   },
 
+  /** Lấy sẵn địa chỉ luồng TRƯỚC khi người dùng chạm, và nhớ lại.
+   *
+   * Vì sao phải có: tài liệu của Apple nói thẳng — trên iOS "no data is loaded
+   * until the user initiates it", và «play()» / «load()» không có tác dụng trừ
+   * khi do người dùng khởi động. Thẻ hiện hỏi máy chủ 1,5–2,6 giây SAU cú chạm
+   * (đo thật), nên lệnh tải rơi ra ngoài cử chỉ ấy và iOS lặng lẽ không tải gì —
+   * đúng bộ số «nap=0 mang=2 loi=0 nguon=1 dom=1» chủ máy gửi hai lần.
+   * Có sẵn địa chỉ thì «listen» dựng được phần tử NGAY trong cú chạm, không chờ.
+   */
+  nhoLuong: new Map(),
+
+  async chuanBi(item) {
+    if (!item || !this.hass || !this.entryId) return;
+    const khoa = this.khoaLuong(item);
+    if (this.nhoLuong.has(khoa)) return;
+    this.nhoLuong.set(khoa, null);           // giữ chỗ, đừng hỏi hai lần
+    const url = await this.streamUrl(item);
+    if (!url) { this.nhoLuong.delete(khoa); return; }
+    this.nhoLuong.set(khoa, { url, luc: Date.now() });
+    if (this.nhoLuong.size > 40) this.nhoLuong.delete(this.nhoLuong.keys().next().value);
+  },
+
+  luongSan(item) {
+    const ban = this.nhoLuong.get(this.khoaLuong(item));
+    // Vé của máy phát ngắn hạn; quá 4 phút thì coi như không có, đi hỏi lại.
+    if (!ban || Date.now() - ban.luc > 240000) return "";
+    return ban.url;
+  },
+
+  /** Dựng MỘT phần tử mới, địa chỉ có sẵn từ lúc sinh ra — làm y như Home Assistant.
+   *
+   * Đây là chỗ bản cũ sai về bản chất. Nó giữ MỘT phần tử sống mãi rồi ĐỔI «src»
+   * cho từng bài. Trên iOS, cú đổi ấy mở một lượt tải mới, mà lượt tải mới thì
+   * không còn nằm trong cú chạm nào cả — nên iOS không tải, không báo lỗi, và
+   * phần tử nằm im ở «đang tải» vĩnh viễn.
+   *
+   * Trình duyệt Media của chính Home Assistant chạy được trên iPhone vì nó làm
+   * ngược lại, xem «hui-dialog-web-browser-play-media.ts»: địa chỉ được giải
+   * xong TRƯỚC, rồi mới dựng một phần tử hoàn toàn mới mang sẵn địa chỉ đó, và
+   * nó KHÔNG gọi «play()» bằng JavaScript — nó để thuộc tính «autoplay» lo, còn
+   * «controls» là lối thoát khi trình duyệt chặn: người dùng chạm thẳng vào nút
+   * phát của chính phần tử, một cử chỉ không thể thật hơn.
+   */
+  moi(url, { hienNut = false } = {}) {
+    const cu = this.element;
+    const audio = document.createElement("audio");
+    audio.preload = "auto";
+    audio.autoplay = true;                   // HA dùng đúng thuộc tính này
+    audio.playsInline = true;
+    audio.controls = hienNut;
+    audio.setAttribute("src", url);          // CÓ SẴN trước khi vào trang
+    audio.addEventListener("play", () => this.notify());
+    audio.addEventListener("pause", () => this.notify());
+    audio.addEventListener("ended", () => {
+      if (this.real() && this.item && !this.next(1)) this.notify("Đã nghe hết hàng đợi.");
+    });
+    audio.addEventListener("error", () => {
+      if (this.real()) this.notify("Không phát được tiếng bài này trên máy này.", true);
+    });
+    /* MỘT LUỒNG MỘT LÚC. Apple: "all devices running iOS are limited to playback
+       of a single audio or video stream at any time." Để phần tử cũ còn trong
+       trang là còn giữ chỗ, phần tử mới phải xếp hàng sau nó. */
+    if (cu) {
+      try { cu.pause(); } catch (_e) { /* đã chết thì thôi */ }
+      cu.removeAttribute("src");
+      cu.remove();
+    }
+    this.element = audio;
+    this.theoDoiAn();
+    try {
+      document.body.appendChild(audio);
+    } catch (_error) {
+      // Tài liệu chưa sẵn sàng: phần tử rời vẫn phát được trên Chrome.
+    }
+    return audio;
+  },
+
+  /** Gắn MỘT LẦN cái theo dõi ẩn/hiện trang; nó đọc phần tử hiện thời, không giữ
+      cứng một phần tử — vì nay mỗi bài là một phần tử khác. */
+  theoDoiAn() {
+    if (this.daTheoDoiAn) return;
+    this.daTheoDoiAn = true;
+    document.addEventListener("visibilitychange", () => {
+      const audio = this.element;
+      if (!audio) return;
+      if (document.visibilityState === "hidden") {
+        if (!listenScreenOff() && this.real() && !audio.paused) {
+          audio.pause();
+          this.pausedByHide = true;
+        }
+      } else if (this.pausedByHide) {
+        this.pausedByHide = false;
+        audio.play().catch(() => {});
+      } else if (this.item && this.real() && audio.paused) {
+        audio.play().catch(() => {});
+      }
+    });
+  },
+
   /** Listen alone; `startAt` = second to start from (the sound of a video watched until now). */
-  async listen(item, queue, index, startAt = 0) {
-    const audio = this.unlock();
+  listen(item, queue, index, startAt = 0) {
     const generation = ++this.generation;
     Object.assign(this, { item, queue, index, along: false, alongKey: "", pausedByHide: false });
     this.mediaSession(item);
+    /* ĐƯỜNG NHANH — và đây là đường DUY NHẤT iOS chấp nhận. Có sẵn địa chỉ thì
+       dựng phần tử ngay, không một «await» nào chen vào, nên cả việc dựng lẫn
+       việc tải đều nằm TRONG cú chạm của người dùng. Xem «chuanBi» để biết vì
+       sao đó là điều kiện bắt buộc trên iOS. */
+    const san = this.luongSan(item);
+    if (san) {
+      this.batDau(san, startAt, generation);
+      this.notify();
+      return;
+    }
     this.notify();
+    this.chamHon(item, startAt, generation);
+  },
+
+  /** Chưa kịp lấy sẵn địa chỉ: đành hỏi máy chủ rồi mới dựng phần tử.
+   *
+   * Trên iOS nhánh này có thể bị chặn tự phát, nên phần tử dựng ra mang theo
+   * BỘ NÚT GỐC — đúng lối thoát mà trình duyệt Media của Home Assistant dùng:
+   * chạm vào nút phát của chính phần tử là cử chỉ mà WebKit luôn chấp nhận.
+   */
+  async chamHon(item, startAt, generation) {
     const url = await this.streamUrl(item);
     if (generation !== this.generation) return;
     if (!url) {
@@ -315,14 +437,25 @@ const deviceAudio = {
       this.notify("Không lấy được tiếng bài này.", true);
       return;
     }
-    // Tắt lặp vòng của đoạn im lặng mở khoá TRƯỚC khi gán bài thật, nếu không bài sẽ
-    // tự phát lại mãi. Xem lý do lặp vòng ở «unlock».
-    audio.loop = false;
-    audio.src = url;
-    if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
-    audio.play().catch((error) => this.playRefused(error));
-    this.canhTieng(audio, generation);
+    this.nhoLuong.set(this.khoaLuong(item), { url, luc: Date.now() });
+    this.batDau(url, startAt, generation, { hienNut: true });
     this.notify();
+  },
+
+  batDau(url, startAt, generation, { hienNut = false } = {}) {
+    const audio = this.moi(url, { hienNut });
+    if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
+    /* «autoplay» đã lo việc phát — đây chỉ là cú thúc thêm cho các trình duyệt
+       coi lệnh gọi tường minh là mạnh hơn. Hỏng thì im, vì «autoplay» hoặc bộ
+       nút gốc vẫn còn đó; báo lỗi ở đây chỉ dựng lên một lỗi không có thật. */
+    audio.play().catch((error) => { if (!audio.autoplay) this.playRefused(error); });
+    this.canhTieng(audio, generation);
+    /* LẤY SẴN BÀI KẾ TIẾP. Người dùng iPhone tả đúng lỗ hổng này: "khi phát rồi thì
+       khoá màn vẫn phát được, nhưng chuyển bài khác là lại tịt" — chuyển bài là một
+       lượt tải mới, mà lúc ấy không còn cú chạm nào. Có sẵn địa chỉ thì bài kế tiếp
+       dựng được ngay trong cú chạm vào nút chuyển bài. */
+    const ke = this.queue?.[this.index + 1];
+    if (ke) this.chuanBi(ke);
   },
 
   /** Canh xem tiếng có THẬT SỰ chạy không, sau 12 giây kể từ lúc bảo nó phát.
@@ -435,11 +568,10 @@ const deviceAudio = {
       this.notify("Không lấy được tiếng bài loa đang phát.", true);
       return;
     }
-    const audio = this.audio();
-    audio.loop = false;   // cùng lý do như trong «listen» — xem chú thích ở «unlock»
-    audio.src = url;
-    audio.play().catch(() => this.notify("Trình duyệt chặn tự phát có tiếng — bấm lại “Nghe trên máy này”.", true));
-    this.canhTieng(audio, generation);
+    this.nhoLuong.set(this.khoaLuong(item), { url, luc: Date.now() });
+    // Phần tử MỚI mang sẵn địa chỉ, không đổi «src» của phần tử đang sống — xem «moi».
+    // Nhánh này luôn chạy sau một vòng hỏi máy chủ nên để lộ bộ nút gốc làm lối thoát.
+    this.batDau(url, 0, generation, { hienNut: true });
   },
 
   mediaSession(item, controls = true) {
@@ -4461,6 +4593,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const container = this.shadowRoot.querySelector(".results");
     container.replaceChildren();
     if (this._results.some((item) => this._isVideoItem(item, item.source || this._source))) this._warmFrame();
+    /* LẤY SẴN ĐỊA CHỈ LUỒNG cho vài bài đầu — điều kiện bắt buộc để iOS chịu phát.
+       Apple: "no data is loaded until the user initiates it", nên lượt tải phải nằm
+       TRONG cú chạm; mà hỏi máy chủ mất 1,5–2,6 giây thì cú chạm đã trôi qua từ lâu.
+       Có sẵn thì «deviceAudio.listen» dựng phần tử ngay, không chờ gì.
+       Chỉ ba bài đầu: đủ cho thao tác thường gặp mà không nã máy chủ cả trang. */
+    deviceAudio.entryId = this._entryId();
+    this._results.slice(0, 3)
+      .filter((item) => !this._isVideoItem(item, item.source || this._source))
+      .forEach((item) => deviceAudio.chuanBi({ ...item, source: item.source || this._source }));
     // Gợi ý hiện khi chưa có kết quả, tự ẩn khi có — xem `_renderSuggestions`.
     this._renderSuggestions();
     this._results.forEach((item, index) => {

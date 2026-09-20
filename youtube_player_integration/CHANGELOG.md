@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.26.18 - 2026-09-20
+
+### Fixed — iOS: bỏ hẳn mô hình cũ, làm y như trình duyệt Media của Home Assistant
+
+Chủ máy: *"không có tiếng gì luôn. Tìm kiếm thêm thông tin cộng đồng chia sẻ để làm cho
+đúng đi, không đoán mò nữa"*. Đúng. Bốn giả thuyết trước đều là suy đoán, và đây là câu
+trả lời có nguồn.
+
+**Tài liệu của Apple nói thẳng:**
+
+> *"On iOS, preload and autoplay are disabled. **No data is loaded until the user
+> initiates it.** The JavaScript `play()` and `load()` methods are inactive until the
+> user initiates playback, unless triggered by user action."*
+
+> *"Currently, all devices running iOS are limited to playback of a **single** audio or
+> video stream at any time."*
+
+Câu đầu mô tả **chính xác** bộ số chụp được hai lần: `nap=0 mang=2 loi=0 nguon=1 dom=1`
+— phần tử có nguồn, nằm trong trang, tự nhận đang tải, không lỗi, và không một byte nào
+về. Không phải hỏng: là iOS đang làm đúng điều Apple viết.
+
+Và `mo_khoa=ok` **không hề mâu thuẫn**. Cú mở khoá thành công trên một nguồn khác — đoạn
+im lặng. Ngay sau đó thẻ đổi `src` sang địa chỉ thật, và **cú tải mới ấy không còn nằm
+trong cú chạm nữa**. Toàn bộ mô hình "mở khoá một lần rồi đổi nguồn" mà các bản
+0.26.13–0.26.15 xây lên chính là thứ Apple nói là không chạy.
+
+**Trình duyệt Media của chính Home Assistant chạy được trên iPhone, và nó làm ngược
+lại.** Đọc `hui-dialog-web-browser-play-media.ts`: địa chỉ được giải xong **trước**, rồi
+mới dựng một phần tử **hoàn toàn mới mang sẵn địa chỉ**; nó **không gọi `play()` bằng
+JavaScript** mà để thuộc tính `autoplay` lo; và nó luôn có `controls` làm lối thoát —
+chạm vào nút phát của chính phần tử là cử chỉ không thể thật hơn.
+
+Nay thẻ làm đúng ba điều đó:
+
+- **Phần tử mới cho mỗi bài**, `src` gắn từ lúc sinh ra, không bao giờ đổi `src` của một
+  phần tử đang sống.
+- **`autoplay` + `playsinline`**, và khi phải hỏi máy chủ trước thì hiện luôn **bộ nút
+  gốc** để người dùng có đường chạm thật.
+- **Lấy sẵn địa chỉ luồng trước cú chạm** — ba bài đầu của danh sách, và bài kế tiếp mỗi
+  khi một bài bắt đầu. Có sẵn thì `listen()` chạy thẳng, **không một `await` nào chen
+  vào**, nên cả việc dựng lẫn việc tải đều nằm trong cử chỉ người dùng. Đây là điều kiện
+  bắt buộc, không phải tối ưu tốc độ.
+- **Một luồng một lúc**: phần tử cũ bị gỡ hẳn khỏi trang chứ không chỉ tạm dừng, vì còn
+  trong trang là còn giữ chỗ.
+
+Cách này giải thích luôn mọi báo cáo cũ mà không cần thêm giả thuyết nào: *"lượn qua app
+khác rồi quay lại thì lại phát"* (đổi app buộc WebKit xét lại chỗ ngồi), *"khi phát rồi
+thì khoá màn vẫn phát được"* (giữ được chỗ thì giữ luôn), *"chuyển bài khác là lại tịt"*
+(đổi bài là một lượt tải mới, ngoài cử chỉ — nay đã lấy sẵn bài kế tiếp).
+
+### Máy chủ đã được minh oan bằng số đo, không phải bằng lập luận
+
+Đo trên Home Assistant thật (`172.16.10.200`), qua đúng đường ký mà thẻ dùng, **không
+gửi header xác thực** — vì thẻ `<audio>` không bao giờ gửi — và giả làm iPhone Safari:
+
+```
+Range: bytes=0-1  →  206 | Content-Range: bytes 0-1/3449447 | Content-Length: 2
+không Range       →  200 | Content-Length: 3449447
+Accept-Ranges: bytes | Content-Type: audio/mp4
+```
+
+Safari đòi máy chủ phải trả 206 cho cú hỏi hai byte đầu; máy chủ trả đúng, ở cả nguồn
+gốc lẫn lớp trung chuyển của tích hợp. Giả thuyết byte-range chết hẳn.
+
+### Chưa kiểm được
+
+Nói thẳng: **chưa thử trên iPhone thật** — không có máy iOS ở đây. Kiểm được là bộ test
+của thẻ và các số đo máy chủ ở trên. Phần bản sửa dựa vào là tài liệu Apple và mã nguồn
+của Home Assistant, không phải suy đoán; nhưng chỉ máy của chủ máy mới xác nhận được.
+
 ## 0.26.17 - 2026-09-20
 
 ### Fixed — ĐÂY mới là ca iOS: "có đổi" không phải là "có tiến"
