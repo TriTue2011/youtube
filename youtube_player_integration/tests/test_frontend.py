@@ -338,8 +338,54 @@ class LovelaceCardContractTests(unittest.TestCase):
         # unless the iframe carries its own policy, set before src.
         self.assertLess(
             script.index('iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin")'),
-            script.index('iframe.setAttribute("src", src)'),
+            script.index('iframe.setAttribute("src", this._ytEmbedSrc(id,'),
         )
+        # 0.26.31 — ĐỪNG BẬT TIẾNG CHO MỘT KHUNG ĐANG CÂM BẰNG postMessage.
+        # Chủ máy đo trên Android 20/09/2026: "nghe trên máy này mà đang phát ra loa
+        # thì bị dừng video, nhưng chọn cả nghe khi tắt màn hình thì không sao".
+        # Hai nhánh ấy chỉ khác một điều — nhánh tắt-màn-hình để khung câm nguyên và
+        # cho phần tử âm thanh mang tiếng, nhánh kia gửi «unMute». Lý do: cú bấm nằm
+        # ở trang THẺ, còn trình phát nằm trong khung youtube.com khác miền, nên cử
+        # chỉ người dùng không đi theo lệnh postMessage; trình duyệt thấy một video
+        # tự phát đang câm bỗng bật tiếng mà không ai chạm vào, và nó TẠM DỪNG video.
+        # Thẻ phicomm-r1-card chạy được trên cả hai máy vì địa chỉ nhúng của nó không
+        # hề có tham số «mute» (dòng 1896) — khung sinh ra đã có tiếng sẵn.
+        # Nên đường bật tiếng phải DỰNG LẠI khung tại đúng giây đang xem.
+        self.assertIn("_batTiengKhung() {", script)
+        self.assertIn(
+            'iframe.setAttribute("src", this._ytEmbedSrc(id, { muted: false, start: giay }));',
+            script)
+        # Đường nhanh đổi bài (giữ toàn màn hình) chỉ được đi khi KHÔNG phải bật tiếng
+        # cho khung đang câm — nếu không thì mỗi lần chuyển bài lại dính đúng bẫy trên.
+        self.assertIn(
+            "const phaiBatTieng = this._video.soundHere && this._video.muted !== false;",
+            script)
+        # Và mọi nơi cần tiếng đều đi qua một cửa: không còn «unMute» đơn độc nào
+        # trong các nhánh đổi chế độ (chỉ còn trong «_traTiengVeKhung», nơi đã tạm
+        # dừng video trước nên không dính luật tự-phát).
+        self.assertNotIn('video.soundHere = true;\n      this._videoCommand("unMute");', script)
+        # Bậc thang thúc tiếng 0 / 300 / 800 / 2000 mili giây — chép nguyên của
+        # phicomm-r1-card (dòng 1904-1908). Giao diện lập trình của trình phát chưa
+        # nhận lệnh ngay lúc khung vừa nạp, nên gửi đúng một lần là rơi vào khoảng
+        # chưa ai nghe. Đây là chỗ chữa "trên iPhone phải tự bật biểu tượng loa".
+        self.assertIn("this._thucTiengTimers = [300, 800, 2000].map((cho) => setTimeout(thuc, cho));", script)
+        # 0.26.31 — ĐANG NGHE TRÊN MÁY MÀ TÍCH LOA thì loa nhận bài ngay. Trước đây
+        # «_onSpeakerAdded» chỉ lo ca đang XEM VIDEO; ca chỉ-nghe rơi ra ngoài nên
+        # tích loa xong không có gì xảy ra. Chủ máy 20/09/2026: "đang phát mà chọn
+        # loa thì phát được luôn âm thanh, không cần phải chuyển bài".
+        # «along» là nghe GHÉP theo loa (loa đã có bài rồi) nên phải loại ra.
+        self.assertIn("if (deviceAudio.item && !deviceAudio.along) {", script)
+        self.assertIn("async _loaNhanBaiDangNghe(entityId) {", script)
+        # Loa Cast mất vài giây mới bắt đầu phát, nên tua phải CHỜ loa báo "playing"
+        # rồi mới tua, và chỉ MỘT lần — tua liên tiếp là sinh ra giật.
+        self.assertIn("_dongBoLoaVeGiay(entityId, giay, moc) {", script)
+        # 0.26.31 — chọn xong bài thì THU GỌN danh sách kết quả, bấm thanh tóm tắt để
+        # mở lại. Chủ máy 20/09/2026: "sau khi tìm kiếm mà chọn phát 1 bài xong thì ẩn
+        # phần danh sách tìm kiếm đi, sau đó muốn thay đổi bài thì kích vào".
+        # Danh sách KHÔNG bị xoá — nó vẫn là hàng chờ phát tiếp.
+        self.assertIn('<button class="results-toggle"', script)
+        self.assertIn("_thuGonKetQua(item) {", script)
+        self.assertIn("this._thuGonKetQua(item);", script)
         self.assertIn("this._toggleVideoExpanded()", script)
         # 0.26.11: hình của CHÍNH THẺ (Facebook) thì phóng to vẫn giữ thanh tiến trình
         # và hàng nút. Luật ẩn sinh ra vì khung nhúng YouTube có bộ nút riêng; phần tử

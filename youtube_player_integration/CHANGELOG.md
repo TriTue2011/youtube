@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.26.31 - 2026-09-20
+
+### Lỗi dừng video: thủ phạm là lệnh bật tiếng, không phải phần tử âm thanh
+
+Chủ máy đưa một phép so sánh có đối chứng, và nó lật ngược giả thuyết tôi đang theo:
+
+> *"tôi thấy khi nghe trên máy này mà đang phát ra loa bị dừng video, nhưng chọn cả nghe
+> khi tắt màn hình thì không sao, tôi đang dùng android"*
+
+Cùng một máy, cùng cảnh "loa + máy", chỉ khác một công tắc — và công tắc đó làm lỗi biến
+mất. Hai nhánh ấy chỉ khác đúng một điều:
+
+| Công tắc "nghe khi tắt màn hình" | Tiếng đi đường nào | Kết quả |
+|---|---|---|
+| Tắt | thẻ gửi lệnh `unMute` cho khung YouTube | **video dừng** |
+| Bật | khung giữ nguyên câm, phần tử `<audio>` mang tiếng | bình thường |
+
+Nên thủ phạm là **lệnh bật tiếng gửi qua `postMessage`**, chứ không phải phần tử âm
+thanh như tôi đã ngờ suốt mấy bản trước.
+
+Lý do: cú bấm của người dùng nằm ở trang **thẻ**, còn trình phát nằm trong khung
+`youtube.com` — khác miền. Lệnh `unMute` đi qua `postMessage` nên **cử chỉ người dùng
+không đi theo**. Với trình duyệt, đó là cảnh một video đang tự phát ở chế độ câm bỗng bật
+tiếng mà không ai chạm vào nó, và cách nó xử là **tạm dừng video**. Luật này có ở cả
+Chrome trên Android lẫn WebKit trên iPhone và macOS.
+
+Thẻ `phicomm-r1-card` chủ máy đưa chạy được trên mọi máy vì nó **không bao giờ** làm động
+tác câm-rồi-bật. Địa chỉ nhúng của nó (dòng 1896) không hề có tham số `mute`:
+
+```js
+const targetSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0`;
+```
+
+Khung sinh ra đã có tiếng sẵn, ngay trong cú bấm.
+
+**Bản sửa, theo nguyên tắc chứ không theo danh sách:** mọi đường cần bật tiếng cho khung
+giờ đi qua một cửa duy nhất, `_batTiengKhung`, và cửa ấy **dựng lại khung** bằng địa chỉ
+không có `mute`, kèm `start` ở đúng giây đang xem — thay vì gửi lệnh. Bốn nơi cùng lớp
+lỗi đã đổi: bật tiếng trên máy khi đang ra loa, bỏ tích loa cuối cùng, đổi bài trong cùng
+trình phát, và bộ dò tiếng-bị-chặn.
+
+Khung vốn đã có tiếng thì **không nạp lại** — nạp lại chỉ tổ mất toàn màn hình và mất mấy
+giây. Đây là lý do đường đổi bài thường ngày vẫn nhanh như cũ.
+
+Đo trên trình duyệt thật, đúng cảnh chủ máy báo:
+
+| Cảnh | Lệnh gửi tới khung | `mute=1` còn không | `start` |
+|---|---|---|---|
+| Đang ra loa, bấm nghe trên máy (khung đang câm) | không còn `unMute` đơn độc | **mất** | **137** (đúng giây đang xem) |
+| Khung vốn đã có tiếng | chỉ `playVideo` | giữ nguyên, không nạp lại | — |
+
+Và phép đo đồng bộ hình cũ vẫn giữ nguyên kết quả đã kiểm ở 0.26.25: chỉ ra loa 0 cú tua,
+loa + máy 0 cú tua, loa lành mạnh 2 cú tua.
+
+### iPhone phải tự bấm biểu tượng loa mới nghe được
+
+Cùng một gốc, một biểu hiện khác. Thẻ `phicomm-r1-card` gửi `unMute` + `setVolume` **bốn
+lần**, ở mốc 0 / 300 / 800 / 2000 mili giây sau khi dựng khung (dòng 1904-1908). Thẻ của
+tôi chỉ gửi **một lần**, sau 2,5 giây.
+
+Lý do phải gửi nhiều lần: giao diện lập trình của trình phát YouTube chưa nhận lệnh ngay
+lúc khung vừa nạp, nên gửi đúng một lần là rơi vào khoảng chưa ai nghe. Nay thẻ dùng
+nguyên bậc thang ấy.
+
+Chỗ này khác `_batTiengKhung` ở một điểm cần nói rõ: ở đây khung sinh ra vốn **không** có
+tham số `mute`, nên đây không phải động tác câm-rồi-bật — ta chỉ đang gỡ cái câm mà chính
+YouTube tự đặt để được phép tự phát trên điện thoại.
+
+### Đang nghe trên máy mà tích loa thì loa nhận bài ngay
+
+> *"tối ưu cả đang phát mà chọn loa thì phát được luôn âm thanh, không cần phải chuyển bài"*
+
+Trước đây đường xử lý lúc tích loa chỉ lo ca **đang xem video**; ca **chỉ nghe** rơi ra
+ngoài, nên tích loa xong không có gì xảy ra và chủ máy phải bấm lại bài mới ra tiếng.
+
+Nay tích loa lúc đang nghe thì loa nhận bài **tiếp từ đúng giây đang nghe**, không phát
+lại từ đầu. Loa Cast mất vài giây mới thật sự bắt đầu, nên cú tua **chờ** loa báo đang
+phát rồi mới gửi, và chỉ gửi **một** lần — tua liên tiếp là sinh ra giật.
+
+Nghe **ghép** theo loa (loa đã có bài rồi) thì không đụng vào.
+
+### Chọn xong bài thì thu gọn danh sách tìm kiếm
+
+> *"sau khi tìm kiếm mà chọn phát 1 bài xong thì ẩn phần danh sách tìm kiếm đi, sau đó
+> muốn thay đổi bài thì kích vào"*
+
+Danh sách thu về một thanh tóm tắt ghi tên bài vừa chọn và số kết quả; bấm vào là mở lại.
+Tìm lượt mới thì danh sách tự mở ra, vì người vừa tìm là đang muốn nhìn nó.
+
+Danh sách **không bị xoá** — nó vẫn là hàng chờ phát tiếp, chỉ thôi chiếm màn hình.
+
 ## 0.26.30 - 2026-09-20
 
 ### iOS "nghe khi tắt màn hình" — chép từ một bản cài ĐÃ CHẠY ĐƯỢC

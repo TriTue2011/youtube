@@ -1647,6 +1647,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .svol-pct { text-align: right; color: var(--secondary-text-color); font-size: .78rem; font-variant-numeric: tabular-nums; }
         .results { display: grid; gap: 6px; max-height: 330px; margin-top: 10px; overflow: auto; padding-right: 2px; }
         .results:empty { display: none; }
+        .results-toggle {
+          display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 10px;
+          padding: 8px 10px; border: 1px solid var(--divider-color, rgba(255,255,255,.12));
+          border-radius: 10px; background: none; color: var(--secondary-text-color);
+          font: inherit; font-size: .82rem; text-align: left; cursor: pointer;
+        }
+        .results-toggle:hover { color: var(--primary-text-color); }
+        .results-toggle-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .result {
           display: grid;
           grid-template-columns: 48px minmax(0, 1fr) auto;
@@ -2651,6 +2659,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
               <p class="status" role="status" aria-live="polite"></p>
 
               <div class="yt-suggested-section"></div>
+          <button class="results-toggle" type="button" hidden aria-expanded="true"><ha-icon icon="mdi:chevron-up"></ha-icon><span class="results-toggle-text"></span></button>
           <div class="results"></div>
 
               <div class="np-zone" aria-label="Đang phát">
@@ -2806,6 +2815,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".next").addEventListener("click", () => this._skip(1));
     this.shadowRoot.querySelector(".stop").addEventListener("click", () => this._stop());
     this.shadowRoot.querySelector(".watch").addEventListener("click", () => this._watchCurrent());
+    this.shadowRoot.querySelector(".results-toggle").addEventListener("click", () => {
+      this._ketQuaThuGon = !this._ketQuaThuGon;
+      this._syncKetQuaThuGon();
+    });
     this.shadowRoot.querySelector(".device-sound").addEventListener("click", () => this._toggleSoundHere());
     this.shadowRoot.querySelector(".screen-off").addEventListener("click", () => this._toggleScreenOff());
     this.shadowRoot.querySelector(".video-expand").addEventListener("click", () => this._toggleVideoExpanded());
@@ -4510,6 +4523,36 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     box.append(than);
   }
 
+  /** Chọn xong một bài thì THU GỌN danh sách kết quả; bấm thanh tóm tắt để mở lại.
+   *
+   * Chủ máy yêu cầu 20/09/2026: "sau khi tìm kiếm mà chọn phát 1 bài xong thì ẩn
+   * phần danh sách tìm kiếm đi, sau đó muốn thay đổi bài thì kích vào".
+   * Danh sách KHÔNG bị xoá — nó vẫn là hàng chờ phát tiếp, chỉ thôi chiếm màn hình.
+   */
+  _thuGonKetQua(item) {
+    if (!this._results.length) return;
+    this._ketQuaThuGon = true;
+    this._tenDaChon = String(item?.title || item?.id || "");
+    this._syncKetQuaThuGon();
+  }
+
+  _syncKetQuaThuGon() {
+    const results = this.shadowRoot?.querySelector(".results");
+    const toggle = this.shadowRoot?.querySelector(".results-toggle");
+    if (!results || !toggle) return;
+    const dem = this._results.length;
+    const thuGon = Boolean(this._ketQuaThuGon) && dem > 0;
+    results.hidden = thuGon;
+    toggle.hidden = !dem;
+    toggle.setAttribute("aria-expanded", String(!thuGon));
+    toggle.querySelector(".results-toggle-text").textContent = thuGon
+      ? (this._tenDaChon
+        ? `Đã chọn “${this._tenDaChon}” — bấm để đổi bài (${dem} kết quả)`
+        : `Xem ${dem} kết quả tìm kiếm`)
+      : `Ẩn ${dem} kết quả tìm kiếm`;
+    toggle.querySelector("ha-icon").setAttribute("icon", thuGon ? "mdi:chevron-down" : "mdi:chevron-up");
+  }
+
   _renderResults() {
     const container = this.shadowRoot.querySelector(".results");
     container.replaceChildren();
@@ -4600,6 +4643,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       row.append(image, track, actions);
       container.append(row);
     });
+    // Kết quả MỚI thì luôn mở ra — người vừa tìm là đang muốn nhìn danh sách.
+    this._ketQuaThuGon = false;
+    this._tenDaChon = "";
+    this._syncKetQuaThuGon();
   }
 
   /** Xem video Facebook ngay trên thẻ.
@@ -4783,10 +4830,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.followsDevice = followsDevice;
     if (followsDevice) this._video.soundHere = false;
     const start = Math.max(0, Math.floor(Number(startSeconds) || 0));
-    if (iframe && this._video.ready) {
+    /* Đường nhanh (đổi bài trong cùng trình phát) giữ được toàn màn hình, nhưng
+       CHỈ dùng khi không phải bật tiếng cho một khung đang câm: động tác ấy làm
+       trình duyệt dừng video, xem «_batTiengKhung» để biết vì sao. */
+    const phaiBatTieng = this._video.soundHere && this._video.muted !== false;
+    if (iframe && this._video.ready && !phaiBatTieng) {
       // Same player: switch video without reloading, so fullscreen and mute stay put.
       this._videoCommand("loadVideoById", [{ videoId: id, startSeconds: start }]);
-      this._videoCommand(this._video.soundHere ? "unMute" : "mute");
+      if (!this._video.soundHere) this._videoCommand("mute");
     } else {
       if (!iframe) {
         iframe = document.createElement("iframe");
@@ -4809,31 +4860,116 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          Hai thứ KHÔNG làm được, nói thẳng để khỏi hứa suông: YouTube đã bỏ tác dụng
          của «modestbranding» nên logo vẫn còn, và không cho đặt độ phân giải qua
          khung nhúng — người xem tự chọn ở nút bánh răng của trình phát. */
-      const params = new URLSearchParams({
-        enablejsapi: "1",
-        autoplay: "1",
-        rel: "0",
-        playsinline: "1",
-        cc_load_policy: "0",
-        iv_load_policy: "3",
-        origin: location.origin,
-      });
-      if (!this._video.soundHere) params.set("mute", "1");
-      if (start) params.set("start", String(start));
-      const src = `https://www.youtube-nocookie.com/embed/${id}?${params}`;
-      iframe.setAttribute("src", src);
+      this._video.muted = null;
+      iframe.setAttribute("src", this._ytEmbedSrc(id, { muted: !this._video.soundHere, start }));
     }
     this._video.open = true;
     this._video.state = -1;
     this._soundHintShown = false;
     clearTimeout(this._soundCheckTimer);
-    if (this._video.soundHere) this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
+    if (this._video.soundHere) {
+      this._thucTiengKhung();
+      this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
+    }
     window.addEventListener("message", this._onVideoMessage);
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
     this._syncNowPlaying();
     this._updateTransportState();
     const player = this.shadowRoot.querySelector(".player");
     if (!player.classList.contains("expanded")) player.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
+
+  /** Địa chỉ khung nhúng — một chỗ duy nhất, để mọi đường dựng khung giống nhau. */
+  _ytEmbedSrc(id, { muted = false, start = 0 } = {}) {
+    /* cc_load_policy=0: phụ đề TẮT mặc định. iv_load_policy=3: tắt chú thích nổi.
+       Hai thứ KHÔNG làm được, nói thẳng để khỏi hứa suông: YouTube đã bỏ tác dụng
+       của «modestbranding» nên logo vẫn còn, và không cho đặt độ phân giải qua
+       khung nhúng — người xem tự chọn ở nút bánh răng của trình phát.
+       enablejsapi + origin để thẻ điều khiển được trình phát qua postMessage. */
+    const params = new URLSearchParams({
+      enablejsapi: "1",
+      autoplay: "1",
+      rel: "0",
+      playsinline: "1",
+      cc_load_policy: "0",
+      iv_load_policy: "3",
+      origin: location.origin,
+    });
+    if (muted) params.set("mute", "1");
+    if (start) params.set("start", String(Math.max(0, Math.floor(start))));
+    return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
+  }
+
+  /** THÚC TIẾNG SAU KHI KHUNG VỪA NẠP — bậc thang 0 / 300 / 800 / 2000 mili giây.
+   *
+   * Chép từ thẻ «phicomm-r1-card» chủ máy đưa ngày 20/09/2026 (dòng 1904-1908 của
+   * thẻ ấy), kèm lời xác nhận của chủ máy rằng thẻ ấy nghe nhạc và xem video trên
+   * iPhone đều bình thường. Vì sao phải gửi bốn lần: giao diện lập trình của trình
+   * phát YouTube chưa nhận lệnh ngay lúc khung vừa nạp, nên gửi đúng một lần thì
+   * rơi vào khoảng chưa ai nghe. Đây là chỗ chữa lời chủ máy "trên iPhone phải tự
+   * bật biểu tượng loa mới nghe được, mặc định tắt tiếng".
+   *
+   * Khác với «unMute» trong «_batTiengKhung» ở chỗ nào: ở đây khung sinh ra vốn đã
+   * KHÔNG có tham số «mute», nên đây không phải động tác câm-rồi-bật; ta chỉ đang
+   * gỡ cái câm mà chính YouTube tự đặt để được phép tự phát trên điện thoại.
+   */
+  _thucTiengKhung() {
+    this._dungThucTieng();
+    const thuc = () => {
+      const video = this._video;
+      if (!video.open || !video.soundHere || video.pictureEl) return;
+      this._videoCommand("unMute");
+      this._videoCommand("setVolume", [100]);
+    };
+    thuc();
+    this._thucTiengTimers = [300, 800, 2000].map((cho) => setTimeout(thuc, cho));
+  }
+
+  _dungThucTieng() {
+    (this._thucTiengTimers || []).forEach((id) => clearTimeout(id));
+    this._thucTiengTimers = [];
+  }
+
+  /** BẬT TIẾNG CHO KHUNG — dựng lại khung, KHÔNG gửi lệnh «unMute».
+   *
+   * Cú bấm của người dùng nằm ở trang THẺ, còn trình phát nằm trong khung
+   * «youtube.com» khác miền. Lệnh «unMute» đi qua postMessage nên cử chỉ ấy không
+   * đi theo: với trình duyệt, một video đang tự phát ở chế độ câm bỗng bật tiếng
+   * mà không ai chạm vào nó — và cách nó xử là TẠM DỪNG video.
+   *
+   * Chủ máy đo được đúng chuyện này trên Android ngày 20/09/2026: "nghe trên máy
+   * này mà đang phát ra loa thì bị dừng video, nhưng chọn cả nghe khi tắt màn hình
+   * thì không sao". Hai nhánh ấy chỉ khác một điều: nhánh tắt-màn-hình để khung
+   * câm nguyên và cho phần tử âm thanh mang tiếng, còn nhánh kia gửi «unMute».
+   *
+   * Thẻ «phicomm-r1-card» chạy được trên cả Android lẫn iPhone vì nó KHÔNG BAO GIỜ
+   * làm động tác câm-rồi-bật: khung của nó sinh ra đã có tiếng sẵn, địa chỉ nhúng
+   * không hề có tham số «mute» (dòng 1896 của thẻ ấy).
+   *
+   * Nên ở đây ta dựng lại khung bằng địa chỉ không có «mute», kèm «start» ở đúng
+   * giây đang xem. Khung mới nạp ngay trong cú bấm nên được quyền phát kèm tiếng.
+   */
+  _batTiengKhung() {
+    const video = this._video;
+    video.soundHere = true;
+    // Hình của chính thẻ (thẻ «video» của ta) thì không dính luật của khung nhúng.
+    if (video.pictureEl) return;
+    if (video.muted === false) {
+      // Khung đang có tiếng sẵn: nạp lại chỉ tổ mất toàn màn hình và mất mấy giây.
+      this._videoCommand("playVideo");
+      return;
+    }
+    const iframe = this.shadowRoot?.querySelector(".video-frame iframe");
+    const id = video.item?.id;
+    if (!iframe || !id) return;
+    const giay = Math.max(0, Math.floor(this._videoTimeNow() || 0));
+    video.ready = false;
+    video.muted = null;
+    video.time = giay;
+    video.timeAt = 0;
+    video.moUL = Date.now();
+    iframe.setAttribute("src", this._ytEmbedSrc(id, { muted: false, start: giay }));
+    this._thucTiengKhung();
   }
 
   _toggleSoundHere() {
@@ -4848,8 +4984,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     } else if (video.open && video.withSpeakers && !video.picture && !listenScreenOff()) {
       // With speakers the picture starts muted (the speakers carry the sound); this
       // lets the device showing the card play the sound too.
-      video.soundHere = true;
-      this._videoCommand("unMute");
+      this._batTiengKhung();
       clearTimeout(this._soundCheckTimer);
       this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
     } else if (this._focusedSession()?.title) {
@@ -5334,7 +5469,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._soundFromDevice();
       return;
     }
-    this._videoCommand("unMute");
+    this._thucTiengKhung();
     this._videoCommand("playVideo");
     clearTimeout(this._soundCheckTimer);
     this._soundCheckTimer = setTimeout(() => {
@@ -5839,6 +5974,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _closeVideo() {
     if (this._video.picture) this._leavePicture();
     this._awayPictureOk = false;
+    this._dungThucTieng();
     clearTimeout(this._soundCheckTimer);
     this._soundHintShown = false;
     clearInterval(this._videoTimer);
@@ -5860,6 +5996,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const source = item.source || this._source;
     const requestedCount = this._selectedPlayers.size;
     const isVideo = this._isVideoItem(item, source);
+    // Đã chọn xong bài: nhường màn hình cho phần đang phát, danh sách thu về một thanh.
+    this._thuGonKetQua(item);
     if (!requestedCount) {
       // No speaker ticked: listen or watch right here, with the results (or the
       // playlist) as the queue.
@@ -5999,7 +6137,65 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // ticking only focuses the speaker (see "Cho … nghe cùng" to join a song).
     if (this._video.open && !this._video.withSpeakers) {
       await this._speakerJoinsVideo(entityId);
+      return;
     }
+    /* CHỈ NGHE trên máy mà tích loa: loa nhận bài ngay. Trước đây nhánh này không
+       tồn tại nên tích loa xong không có gì xảy ra — chủ máy phải bấm lại bài mới
+       ra tiếng. Yêu cầu 20/09/2026: "đang phát mà chọn loa thì phát được luôn âm
+       thanh, không cần phải chuyển bài".
+       «along» là đang nghe GHÉP theo loa, tức loa đã có bài rồi — không đụng vào. */
+    if (deviceAudio.item && !deviceAudio.along) {
+      await this._loaNhanBaiDangNghe(entityId);
+    }
+  }
+
+  async _loaNhanBaiDangNghe(entityId) {
+    const item = deviceAudio.item;
+    const state = this._hass?.states?.[entityId];
+    const name = state?.attributes?.friendly_name || entityId;
+    const entryId = this._entryId();
+    if (!item || !state || state.state === "unavailable" || !entryId) return;
+    const nguon = item.source || "youtube";
+    if (!this._supportsFeature(entityId, 512) || !this._supportsSource(entityId, nguon)) {
+      this._setStatus(`${name} không nhận tiếng ${TEN_NGUON[nguon] || nguon}.`, true);
+      return;
+    }
+    // Giây đang nghe, để loa vào đúng chỗ ấy chứ không phát lại từ đầu bài.
+    const giay = Number(deviceAudio.audio()?.currentTime) || 0;
+    const moc = Date.now();
+    const ten = item.title || item.id;
+    this._setStatus(`Đang chuyển “${ten}” sang ${name}…`);
+    try {
+      await this._hass.callService("tritue_youtube_player", "play_on_players", {
+        entry_id: entryId,
+        source: nguon,
+        target: item.url || item.id,
+        entity_id: [entityId],
+      });
+      this._dongBoLoaVeGiay(entityId, giay, moc);
+      deviceAudio.stop();
+      this._syncNowPlaying();
+      this._updateTransportState();
+      this._setStatus(`${name} đang phát “${ten}” tiếp từ chỗ đang nghe.`);
+    } catch (error) {
+      this._setStatus(error?.message || `Không phát được ra ${name}.`, true);
+    }
+  }
+
+  /** Đưa loa về đúng giây người dùng đang nghe — MỘT cú tua, ở nhịp đầu tiên loa
+   *  thật sự báo "playing". Loa Cast mất vài giây mới bắt đầu, nên phải chờ thay
+   *  vì tua ngay; và chỉ tua một lần, vì tua liên tiếp là sinh ra giật. */
+  _dongBoLoaVeGiay(entityId, giay, moc) {
+    if (giay < 3 || !this._supportsFeature(entityId, 2)) return;
+    let xong = false;
+    [1200, 2400, 3800, 6000].forEach((cho) => setTimeout(() => {
+      if (xong || this._hass?.states?.[entityId]?.state !== "playing") return;
+      xong = true;
+      this._hass.callService("media_player", "media_seek", {
+        entity_id: entityId,
+        seek_position: Math.round(giay + (Date.now() - moc) / 1000),
+      }).catch(() => {});
+    }, cho));
   }
 
   async _joinSession(session, entityIds) {
@@ -6060,9 +6256,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (this._video.open && this._video.withSpeakers && !this._selectedPlayers.size) {
       // No speaker ticked any more: the card's video plays on its own with sound.
       this._video.withSpeakers = false;
-      this._video.soundHere = true;
       this._pendingSpeakerSeek = null;
-      this._videoCommand("unMute");
+      // Cùng lớp lỗi với «_toggleSoundHere»: dựng lại khung, đừng gửi «unMute».
+      this._batTiengKhung();
       this._syncNowPlaying();
     }
   }
