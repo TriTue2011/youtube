@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.26.30 - 2026-09-20
+
+### iOS "nghe khi tắt màn hình" — chép từ một bản cài ĐÃ CHẠY ĐƯỢC
+
+Chủ máy đưa thẻ `phicomm-r1-card` kèm đúng một câu: *"dùng trên iPhone nghe nhạc, xem
+video trên iPhone bình thường"*. Đọc mã của nó thì ra điều tôi tìm cả ngày, và nó đơn
+giản đến mức khó chịu:
+
+**Thẻ ấy không phát nhạc bằng thẻ `<audio>` bao giờ.**
+
+Nhạc luôn nằm trong khung YouTube. Phần tử âm thanh chỉ để phát một dòng **im lặng lặp
+vô hạn**, giữ cho iOS coi trang là đang có tiếng nên không cắt khi tắt màn hình. Thẻ của
+tôi thì làm ngược: cố đẩy luồng nhạc thật qua `<audio>` — đúng thứ iOS từ chối, và là
+gốc của mọi lần hỏng suốt hôm nay.
+
+Nay đường "nghe khi tắt màn hình" trên iOS **giữ tiếng trong khung**, kèm hai thứ chép
+nguyên từ bản chạy được:
+
+- **Dòng im lặng**: dao động 20 Hz, âm lượng 0,0001 — vô thanh trên thực tế nhưng là
+  tiếng **thật**, nên iOS không coi là im lặng giả. Lùi về tệp WAV im lặng nếu máy không
+  có Web Audio. `loop` để dòng không bao giờ kết thúc; `playsinline` **và**
+  `webkit-playsinline` vì Safari đời cũ chỉ hiểu tên thứ hai; nằm trong trang ở kích
+  thước 1×1 điểm ảnh, mờ 0,01 — **không** dùng `display:none`, vì WebKit bỏ qua phần tử
+  media bị ẩn hẳn.
+- **Wake Lock**, nếu máy có.
+
+### Lần đầu đo được trên WebKit thật
+
+Cũng hôm nay dựng được chỗ đo: chạy **engine WebKit thật** (cùng lõi Safari) trong một
+container dùng một lần, không đụng gì tới máy chủ. Hai kết quả đáng giá:
+
+Một, mô hình cũ của thẻ — phần tử sống lâu, mở khoá bằng im lặng, đổi `src` — **chạy tốt
+trên WebKit máy bàn**: `nap=4`, không lỗi, đồng hồ tiến 1 → 4 → 9 giây đúng nhịp. Tức nó
+không hỏng vì WebKit nói chung, mà vì luật riêng của iOS.
+
+Hai, dòng im lặng mới **chạy liên tục**: đồng hồ tiến 2,51 giây trong 2,5 giây thực.
+
+Nói rõ giới hạn: đây là WebKit trên Linux, không phải Safari trên máy Mac hay iPhone.
+Nó loại bỏ được một lớp giả thuyết, không thay được phép thử trên máy thật của chủ máy.
+
 ## 0.26.29 - 2026-09-20
 
 ### Changed — bấm nghe bài PHÁT TRỰC TIẾP thì mở hình, không bỏ qua nữa

@@ -4863,10 +4863,89 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._syncNowPlaying();
   }
 
+  /** GIỮ TRANG "ĐANG CÓ TIẾNG" CHO iOS — chép từ một bản cài ĐÃ CHẠY ĐƯỢC.
+   *
+   * Chủ máy đưa thẻ «phicomm-r1-card» ngày 20/09/2026 kèm một câu quyết định:
+   * "dùng trên iPhone nghe nhạc, xem video trên iPhone bình thường". Đọc mã của
+   * nó thì ra điều tôi tìm cả ngày: **nó không phát nhạc bằng thẻ «audio» bao
+   * giờ**. Nhạc luôn nằm trong khung YouTube; phần tử âm thanh chỉ phát một dòng
+   * IM LẶNG lặp vô hạn, để iOS coi trang là đang có tiếng và không cắt khi tắt màn.
+   *
+   * Vì sao từng chi tiết có mặt (giữ nguyên như bản gốc, đừng "dọn" cho gọn):
+   *   - dao động 20 Hz, âm lượng 0,0001 → thực tế vô thanh, nhưng là tiếng THẬT
+   *     nên iOS không coi là im lặng giả; lùi về tệp WAV im lặng khi máy không có
+   *     Web Audio.
+   *   - «loop» → dòng này không bao giờ kết thúc, nên trạng thái "đang phát" không
+   *     rụng giữa chừng.
+   *   - «playsinline» VÀ «webkit-playsinline» → Safari đời cũ chỉ hiểu cái thứ hai.
+   *   - nằm TRONG trang, 1×1 điểm ảnh, mờ 0,01 — KHÔNG dùng «display:none», vì
+   *     WebKit bỏ qua phần tử media bị ẩn hẳn.
+   */
+  async _giuTiengNen() {
+    if (!laIOS()) return;
+    try {
+      if (!this._nenAudio) {
+        let dong = null;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) {
+          this._nenCtx = this._nenCtx || new Ctx();
+          if (this._nenCtx.state === "suspended") await this._nenCtx.resume();
+          if (this._nenCtx.createMediaStreamDestination) {
+            const osc = this._nenCtx.createOscillator();
+            osc.frequency.setValueAtTime(20, this._nenCtx.currentTime);
+            const gain = this._nenCtx.createGain();
+            gain.gain.setValueAtTime(0.0001, this._nenCtx.currentTime);
+            osc.connect(gain);
+            const dich = this._nenCtx.createMediaStreamDestination();
+            gain.connect(dich);
+            osc.start();
+            dong = dich.stream;
+          }
+        }
+        const nen = document.createElement("audio");
+        nen.setAttribute("playsinline", "");
+        nen.setAttribute("webkit-playsinline", "");
+        nen.loop = true;
+        Object.assign(nen.style, {
+          position: "fixed", top: "-9999px", left: "-9999px",
+          width: "1px", height: "1px", opacity: "0.01",
+        });
+        if (dong) nen.srcObject = dong;
+        else nen.src = SILENCE;
+        document.body.appendChild(nen);
+        this._nenAudio = nen;
+      }
+      if (this._nenAudio.paused) await this._nenAudio.play();
+      if ("wakeLock" in navigator && !this._khoaThuc) {
+        this._khoaThuc = await navigator.wakeLock.request("screen");
+        this._khoaThuc.addEventListener("release", () => { this._khoaThuc = null; });
+      }
+    } catch (_error) {
+      // Máy không cho thì thôi — đường xem vẫn chạy, chỉ là tắt màn sẽ dừng.
+    }
+  }
+
+  _thoiGiuTiengNen() {
+    try { this._nenAudio?.pause(); } catch (_error) { /* đã chết thì thôi */ }
+    try { this._khoaThuc?.release(); } catch (_error) { /* đã nhả rồi */ }
+    this._khoaThuc = null;
+  }
+
   _toggleScreenOff() {
     const on = !listenScreenOff();
     setListenScreenOff(on);
     const video = this._video;
+    if (on && laIOS() && video.open && !video.withSpeakers && video.item) {
+      /* iOS: GIỮ TIẾNG TRONG KHUNG, đừng chuyển sang phần tử âm thanh.
+         Đó là chỗ mọi bản trước hỏng — đo được phần tử ấy không bao giờ tải trên
+         iOS. Thẻ «phicomm-r1-card» của chủ máy chạy được chính vì nó không bao giờ
+         làm thế; nó chỉ giữ một dòng im lặng cho trang khỏi bị cắt. */
+      this._giuTiengNen();
+      this._setStatus("Bật nghe khi tắt màn hình: giữ tiếng trong video, tắt màn vẫn nghe tiếp.");
+      this._syncNowPlaying();
+      return;
+    }
+    if (!on) this._thoiGiuTiengNen();
     if (on && video.open && !video.withSpeakers && !video.followsDevice && video.item) {
       // Watching with sound: the sound moves to the audio element from the second
       // being watched, and the picture follows it muted.

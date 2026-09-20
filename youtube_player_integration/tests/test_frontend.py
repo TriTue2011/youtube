@@ -257,6 +257,28 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Giả lập với user-agent iPhone: không cướp tiếng, gửi unMute + playVideo,
         # soundHere vẫn true. Với user-agent máy bàn: hành vi cũ, không đổi.
         self.assertIn("if (!video.withSpeakers && !laIOS()) {", script)
+        # 0.26.30 — CHÉP TỪ MỘT BẢN CÀI ĐÃ CHẠY ĐƯỢC. Chủ máy đưa thẻ phicomm-r1-card
+        # kèm "dùng trên iPhone nghe nhạc, xem video trên iPhone bình thường". Đọc mã
+        # nó thì ra điều tìm cả ngày: nó KHÔNG phát nhạc bằng thẻ <audio> bao giờ.
+        # Nhạc luôn ở khung YouTube; phần tử âm thanh chỉ phát một dòng IM LẶNG lặp
+        # vô hạn để iOS coi trang là đang có tiếng và không cắt khi tắt màn.
+        # Từng chi tiết đều có lý do, đừng "dọn" cho gọn:
+        #   dao động 20 Hz + âm lượng 0,0001 → vô thanh nhưng là tiếng THẬT;
+        #   loop → dòng không bao giờ kết thúc nên trạng thái phát không rụng;
+        #   webkit-playsinline → Safari đời cũ chỉ hiểu tên này;
+        #   1×1 điểm ảnh, mờ 0,01, KHÔNG display:none — WebKit bỏ qua media ẩn hẳn.
+        # Đo trong WebKit thật: chạy liên tục, đồng hồ tiến 2,51s trong 2,5s thực.
+        self.assertIn("async _giuTiengNen() {", script)
+        self.assertIn("osc.frequency.setValueAtTime(20, this._nenCtx.currentTime);", script)
+        self.assertIn("gain.gain.setValueAtTime(0.0001, this._nenCtx.currentTime);", script)
+        self.assertIn('nen.setAttribute("webkit-playsinline", "");', script)
+        self.assertIn("nen.loop = true;", script)
+        self.assertIn('opacity: "0.01",', script)
+        self.assertNotIn('nen.style.display = "none"', script)
+        self.assertIn('navigator.wakeLock.request("screen")', script)
+        # Và đường iOS phải GIỮ TIẾNG TRONG KHUNG, không chuyển sang phần tử âm thanh
+        # — đó là chỗ mọi bản trước hỏng.
+        self.assertIn("if (on && laIOS() && video.open && !video.withSpeakers && video.item) {", script)
         # 0.26.27: lời nhắn phải ĐÚNG MÁY ĐANG CẦM. Chủ máy gửi ảnh điện thoại
         # Android mà hiện câu nói về iPhone — vừa sai vừa khiến người đọc đi tìm
         # nhầm chỗ. Giới hạn "một luồng một lúc" là của iOS; trên Android mà nhánh
