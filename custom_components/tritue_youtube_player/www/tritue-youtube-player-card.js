@@ -276,7 +276,9 @@ const deviceAudio = {
   nhoLuong: new Map(),
 
   async chuanBi(item) {
-    if (!item || !this.hass || !this.entryId) return;
+    // Bài trực tiếp thì không nghe riêng được (xem «laTrucTiep»), nên lấy sẵn địa
+    // chỉ cho nó chỉ tốn một lượt hỏi máy chủ mà không bao giờ dùng tới.
+    if (!item || !this.hass || !this.entryId || this.laTrucTiep(item)) return;
     const khoa = this.khoaLuong(item);
     if (this.nhoLuong.has(khoa)) return;
     this.nhoLuong.set(khoa, null);           // giữ chỗ, đừng hỏi hai lần
@@ -308,8 +310,30 @@ const deviceAudio = {
     return this.layLuong(item);
   },
 
+  /** Bài PHÁT TRỰC TIẾP thì thẻ <audio> không nghe riêng được.
+   *
+   * Đo trên c2a 20/09/2026, đúng bài chủ máy gặp lỗi ("Bolero Trữ Tình Hay Nhất
+   * Không Quảng Cáo" của Ngọc Diệu Bolero):
+   *     thời lượng = None            ← dấu hiệu của bài trực tiếp
+   *     luồng giải ra  = …/playlist/index.m3u8    ← bản kê HLS, không phải file
+   *     máy chủ khai báo = audio/mp4              ← khai SAI kiểu
+   * Chrome không phát được HLS bằng thẻ «audio» (chỉ Safari làm được), nên nó trả
+   * «NotSupportedError» — đúng nghĩa, nhưng người dùng chỉ thấy một mã lỗi kỹ thuật.
+   *
+   * Nhận dạng bằng THỜI LƯỢNG chứ không bằng đuôi địa chỉ: lúc bấm nghe thì chưa
+   * có địa chỉ, mà bài trực tiếp thì không có thời lượng — đó là thứ biết được ngay.
+   */
+  laTrucTiep(item) {
+    return !Number(item?.duration);
+  },
+
   /** Listen alone; `startAt` = second to start from (the sound of a video watched until now). */
   async listen(item, queue, index, startAt = 0) {
+    if (this.laTrucTiep(item)) {
+      this.notify(`“${item.title || item.id}” đang phát trực tiếp nên không nghe riêng`
+        + " tiếng được — bấm nút xem để nghe.", true);
+      return;
+    }
     const audio = this.unlock();
     const generation = ++this.generation;
     Object.assign(this, { item, queue, index, along: false, alongKey: "", pausedByHide: false });

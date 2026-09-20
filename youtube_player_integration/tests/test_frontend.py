@@ -205,6 +205,17 @@ class LovelaceCardContractTests(unittest.TestCase):
         # TRONG «streamUrl» nên không đụng một dòng nào của đường phát, mà vẫn bỏ
         # được quãng chờ 1,5–2,6 giây hỏi máy chủ sau mỗi cú chạm.
         self.assertIn("async chuanBi(item) {", script)
+        # 0.26.28: bài PHÁT TRỰC TIẾP không nghe riêng được bằng thẻ <audio>. Đo trên
+        # c2a, đúng bài chủ máy gặp lỗi: thời lượng = None, luồng giải ra là
+        # …/playlist/index.m3u8 (bản kê HLS), mà máy chủ lại khai là audio/mp4.
+        # Chrome không phát được HLS bằng thẻ audio nên trả NotSupportedError — đúng
+        # nghĩa, nhưng người dùng chỉ thấy một mã lỗi kỹ thuật.
+        # Nhận dạng bằng THỜI LƯỢNG, không phải đuôi địa chỉ: lúc bấm nghe thì chưa
+        # có địa chỉ, mà bài trực tiếp thì không có thời lượng.
+        self.assertIn("laTrucTiep(item) {", script)
+        self.assertIn("return !Number(item?.duration);", script)
+        self.assertIn("đang phát trực tiếp nên không nghe riêng", script)
+        self.assertIn("|| this.laTrucTiep(item)) return;", script)
         self.assertIn("async layLuong(item) {", script)
         self.assertIn("if (ban && Date.now() - ban.luc <= 240000) return ban.url;", script)
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)

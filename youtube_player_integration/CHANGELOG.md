@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.26.28 - 2026-09-20
+
+### Fixed — bấm sang bài PHÁT TRỰC TIẾP thì báo "NotSupportedError"
+
+Chủ máy: *"khi next bị lỗi này"*, kèm ảnh dòng đỏ **"Máy này không phát được tiếng bài
+này (NotSupportedError)"**, rồi chỉ đúng chỗ: *"hình như YouTube trực tiếp bị lỗi, next
+qua bài đó không sao"*.
+
+Đo trên c2a, đúng bài trong ảnh — "Bolero Trữ Tình Hay Nhất Không Quảng Cáo" của Ngọc
+Diệu Bolero:
+
+```
+thời lượng        = None                       ← dấu hiệu bài trực tiếp
+luồng giải ra     = …/playlist/index.m3u8      ← bản kê HLS, không phải file nhạc
+máy chủ khai báo  = audio/mp4                  ← KHAI SAI kiểu
+```
+
+Bài phát trực tiếp không có file nhạc cố định, chỉ có một bản kê luồng HLS. Thẻ
+`<audio>` của Chrome **không phát được** định dạng đó (chỉ Safari làm được), nên nó trả
+đúng `NotSupportedError` — nhưng người dùng chỉ thấy một mã lỗi kỹ thuật vô nghĩa.
+
+Nay thẻ nhận ra bài trực tiếp và nói thẳng: *"đang phát trực tiếp nên không nghe riêng
+tiếng được — bấm nút xem để nghe"*. Xem video thì vẫn chạy bình thường, vì khung YouTube
+tự lo được HLS.
+
+Nhận dạng bằng **thời lượng**, không phải đuôi địa chỉ: lúc bấm nghe thì chưa có địa chỉ
+nào cả, mà bài trực tiếp thì không có thời lượng — đó là thứ biết được ngay. Và bài trực
+tiếp cũng không còn bị lấy sẵn địa chỉ, đỡ một lượt hỏi máy chủ không bao giờ dùng tới.
+
+Đo lại sau khi sửa, bấm next sang bài trực tiếp: **không đặt nguồn, không gọi phát** —
+nên không còn dòng lỗi nào.
+
+### Còn một chỗ máy chủ khai sai, chưa sửa
+
+Máy chủ trả `media_content_type: audio/mp4` cho một địa chỉ `.m3u8`. Hiện không ai dùng
+trường đó nên chưa gây hại, và thẻ nhận dạng bằng thời lượng chứ không dựa vào nó. Nhưng
+đó là một lời khai sai nằm sẵn chờ người sau tin nhầm — ghi lại để sửa khi đụng tới
+đường giải luồng.
+
 ## 0.26.27 - 2026-09-20
 
 ### Fixed — máy Android mà hiện lời nhắn nói về iPhone
