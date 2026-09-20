@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.24 - 2026-09-20
+
+### Gỡ HẲN cái chốt của bản 0.26.22 — nó dựng trên một chẩn đoán đã bị rút lại
+
+Chủ máy: *"vẫn lỗi khi nghe cả 2 nơi, tôi yêu cầu kiểm tra thật kỹ"*. Kiểm kỹ thì ra
+chuỗi nhân quả, và nó dẫn ngược về chính tay tôi.
+
+Khi đang mở video **và** có loa, bấm "Nghe trên máy này" **không** vào chế độ nghe-kèm.
+Nó **bỏ tắt tiếng khung YouTube** — nghĩa là máy phát luồng của YouTube còn loa phát
+luồng qua máy chủ, **hai nguồn khác nhau**. Thứ duy nhất giữ chúng cùng nhịp là vòng
+kéo hình theo loa. Bản 0.26.22 chặn đúng vòng ấy, và 0.26.23 vẫn còn chặn — nên chế độ
+nghe-cả-hai-nơi mất luôn cơ chế giữ nhịp duy nhất của nó.
+
+Cái chốt ấy đáng ra không nên tồn tại. Nó dựng trên kết luận rằng vòng đồng bộ gây ra
+cái giật — mà chính tôi đã rút lại ở 0.26.23, vì phép giả lập chỉ đếm số lần **cửa mở**
+chứ không phải số lần thật sự tua. Một thay đổi dựa trên chẩn đoán đã rút lại, lại gây
+hỏng hai lần, thì gỡ hẳn chứ không giữ một nửa.
+
+### Nói thẳng giới hạn: nghe cùng lúc trên loa và trên máy thì KHÔNG khớp tuyệt đối
+
+Đây không phải lỗi sửa được bằng một bản vá, nên nói rõ để khỏi chờ.
+
+Loa và điện thoại là hai bộ giải mã độc lập, nhận hai luồng khác nhau, khởi động lệch
+nhau, và đường mạng tới mỗi bên cũng khác. Thẻ chỉ có thể **kéo chúng lại gần** khi
+lệch quá ngưỡng, chứ không thể khoá chúng vào cùng một nhịp. Tai người nghe ra tiếng
+vọng khi lệch chỉ vài phần trăm giây — dưới ngưỡng mà bất kỳ cơ chế nào ở đây với tới
+được.
+
+Muốn nghe hai nơi mà không vọng thì cách thật sự là **cho cả hai cùng phát từ một
+nguồn có đồng hồ chung**, việc của hệ thống multiroom chứ không phải của thẻ này.
+
+### Còn mở: cái giật của hình
+
+Vẫn chưa tìm ra. Điều đã biết chắc là loa Google Home trong nhà báo vị trí đúng một lần
+rồi đứng im, nên giây mà thẻ đọc được là phép cộng thời gian trôi. Điều **chưa** biết là
+nó có thật sự làm hình giật hay không — tôi chưa đo được số lần tua thật, và lần trước
+đã trình bày một phép đo như thể nó chứng minh nhiều hơn thực tế.
+
 ## 0.26.23 - 2026-09-20
 
 ### Fixed — lỗi do CHÍNH bản 0.26.22 gây ra: loa và máy không còn đồng bộ

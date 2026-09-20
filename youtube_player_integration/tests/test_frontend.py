@@ -233,15 +233,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("if (!laIOS()) return;", script)
         # iPad đời mới khai user-agent giống Mac — phải hỏi thêm màn cảm ứng.
         self.assertIn('return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;', script)
-        # 0.26.23: chốt "phải là số đo" CHỈ áp cho vòng kéo HÌNH, không áp cho vòng
-        # kéo TIẾNG. Bản 0.26.22 chốt cả hai, và chủ máy báo ngay hệ quả: "tiếng loa
-        # và thiết bị không đồng bộ, cái trước cái sau" — vì đó là thứ DUY NHẤT giữ
-        # tiếng trên máy đi cùng loa. Hai bên trả giá khác hẳn nhau: tua khung
-        # YouTube là một cú nạp lại thấy được bằng mắt, còn đặt lại giây của phần tử
-        # âm thanh thì rẻ. Đúng một nơi gọi, không phải hai.
-        self.assertIn("_nhipDoDuoc(entityId) {", script)
-        self.assertIn("Date.now() - luc <= 10000", script)
-        self.assertEqual(script.count("this._nhipDoDuoc("), 1)
+        # 0.26.24: chốt «_nhipDoDuoc» của bản 0.26.22 đã bị GỠ HẲN. Nó dựng trên một
+        # chẩn đoán tôi đã tự rút lại (phép giả lập chỉ đếm số lần CỬA MỞ, không phải
+        # số lần thật sự tua), và nó gây hỏng hai lần: chặn vòng kéo tiếng làm loa và
+        # máy trôi khỏi nhau, rồi chặn vòng kéo hình làm chế độ nghe-cả-hai-nơi mất
+        # luôn thứ duy nhất giữ chúng cùng nhịp. Một thay đổi dựa trên chẩn đoán đã
+        # rút lại, lại gây hỏng, thì gỡ hẳn chứ không giữ một nửa.
+        self.assertNotIn("_nhipDoDuoc", script)
         # Hai đường nghe — nghe một mình và nghe kèm loa — mỗi đường tự canh, nên
         # có ĐÚNG hai nơi gọi. (Đợt 0.26.18 từng gộp về một qua «batDau»; bản ấy đã
         # được trả về nguyên trạng 0.26.2 vì đo trên máy thật thấy nó không nghe được.)

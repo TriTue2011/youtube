@@ -3434,41 +3434,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ["playing", "paused", "buffering"].includes(this._hass?.states?.[entityId]?.state));
   }
 
-  /** Loa DẪN NHỊP: loa đầu tiên đang chạy MÀ CÓ báo giây.
-   *
-   * Một chỗ chọn cho mọi đường đồng bộ. Trước đây mỗi đường tự chọn một kiểu, và
-   * với NHIỀU LOA thì ba kiểu ấy ra ba loa khác nhau trên cùng một phiên:
-   *   - thanh tiến trình: loa đầu tiên CÓ báo giây;
-   *   - vòng kéo hình  : loa đầu danh sách đang chạy, có báo giây hay không cũng lấy;
-   *   - vòng kéo tiếng : loa đầu danh sách, rồi thấy giây rỗng là thoát.
-   * Nên hình bám loa này còn thanh tiến trình chạy theo loa kia; và chỉ cần loa đầu
-   * danh sách không bao giờ báo giây (khá nhiều loa như vậy) là hai vòng kéo đứng
-   * im hẳn, dù loa thứ hai vẫn báo đàng hoàng.
-   */
-  /** Giây của loa này có phải SỐ ĐO THẬT không, hay chỉ là suy ra.
-   *
-   * «_speakerPosition» trả về «media_position» CỘNG thời gian trôi kể từ mốc Home
-   * Assistant ghi nhận. Đo trong nhà chủ máy 20/09/2026 trên loa đang phát thật:
-   *
-   *     googlehome5802:  pos = 3.300666 (KHÔNG bao giờ đổi)
-   *                      suy ra = 127 → 128 → 129 … → 138
-   *
-   * Loa báo đúng một lần rồi thôi, còn con số thẻ đang bám vào thì chỉ là phép
-   * cộng thời gian trôi — suy đoán từ một mẫu cũ, không phải số đo. Nó tiến đều
-   * 1:1 nên hàng rào «_dongHoChay» không bắt được, mà lại sai lệch tuỳ ý.
-   *
-   * Hậu quả đúng hai điều chủ máy báo ở chế độ vừa-loa-vừa-máy: hình bị kéo về
-   * theo con số ấy mỗi khi lệch quá ngưỡng — thấy giật; và tiếng trên máy bị đặt
-   * «currentTime» về chính con số ấy mỗi 4 giây — nghe như mất tiếng.
-   *
-   * Nguyên tắc: số SUY RA thì được vẽ thanh tiến trình, nhưng KHÔNG được phép
-   * dịch chuyển một bộ phát khác. Muốn kéo ai thì phải có số đo còn tươi.
-   */
-  _nhipDoDuoc(entityId) {
-    const luc = Date.parse(this._hass?.states?.[entityId]?.attributes?.media_position_updated_at || "");
-    return Number.isFinite(luc) && Date.now() - luc <= 10000;
-  }
-
   _loaDanNhip(session = this._focusedSession()) {
     const outputs = session?.output_entity_ids || [...this._selectedPlayers];
     return outputs.find((entityId) =>
@@ -5632,9 +5597,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        nghe-trên-máy đã có hàng rào này từ 19/09; nhánh loa thì chưa, nên lỗi cũ
        vẫn còn nguyên một nửa. */
     if (!this._dongHoChay("hinh", nhip, speakerTime)) return;
-    // Cùng lý do như vòng kéo tiếng: suy ra thì không được kéo ai. Đây là cái
-    // làm hình "giật giật" — mỗi lần lệch quá ngưỡng là một cú tua thật.
-    if (!this._nhipDoDuoc(nhip)) return;
     if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
       this._seekPicture(speakerTime);
     }
