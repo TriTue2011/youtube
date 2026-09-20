@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.26.25 - 2026-09-20
+
+### Fixed — "ra loa thì bình thường, nghe cả hai nơi thì lỗi video"
+
+Chủ máy tả đúng cấu hình: điện thoại Android, mở nhạc trên Home Assistant ra loa, thẻ
+nối vào c2a. Và thêm một câu quyết định: *"trước kia bản .19 không sao"*.
+
+Đo trên loa thật trong nhà, lấy mẫu cách nhau 25 giây:
+
+```
+googlehome5802:  playing | media_position = 0 → 0 | mốc thời gian KHÔNG đổi
+                 bài dài 10684 giây
+```
+
+Loa không báo lại vị trí bao giờ. Mà thẻ tính giây của loa bằng `media_position` **cộng
+thời gian trôi kể từ mốc**, nên khi mốc đã cũ 90 giây thì con số suy ra là 90 — trong
+khi sự thật không ai biết.
+
+Giả lập trên chính mã của thẻ, nạp đúng số đo ấy:
+
+```
+A) Chỉ ra loa (hình câm)   : seekTo 91.2 , seekTo 97.2   → 2 cú tua / 8,4 giây
+B) Ra loa + nghe trên máy  : unMute, seekTo 99.6 , seekTo 105.6
+```
+
+Hình đang ở giây 1–8 thì bị **quăng tới giây 91**, rồi lặp mỗi ~5 giây.
+
+Điều này giải thích luôn vì sao chủ máy thấy "ra loa thì bình thường": **cú tua xảy ra ở
+cả hai trường hợp**, nhưng khi hình còn câm và tai đang nghe loa thì không ai để ý. Bật
+tiếng trên máy lên là nghe rõ từng cú nhảy.
+
+Nay chốt lại: số **ngoại suy** thì không được tua hình. Đo lại sau khi sửa:
+
+```
+A) 0 cú tua     B) 0 cú tua, vẫn unMute cho máy     C) loa khoẻ: 2 cú tua
+```
+
+Ca C là hàng rào ngược: loa nào Home Assistant làm mới vị trí đàng hoàng thì vẫn đồng bộ
+được như cũ.
+
+### Tôi đã gỡ đúng cái chốt này ở bản trước, và đó là quyết định sai
+
+Chốt này có ở 0.26.22, và tôi gỡ hẳn ở 0.26.24 vì lúc ấy **không chứng minh được** nó
+cần thiết — phép giả lập khi đó chỉ đếm số lần *cửa mở*, không phải số lần thật sự tua.
+Nay đo đúng thứ cần đo thì thấy nó cần thật.
+
+Khác biệt so với 0.26.22: chốt **chỉ** áp cho vòng kéo hình. Vòng kéo tiếng vẫn để
+nguyên, vì đó là thứ duy nhất giữ tiếng trên máy đi cùng loa — chốt cả hai thì mất đồng
+bộ (lỗi của .22), gỡ cả hai thì hình bị quăng (lỗi của .24).
+
 ## 0.26.24 - 2026-09-20
 
 ### Gỡ HẲN cái chốt của bản 0.26.22 — nó dựng trên một chẩn đoán đã bị rút lại

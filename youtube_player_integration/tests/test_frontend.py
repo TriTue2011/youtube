@@ -233,13 +233,19 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("if (!laIOS()) return;", script)
         # iPad đời mới khai user-agent giống Mac — phải hỏi thêm màn cảm ứng.
         self.assertIn('return /Mac/.test(ua) && typeof document !== "undefined" && "ontouchend" in document;', script)
-        # 0.26.24: chốt «_nhipDoDuoc» của bản 0.26.22 đã bị GỠ HẲN. Nó dựng trên một
-        # chẩn đoán tôi đã tự rút lại (phép giả lập chỉ đếm số lần CỬA MỞ, không phải
-        # số lần thật sự tua), và nó gây hỏng hai lần: chặn vòng kéo tiếng làm loa và
-        # máy trôi khỏi nhau, rồi chặn vòng kéo hình làm chế độ nghe-cả-hai-nơi mất
-        # luôn thứ duy nhất giữ chúng cùng nhịp. Một thay đổi dựa trên chẩn đoán đã
-        # rút lại, lại gây hỏng, thì gỡ hẳn chứ không giữ một nửa.
-        self.assertNotIn("_nhipDoDuoc", script)
+        # 0.26.25: chốt «_nhipDoDuoc» trở lại, nhưng CHỈ ở vòng kéo HÌNH, và lần này
+        # có bằng chứng. Giả lập dựng đúng số đo của loa trong nhà (media_position = 0,
+        # mốc thời gian không đổi): hình đang ở giây 1–8 bị quăng tới giây 91 rồi 97,
+        # cứ ~5 giây một lần. Cú tua xảy ra cả khi chỉ ra loa, nhưng lúc hình còn câm
+        # thì không ai để ý — nên chủ máy thấy "ra loa bình thường, nghe cả hai nơi
+        # thì lỗi video".
+        #   có chốt: A=0 tua, B=0 tua (vẫn unMute cho máy), loa khoẻ=2 tua.
+        # Vòng kéo TIẾNG cố ý KHÔNG chốt: nó là thứ duy nhất giữ tiếng trên máy đi
+        # cùng loa — chốt cả hai (bản 0.26.22) thì mất đồng bộ, gỡ cả hai (bản
+        # 0.26.24) thì hình lại bị quăng. Đúng MỘT nơi gọi.
+        self.assertIn("_nhipDoDuoc(entityId) {", script)
+        self.assertIn("Date.now() - luc <= 10000", script)
+        self.assertEqual(script.count("this._nhipDoDuoc("), 1)
         # Hai đường nghe — nghe một mình và nghe kèm loa — mỗi đường tự canh, nên
         # có ĐÚNG hai nơi gọi. (Đợt 0.26.18 từng gộp về một qua «batDau»; bản ấy đã
         # được trả về nguyên trạng 0.26.2 vì đo trên máy thật thấy nó không nghe được.)

@@ -3434,6 +3434,31 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ["playing", "paused", "buffering"].includes(this._hass?.states?.[entityId]?.state));
   }
 
+  /** Giây của loa này có phải SỐ ĐO còn tươi không, hay chỉ là phép ngoại suy.
+   *
+   * «_speakerPosition» trả về «media_position» CỘNG thời gian trôi kể từ mốc Home
+   * Assistant ghi nhận. Đo trong nhà chủ máy 20/09/2026, loa Google Home đang phát:
+   *
+   *     media_position = 0, mốc thời gian KHÔNG đổi suốt 25 giây, bài dài 10684s
+   *
+   * Loa không báo lại vị trí bao giờ, nên con số suy ra chỉ là "bao lâu đã trôi kể
+   * từ lần báo cuối" — và mốc ấy có thể đã cũ hàng phút.
+   *
+   * Giả lập trên chính mã này, dựng đúng số đo trên: hình đang ở giây 1–8 thì bị
+   * quăng tới giây 91 rồi 97, cứ ~5 giây một lần. Đó chính là "lỗi video" chủ máy
+   * thấy khi vừa ra loa vừa nghe trên máy — cú tua vẫn xảy ra cả khi chỉ ra loa,
+   * nhưng lúc hình còn câm thì không ai để ý.
+   *
+   * CHỈ dùng cho vòng kéo HÌNH. Vòng kéo TIẾNG cố ý KHÔNG chốt: nó là thứ duy nhất
+   * giữ tiếng trên máy đi cùng loa, và đặt lại giây của phần tử âm thanh thì rẻ,
+   * trong khi tua khung YouTube là một cú nạp lại thấy được bằng mắt. Bản 0.26.22
+   * chốt cả hai nên làm hỏng đồng bộ; bản 0.26.24 gỡ cả hai nên hình lại bị quăng.
+   */
+  _nhipDoDuoc(entityId) {
+    const luc = Date.parse(this._hass?.states?.[entityId]?.attributes?.media_position_updated_at || "");
+    return Number.isFinite(luc) && Date.now() - luc <= 10000;
+  }
+
   _loaDanNhip(session = this._focusedSession()) {
     const outputs = session?.output_entity_ids || [...this._selectedPlayers];
     return outputs.find((entityId) =>
@@ -5597,6 +5622,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        nghe-trên-máy đã có hàng rào này từ 19/09; nhánh loa thì chưa, nên lỗi cũ
        vẫn còn nguyên một nửa. */
     if (!this._dongHoChay("hinh", nhip, speakerTime)) return;
+    // Số NGOẠI SUY thì không được tua hình — xem «_nhipDoDuoc». Thiếu chốt này,
+    // giả lập cho thấy hình đang ở giây 1–8 bị quăng tới giây 91 rồi 97.
+    if (!this._nhipDoDuoc(nhip)) return;
     if (Math.abs(speakerTime - this._videoTimeNow()) > 2) {
       this._seekPicture(speakerTime);
     }
