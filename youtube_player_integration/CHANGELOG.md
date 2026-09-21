@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.26.48 - 2026-09-21
+
+### Tìm ra vì sao điện thoại câm: Google bóp luồng khi không xin theo khúc
+
+Đây mới là gốc, và nó **nằm ở máy chủ chứ không nằm ở thẻ**.
+
+Đo trên máy chủ, hỏi thẳng googlevideo, cùng một luồng đã ấm:
+
+| Yêu cầu | Byte đầu tiên | Lấy được |
+|---|---|---|
+| không kèm `Range` | 1,87 giây | 0,33 MB trong 10 giây |
+| `Range: bytes=0-` | 0,04 giây | **3,45 MB trong 0,1 giây** |
+
+Chênh khoảng **100 lần**. Mà cú đầu tiên trình phát của WebKit gửi thì **không kèm
+`Range`** — nên phần tử âm thanh nằm ở "đang tải mà không có dữ liệu" (`nap=0 mang=2`,
+không báo lỗi), đúng những con số hộp đen ghi trên iPhone lúc 14:00–14:03. Thoát app
+rồi vào lại thì WebKit dựng lại trình phát và xin tiếp **có** kèm `Range`, rơi vào
+đường nhanh — đúng cái trò phải làm mãi lâu nay.
+
+Đã sửa ở cả hai nơi tiếp sóng: máy chủ c2a và add-on. Nay luôn xin theo khúc, kể cả
+khi máy nghe không xin.
+
+### Thẻ: ghi lại câu trả lời của trình duyệt, và tự cứu một lần
+
+- Hộp đen ghi thêm `phat=` (lệnh phát được chấp nhận hay bị chặn) và `cuchi=`. Thiếu
+  đúng dữ kiện này mà tôi đã đoán sai ba lần: `tamdung=0` **không** chứng minh được
+  lệnh phát đã được cho phép, vì theo chuẩn gọi `play()` là `paused` thành false ngay.
+- Ba giây mà chưa nhận được byte nào và không có lỗi thì thẻ tự gọi lại lượt nạp một
+  lần — làm đúng việc mà việc "thoát app rồi vào lại" vẫn làm, nhưng không bắt người
+  dùng phải làm. Đã kiểm trên Chrome: **không** nổ khi luồng đang chạy bình thường.
+
 ## 0.26.47 - 2026-09-21
 
 ### iPhone: phần tử âm thanh phải nằm TRONG khung nhìn

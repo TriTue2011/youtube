@@ -312,6 +312,33 @@ const deviceAudio = {
     return !!audio && !audio.paused;
   },
 
+  /** GỌI PHÁT VÀ NHỚ LẠI CÂU TRẢ LỜI CỦA TRÌNH DUYỆT.
+   *
+   *  Thiếu đúng dữ kiện này mà tôi đã đoán mò ba lần. `paused` không trả lời được:
+   *  theo chuẩn, gọi `play()` là `paused` thành false NGAY, kể cả khi ngay sau đó
+   *  trình duyệt chặn. Nên số đo «tamdung=0» của iPhone chủ máy (20 và 21/09/2026)
+   *  KHÔNG chứng minh được lệnh phát đã được chấp nhận.
+   *  Lời hứa của `play()` mới trả lời: xong êm là được phép, ném `NotAllowedError`
+   *  là bị chặn. Hai đường chữa hoàn toàn khác nhau.
+   */
+  phatVaGhi(audio) {
+    this.ketQuaPhat = "cho";
+    this.cuChi = typeof navigator !== "undefined" && navigator.userActivation
+      ? (navigator.userActivation.isActive ? 1 : 0)
+      : -1;
+    const hong = (error) => {
+      this.ketQuaPhat = error?.name || "lỗi";
+      this.playRefused(error);
+    };
+    try {
+      const hua = audio.play();
+      if (hua && hua.then) hua.then(() => { this.ketQuaPhat = "ok"; }, hong);
+      else this.ketQuaPhat = "ok";
+    } catch (error) {
+      hong(error);
+    }
+  },
+
   /** Call inside the tap, before any await. */
   unlock() {
     const audio = this.audio();
@@ -419,7 +446,7 @@ const deviceAudio = {
     }
     audio.src = url;
     if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
-    audio.play().catch((error) => this.playRefused(error));
+    this.phatVaGhi(audio);
     this.hopDenTheoDoi(coSan ? "nghe một mình, địa chỉ có sẵn" : "nghe một mình, phải hỏi máy chủ", audio);
     this.canhTieng(audio, generation);
     this.notify();
@@ -466,6 +493,13 @@ const deviceAudio = {
         + ` giay=${Number(a.currentTime || 0).toFixed(1)} tamdung=${a.paused ? 1 : 0}`
         + ` nguon=${a.currentSrc ? 1 : 0} dom=${a.isConnected ? 1 : 0}`
         + ` ochoy=${(() => { const h = a.getBoundingClientRect(); return `${Math.round(h.left)},${Math.round(h.top)}`; })()}`
+        + ` phat=${this.ketQuaPhat || "?"} cuchi=${this.cuChi ?? "?"}`
+        + ` dem=${(() => {
+          const goc = document.querySelector("tritue-youtube-player-card")?.shadowRoot;
+          const dem = (chon) => document.querySelectorAll(chon).length
+            + (goc ? goc.querySelectorAll(chon).length : 0);
+          return `${dem("audio,video")}m/${dem("iframe")}k`;
+        })()}`
       : "(chưa có phần tử)";
     this.hass.callService("system_log", "write", {
       message: `[the youtube] ${nhan} — ${so}`,
@@ -484,8 +518,38 @@ const deviceAudio = {
         // Ba giây mà chưa có một byte nào: hỏi thẳng xem MẠNG của máy này có lấy được
         // dữ liệu từ đúng địa chỉ ấy không. Tách được hai chuyện hay bị lẫn — "máy không
         // với tới được luồng" với "với tới được mà trình phát không thèm tải".
-        if (cho === 3000 && audio && audio.readyState === 0) this.doThuLuong(audio);
+        if (cho === 3000 && audio && audio.readyState === 0 && !audio.error) {
+          this.doThuLuong(audio);
+          this.cuuLuotNap(audio);
+        }
       }, cho));
+  },
+
+  /** CỨU MỘT LẦN khi lượt tải chết lặng — và đồng thời là phép đo quyết định.
+   *
+   *  Ba giây trôi qua mà `readyState` vẫn bằng 0 và KHÔNG có lỗi nghĩa là lượt tải
+   *  không hề khởi động: phần tử báo "đang tải" mà không một byte nào về. Chủ máy đã
+   *  gặp đúng cảnh này trên iPhone và Android, và cách duy nhất thoát ra là ẩn app
+   *  rồi mở lại — lúc ấy khung web tự dựng lại trình phát và bài hát mới chịu chạy.
+   *  Đây là làm đúng việc ấy mà không bắt người dùng phải chuyển app: gọi lại lượt
+   *  nạp một lần, rồi ghi hộp đen xem có ăn thua không.
+   *
+   *  Chỉ chạy khi phần tử đã chắc chắn chết, nên không thể làm hỏng ca đang chạy tốt.
+   */
+  cuuLuotNap(audio) {
+    if (this.dangCuu) return;
+    this.dangCuu = true;
+    try {
+      audio.load();
+    } catch (_error) {
+      // Máy nào không cho gọi lại thì thôi, vẫn còn cú phát bên dưới.
+    }
+    this.phatVaGhi(audio);
+    this.hopDen("cứu lượt nạp: gọi lại load() rồi play()", audio);
+    setTimeout(() => {
+      this.hopDen("sau khi cứu (+2s)", audio);
+      this.dangCuu = false;
+    }, 2000);
   },
 
   /** Thử tải một byte từ chính địa chỉ mà phần tử âm thanh đang trỏ tới. */
@@ -628,7 +692,7 @@ const deviceAudio = {
       this.mediaSession(item, false);
       audio.src = san.url;
       this.nhayKhiSanSang(audio, batDau);
-      audio.play().catch((error) => this.playRefused(error));
+      this.phatVaGhi(audio);
       this.hopDenTheoDoi("nghe cùng loa, phát ngay trong cú bấm", audio);
       this.canhTieng(audio, generation);
     }
@@ -666,7 +730,7 @@ const deviceAudio = {
     /* PHÂN LOẠI LỖI, ĐỪNG KÊU OAN. Đổi bài là lệnh phát cũ bị huỷ («AbortError») —
        chuyện bình thường, mà bản cũ đem hiện thành "trình duyệt chặn tự phát có
        tiếng", đúng dòng chữ đỏ chủ máy gặp trong ảnh 21/09/2026. */
-    audio.play().catch((error) => this.playRefused(error));
+    this.phatVaGhi(audio);
     this.canhTieng(audio, generation);
   },
 

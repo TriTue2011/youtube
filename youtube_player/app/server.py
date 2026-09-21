@@ -1023,16 +1023,27 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 return
             response, resolved = self.open_upstream(source, target, range_header)
             with response:
-                self.send_response(response.getcode() or 200)
+                ma = response.getcode() or 200
+                gui = {h: v for h in ("Content-Length", "Content-Range", "Accept-Ranges")
+                       if (v := response.headers.get(h))}
+                if not range_header and ma == 206:
+                    # May nghe khong hoi theo khuc thi phai nhan nguyen tep: tra 200 chu
+                    # khong phai 206, va bo Content-Range di. Khuc xin o tren la chuyen
+                    # rieng giua proxy nay voi Google.
+                    ma = 200
+                    tong = str(gui.pop("Content-Range", "")).rsplit("/", 1)[-1]
+                    if tong.isdigit():
+                        gui["Content-Length"] = tong
+                    gui.setdefault("Accept-Ranges", "bytes")
+                self.send_response(ma)
                 self.send_header(
                     "Content-Type",
                     response.headers.get(
                         "Content-Type", resolved.get("content_type", "audio/mpeg")
                     ),
                 )
-                for header in ("Content-Length", "Content-Range", "Accept-Ranges"):
-                    if value := response.headers.get(header):
-                        self.send_header(header, value)
+                for header, value in gui.items():
+                    self.send_header(header, value)
                 self.send_header("Cache-Control", "private, no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
@@ -1052,8 +1063,15 @@ class PlayerHandler(BaseHTTPRequestHandler):
         for attempt in (1, 2):
             resolved = self.server.resolve_stream(source, target)
             headers = {**resolved["headers"], "Accept-Encoding": "identity"}
-            if range_header:
-                headers["Range"] = range_header
+            # LUON XIN THEO KHUC, ke ca khi may nghe khong xin.
+            #
+            # Do tren may chu 21/09/2026, hoi THANG googlevideo cung mot luong da am:
+            #   khong kem Range  -> byte dau tien 1,87 s, roi 0,33 MB trong 10 giay
+            #   Range: bytes=0-  -> byte dau tien 0,04 s, va 3,45 MB trong 0,1 giay
+            # Google bop bang thong dung nhung yeu cau khong kem Range, xuong co toc do
+            # nghe (~33 KB/s). Ma cu DAU TIEN trinh phat cua WebKit gui thi khong kem
+            # Range - nen phan tu am thanh nam o "dang tai ma khong co du lieu".
+            headers["Range"] = range_header or "bytes=0-"
             try:
                 response = urlopen(Request(resolved["url"], headers=headers), timeout=30)
             except HTTPError as error:

@@ -662,6 +662,55 @@ class YouTubePlayerHttpTests(unittest.TestCase):
         upstream_request = open_upstream.call_args.args[0]
         self.assertEqual("bytes=0-3", upstream_request.get_header("Range"))
 
+    @patch("server.urlopen")
+    @patch("server.resolve_zing_stream")
+    def test_a_request_without_a_range_still_asks_upstream_for_one(
+        self, resolve, open_upstream
+    ):
+        """Google throttles range-less requests; a player's first request has no range.
+
+        Measured against googlevideo on 21/09/2026, same warm stream: with no Range
+        header the first byte took 1.87 s and only 0.33 MB arrived in 10 seconds; with
+        "Range: bytes=0-" the first byte took 0.04 s and 3.45 MB arrived in 0.1 s.
+        WebKit's first media request carries no Range, which left the element loading
+        without data until the user switched apps and back.
+        """
+        target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
+        self.remember_public_zing_target(target)
+        resolve.return_value = {
+            "url": "https://audio.zmdcdn.me/song.mp3",
+            "headers": {"Referer": "https://zingmp3.vn/"},
+            "content_type": "audio/mpeg",
+        }
+        upstream = io.BytesIO(b"MP3!")
+        upstream.headers = {
+            "Content-Type": "audio/mpeg",
+            "Content-Length": "4",
+            "Content-Range": "bytes 0-3/4",
+            "Accept-Ranges": "bytes",
+        }
+        upstream.getcode = lambda: 206
+        open_upstream.return_value = upstream
+        _, created = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={"source": "zing", "target": target},
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        token = created["stream_url"].rsplit("/", 1)[-1]
+        request = urllib.request.Request(f"{self.base_url}/api/stream/{token}")
+
+        with urllib.request.urlopen(request, timeout=2) as response:
+            # The listener asked for the whole file, so it gets 200 — not 206 — and no
+            # Content-Range, while still learning the size so it can seek.
+            self.assertEqual(200, response.status)
+            self.assertIsNone(response.headers.get("Content-Range"))
+            self.assertEqual("4", response.headers["Content-Length"])
+            self.assertEqual("bytes", response.headers["Accept-Ranges"])
+            self.assertEqual(b"MP3!", response.read())
+
+        self.assertEqual("bytes=0-", open_upstream.call_args.args[0].get_header("Range"))
+
     @patch("server.resolve_zing_stream")
     def test_stream_creation_reports_an_unplayable_zing_result(self, resolve):
         target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
