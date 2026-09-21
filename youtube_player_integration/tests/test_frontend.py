@@ -422,10 +422,21 @@ class LovelaceCardContractTests(unittest.TestCase):
         # kèm tiếng. Nay khung lấy từ www.youtube.com nên cả hai nền tảng đi chung
         # đường khung; giả thuyết ấy sai thì _checkVideoSound tự trả việc về phần
         # tử âm thanh, nên không ai mất tiếng.
+        # 0.26.38 — ĐƯỜNG KHUNG CHỈ DÀNH CHO MÁY NHÀ TÁO, và đây là luật đo được chứ
+        # không phải đoán. Ảnh chụp Android của chủ máy 21/09/2026: khung dựng lại có
+        # tiếng vẫn hiện nút play đỏ kèm "Chạm vào video để phát có tiếng" — Chrome
+        # chặn tự phát kèm tiếng, đổi khung sang www.youtube.com KHÔNG thay đổi điều
+        # đó (giả thuyết của bản 0.26.34, nay đã bị bác).
         self.assertIn(
-            "} else if (video.open && video.withSpeakers && !video.picture) {",
+            "} else if (video.open && video.withSpeakers && !video.picture && laTao()) {",
             script)
-        self.assertIn("} else if (this._ngheBangKhung()) {", script)
+        self.assertIn("} else if (laTao() && this._ngheBangKhung()) {", script)
+        # Và Android phải mở khoá phần tử âm thanh NGAY TRONG CÚ BẤM: thử khung trước
+        # rồi mới lùi sau vài giây là mở khoá ngoài cử chỉ người dùng, Chrome từ chối
+        # thẳng ("Trình duyệt chặn tự phát có tiếng"), tức mất tiếng hoàn toàn.
+        self.assertIn("""      deviceAudio.entryId = this._entryId();
+      deviceAudio.startAlong();
+      this._syncAlong();""", script)
         self.assertIn("if (video.soundOnly) {", script)
         # Ràng buộc cũ đã bỏ: chủ máy báo "Phải bật nghe khi tắt màn hình kèm theo
         # thì mới bật được nghe trên máy này".

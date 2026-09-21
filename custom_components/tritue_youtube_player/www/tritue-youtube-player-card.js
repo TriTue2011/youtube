@@ -5086,21 +5086,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         video.soundHere = false;
         this._videoCommand("mute");
       }
-    } else if (video.open && video.withSpeakers && !video.picture) {
-      /* ĐANG MỞ HÌNH THÌ BẬT TIẾNG NGAY TẠI KHUNG — không còn tách Android với máy
-         nhà Táo nữa. Chỗ tách ấy có từ 20/09/2026 vì khung nhúng khi đó lấy từ
-         «youtube-nocookie.com» và Chrome không cho nó tự phát kèm tiếng; nay khung
-         lấy từ «www.youtube.com» như thẻ «phicomm-r1-card», xem «EMBED_ORIGIN».
-         Nếu giả thuyết ấy sai thì «_checkVideoSound» tự trả việc về phần tử âm
-         thanh sau 1,5 giây, nên không ai mất tiếng. */
+    } else if (video.open && video.withSpeakers && !video.picture && laTao()) {
+      /* CHỈ MÁY NHÀ TÁO ĐI ĐƯỜNG KHUNG — và đây là chỗ tôi đã sai ở 0.26.34.
+         Tôi gộp hai nền tảng làm một vì đoán rằng đổi khung sang «www.youtube.com»
+         thì Chrome sẽ cho tự phát kèm tiếng. Chủ máy gửi ảnh chụp Android
+         21/09/2026: khung vẫn hiện nút play đỏ của YouTube kèm dòng "Chạm vào video
+         để phát có tiếng" — tức Chrome CHẶN, và khung có hiện hay thu bé cũng thế.
+         Giả thuyết ấy sai; đường của Android là phần tử âm thanh, như trước. */
       this._batTiengKhung();
       clearTimeout(this._soundCheckTimer);
       this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 1500);
-    } else if (this._ngheBangKhung()) {
+    } else if (laTao() && this._ngheBangKhung()) {
       // Đã nhận việc bên trong; xem «_ngheBangKhung».
     } else if (this._focusedSession()?.title) {
-      /* CÒN LẠI (Zing MP3, link audio) thì khung YouTube không phát được, nên vẫn đi
-         đường phần tử âm thanh: hỏi máy chủ lấy luồng rồi tự canh theo loa. */
+      /* ANDROID VÀ MỌI MÁY CÒN LẠI (và mọi nguồn không phải YouTube) đi đường phần
+         tử âm thanh — và phải gọi NGAY TRONG CÚ BẤM này.
+         Đây là chỗ hỏng thứ hai của 0.26.34–0.26.37: tôi cho thử khung trước rồi mới
+         lùi về phần tử âm thanh sau 2,5–8 giây, tức mở khoá phần tử ấy NGOÀI cú bấm.
+         Chrome từ chối, và chủ máy nhận đúng dòng "Trình duyệt chặn tự phát có tiếng
+         — bấm lại «Nghe trên máy này»" trong ảnh chụp 21/09/2026: mất tiếng hoàn
+         toàn, tệ hơn cả bản cũ vốn chỉ chậm. */
       deviceAudio.entryId = this._entryId();
       deviceAudio.startAlong();
       this._syncAlong();

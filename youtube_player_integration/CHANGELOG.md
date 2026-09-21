@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.26.38 - 2026-09-21
+
+### Android: trả tiếng về phần tử âm thanh, và mở khoá NGAY TRONG CÚ BẤM
+
+Ảnh chụp Android của chủ máy sáng nay bác thẳng giả thuyết tôi dựa vào từ bản 0.26.34:
+
+1. Khung YouTube dựng lại kèm tiếng **vẫn hiện nút play đỏ** và dòng *"Chạm vào video để
+   phát có tiếng"*. Đổi khung sang `www.youtube.com` **không** làm Chrome cho tự phát kèm
+   tiếng; khung hiện hay thu bé một điểm ảnh cũng thế.
+2. Tệ hơn: vì bản 0.26.34–0.26.37 **thử khung trước rồi mới lùi** về phần tử âm thanh sau
+   2,5–8 giây, việc mở khoá phần tử ấy rơi **ra ngoài cú bấm** của người dùng. Chrome từ
+   chối thẳng, và chủ máy nhận đúng dòng *"Trình duyệt chặn tự phát có tiếng"* — **mất
+   tiếng hoàn toàn**, tệ hơn cả bản cũ vốn chỉ chậm. Đó là lỗi của tôi.
+
+Nay luật rõ ràng và chia theo **nền tảng**, đúng thứ đo được:
+
+| Máy | Ai mang tiếng khi loa đang phát |
+|---|---|
+| iPhone / iPad / Safari | khung YouTube (phần tử âm thanh của WebKit đo được là không tải nổi) |
+| Android và mọi máy khác | phần tử `<audio>`, **gọi ngay trong cú bấm** |
+
+### Những thứ vẫn giữ, và vì thế Android nay NHANH HƠN trước
+
+Phần tử âm thanh quay lại, nhưng không quay lại nguyên trạng:
+
+- **Địa chỉ luồng đã xin sẵn** từ lúc loa bắt đầu phát — bỏ được lượt hỏi 1,0–1,6 giây.
+- **Vào thẳng giây của loa ngay khi nạp**, thay vì phát từ giây 0 rồi mới kéo về: hết
+  quãng nghe sai chỗ, và bỏ luôn một lượt xin dữ liệu (đo: 1,64 giây).
+- **Không còn quãng im lặng** khi tích loa lúc đang nghe trên máy (0.26.36).
+- Lớp tiếp sức luồng trả lời cả HEAD (0.26.35).
+
 ## 0.26.37 - 2026-09-21
 
 ### "Bị giật, tiếng thì mất 10s mới có" — thẻ kết luận vội rồi tự dỡ bỏ khung đang chạy tới
