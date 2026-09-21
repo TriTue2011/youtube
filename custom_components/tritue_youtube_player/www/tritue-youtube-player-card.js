@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.62";
+const PHIEN_BAN_THE = "0.26.63";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -1172,6 +1172,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       }, 1000);
     }
     deviceAudio.listeners.add(this._onDeviceAudio);
+    this._theoDoiTatMan();
     /* Máy nhà Táo: mọi lối gọi «listen» đều nhường việc cho khung — xem cửa chặn
        trong «deviceAudio.listen». */
     deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>
@@ -5709,14 +5710,33 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   async _giuTiengNen() {
     if (!laTao()) return;
+    /* GHI DẤU NGAY ĐẦU HÀM. Thiếu nó thì không phân biệt được "chưa từng gọi" với
+       "gọi rồi mà treo ở giữa" — mà «resume()» của bộ trộn tiếng là thứ treo được
+       vô thời hạn trên iOS khi không có cử chỉ. */
+    deviceAudio.hass = this._hass;
+    deviceAudio.ghiThang(`giữ tiếng nền: bắt đầu, tron=${this._nenCtx ? this._nenCtx.state : "chua-co"}`
+      + ` da-co-phan-tu=${this._nenAudio ? 1 : 0}`);
     try {
       if (!this._nenAudio) {
         let dong = null;
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (Ctx) {
           this._nenCtx = this._nenCtx || new Ctx();
-          if (this._nenCtx.state === "suspended") await this._nenCtx.resume();
-          if (this._nenCtx.createMediaStreamDestination) {
+          if (this._nenCtx.state === "suspended") {
+            // Chặn thời gian: «resume()» treo vô thời hạn thì cả đường giữ nền chết
+            // lặng, và không ai biết vì sao.
+            await Promise.race([
+              this._nenCtx.resume(),
+              new Promise((xong) => setTimeout(xong, 2000)),
+            ]);
+          }
+          /* BỘ TRỘN CHƯA THỨC THÌ ĐỪNG DÙNG DÒNG CỦA NÓ.
+             Dòng dao động lấy từ một bộ trộn còn "suspended" là im tuyệt đối, và
+             «play()» trên đó bị iOS từ chối thẳng («NotAllowedError») — đo được trên
+             Chrome giả iPhone 21/09/2026. Mà ngay bên dưới đã có đường dự phòng:
+             một đoạn im lặng thuần, phát được mà không cần bộ trộn nào. Bản cũ không
+             bao giờ chạm tới nó, nên tắt màn là mất tiếng và không ai biết vì sao. */
+          if (this._nenCtx.state === "running" && this._nenCtx.createMediaStreamDestination) {
             const osc = this._nenCtx.createOscillator();
             osc.frequency.setValueAtTime(20, this._nenCtx.currentTime);
             const gain = this._nenCtx.createGain();
@@ -5746,9 +5766,47 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._khoaThuc = await navigator.wakeLock.request("screen");
         this._khoaThuc.addEventListener("release", () => { this._khoaThuc = null; });
       }
-    } catch (_error) {
+      /* HỘP ĐEN CHO DÒNG GIỮ NỀN. Đây là chỗ mù cuối cùng: chủ máy báo 21/09/2026
+         "bật khi nghe màn hình nhưng thoát ra màn hình chính không nghe được nữa",
+         mà hàm này thì im lặng hoàn toàn — hỏng hay chạy đều không để lại dấu vết. */
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang(`giữ tiếng nền: chay=${this._nenAudio.paused ? 0 : 1}`
+        + ` tron=${this._nenCtx ? this._nenCtx.state : "khong-co"}`
+        + ` kieu=${this._nenAudio.srcObject ? "dao-dong" : "im-lang"}`
+        + ` khoathuc=${this._khoaThuc ? 1 : 0}`);
+    } catch (loi) {
       // Máy không cho thì thôi — đường xem vẫn chạy, chỉ là tắt màn sẽ dừng.
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang(`giữ tiếng nền HỎNG: ${loi?.name || loi}`
+        + ` tron=${this._nenCtx ? this._nenCtx.state : "khong-co"}`);
     }
+  }
+
+  /** GHI LẠI ĐÚNG LÚC MÀN HÌNH TẮT / BẬT LẠI.
+   *
+   *  Tắt màn là lúc mọi thứ hỏng, mà không ai thấy gì: người dùng đang cầm máy úp
+   *  xuống, còn thẻ thì không ghi dấu vết nào. Hai dòng này cho biết ngay lúc ấy
+   *  khung đang ở trạng thái gì và dòng giữ nền còn chạy không.
+   */
+  _theoDoiTatMan() {
+    if (this._daTheoDoiTatMan) return;
+    this._daTheoDoiTatMan = true;
+    document.addEventListener("visibilitychange", () => {
+      const v = this._video;
+      if (!v.open) return;
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang(`màn hình ${document.visibilityState === "hidden" ? "TẮT" : "BẬT lại"}`
+        + ` — khung mo=${v.open ? 1 : 0} trangthai=${v.state}`
+        + ` giay=${Number(v.time || 0).toFixed(1)} chitieng=${v.soundOnly ? 1 : 0}`
+        + ` nen=${this._nenAudio && !this._nenAudio.paused ? 1 : 0}`
+        + ` congtac=${listenScreenOff() ? 1 : 0}`);
+      if (document.visibilityState === "visible") {
+        setTimeout(() => {
+          deviceAudio.ghiThang(`sau khi bật lại màn (+2s) — trangthai=${this._video.state}`
+            + ` giay=${Number(this._video.time || 0).toFixed(1)}`);
+        }, 2000);
+      }
+    });
   }
 
   _thoiGiuTiengNen() {

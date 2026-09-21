@@ -818,6 +818,17 @@ class LovelaceCardContractTests(unittest.TestCase):
         # thứ chạy được trên đúng máy ấy — dựng địa chỉ khung KHÔNG có «origin».
         self.assertNotIn("origin: location.origin", script)
         self.assertIn("KHÔNG GỬI «origin»", script)
+        # 0.26.63 — đường giữ tiếng nền phải TỰ NÓI ĐƯỢC nó chạy hay hỏng, và phải
+        # có đường lui khi bộ trộn tiếng chưa thức.
+        self.assertIn("giữ tiếng nền: bắt đầu", script)
+        self.assertIn("giữ tiếng nền HỎNG:", script)
+        self.assertIn("BỘ TRỘN CHƯA THỨC THÌ ĐỪNG DÙNG DÒNG CỦA NÓ", script)
+        self.assertIn('if (this._nenCtx.state === "running" && this._nenCtx.createMediaStreamDestination) {', script)
+        # «resume()» treo vô thời hạn thì cả đường giữ nền chết lặng.
+        self.assertIn("new Promise((xong) => setTimeout(xong, 2000)),", script)
+        # Và phải ghi lại ĐÚNG LÚC màn hình tắt — lúc mọi thứ hỏng mà không ai thấy.
+        self.assertIn("_theoDoiTatMan() {", script)
+        self.assertIn("màn hình ${document.visibilityState === \"hidden\" ? \"TẮT\" : \"BẬT lại\"}", script)
         # Chỉ nghe phải TRÔNG NHƯ nghe nhạc: có tên bài, ảnh bìa, và còn nút Xem.
         self.assertIn("CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC", script)
         self.assertIn("if (video.open && video.soundOnly && video.item && !video.withSpeakers) {", script)

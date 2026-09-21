@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.26.63 - 2026-09-21
+
+### Tắt màn là mất tiếng: bộ trộn tiếng chưa thức mà vẫn đem dòng của nó ra phát
+
+Đường giữ tiếng nền là chỗ mù cuối cùng — hỏng hay chạy đều không để lại một dấu vết
+nào. Nay nó tự ghi, và ngay khi gắn đồng hồ vào thì lỗi lộ ra:
+
+```
+giữ tiếng nền: bắt đầu, tron=suspended
+giữ tiếng nền HỎNG: NotAllowedError tron=suspended
+```
+
+Dòng im lặng giữ nền được lấy từ **bộ trộn tiếng** (`AudioContext`). Khi bộ trộn chưa
+đánh thức được, dòng ấy im tuyệt đối và iOS **từ chối thẳng** lệnh phát. Mà ngay bên
+dưới đã có sẵn đường lui — một đoạn im lặng thuần, phát được mà không cần bộ trộn nào
+— chỉ là mã cũ **không bao giờ chạm tới nó**.
+
+Nay: bộ trộn chưa thức thì dùng luôn đường lui. Thêm chặn thời gian 2 giây cho
+`resume()`, vì nó treo vô thời hạn được trên iOS.
+
+### Ghi lại đúng lúc màn hình tắt
+
+Tắt màn là lúc mọi thứ hỏng, mà không ai thấy gì: người dùng đang cầm máy úp xuống,
+còn thẻ thì im. Nay mỗi lần màn tắt hoặc bật lại, hộp đen ghi một dòng: khung còn mở
+không, trình phát đang ở trạng thái nào, tới giây thứ mấy, và **dòng giữ nền còn chạy
+không**.
+
+Đo trên Chrome giả iPhone: `màn hình TẮT — trangthai=1 nen=1 congtac=1`.
+
 ## 0.26.62 - 2026-09-21
 
 ### Lỗi 150 của YouTube: không phải video bị cấm, mà tại thẻ tự khai địa chỉ IP
