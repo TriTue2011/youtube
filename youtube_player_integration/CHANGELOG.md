@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.41 - 2026-09-21
+
+### Phải thoát app ra vào lại mới nghe được — phần tử âm thanh chưa hề nằm trong trang
+
+> *"Chọn nghe trên thiết bị này mà thoát app HA ra rồi vào 1 app khác, rồi vào lại là
+> nghe được luôn. Nhưng nếu không thoát là tiếng audio mãi không nghe được. iPhone tương
+> tự."*
+
+Câu "thoát ra vào lại thì được" chỉ thẳng vào chỗ hỏng: thẻ tạo phần tử âm thanh bằng
+`new Audio()` và **không gắn nó vào trang bao giờ**. Khung web của app Home Assistant chỉ
+chịu đi lấy dữ liệu cho một phần tử rời như thế khi trang bị ẩn rồi hiện lại — đúng cái
+anh làm khi chuyển app.
+
+Nay phần tử được gắn vào trang (ẩn một điểm ảnh, có `playsinline`) — đúng cách thẻ
+`phicomm-r1-card` làm, và thẻ ấy chạy được trên cả hai nền tảng. Kèm theo: phép canh "tiếng
+có thật sự chảy không" trước đây chỉ chạy trên máy nhà Táo, nay chạy cho **mọi** máy, vì
+Android vướng y hệt.
+
+### Thu gọn kết quả tìm kiếm trên máy tính để lại một ô rỗng to tướng
+
+Cột phải bị đặt **chiều cao cứng 640px**. Đo trong Chrome ở thẻ rộng 1100px: thu gọn xong
+nội dung chỉ còn **173px** mà cột vẫn **660px**. Nay cột cao theo nội dung, chặn trên vẫn
+giữ nguyên ý cũ — danh sách dài không được kéo giãn bố cục, phần dư cuộn bên trong.
+
+| Trạng thái | Trước | Nay |
+|---|---|---|
+| Thu gọn 20 kết quả | cột 660px (rỗng 480px) | cột **203px** |
+| Mở 20 kết quả | 662px, cuộn trong | 662px, cuộn trong — không đổi |
+
+### Tích loa lúc đang nghe: nút qua bài / lùi bài bị khoá
+
+Thẻ giao **một bài** cho loa, nên phiên bên máy chủ chỉ có một bài, và hai nút ấy bị khoá
+ngay (nút vẫn hiện, bấm không được). Nay thẻ **giữ lại hàng đợi của chính nó** khi giao
+bài, và khi phiên của loa chỉ có một bài thì bấm qua bài là thẻ tự gửi bài kế cho loa.
+
+Dựng lại cảnh ấy trong Chrome để chắc: nghe bài 1 trên máy (hàng đợi 3 bài) → tích loa →
+loa nhận bài 1, **nút qua bài vẫn bấm được** → bấm → loa nhận **bài 2**.
+
 ## 0.26.40 - 2026-09-21
 
 ### Nghe trên máy KHI KHÔNG CÓ LOA cũng phải phát ngay trong cú bấm

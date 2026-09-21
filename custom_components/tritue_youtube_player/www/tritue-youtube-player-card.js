@@ -254,6 +254,21 @@ const deviceAudio = {
     if (this.element) return this.element;
     const audio = new Audio();
     audio.preload = "auto";
+    /* PHẦN TỬ PHẢI NẰM TRONG TRANG. «new Audio()» tạo ra một phần tử rời, không gắn vào
+       đâu cả — và khung web của app Home Assistant chỉ chịu đi lấy dữ liệu cho phần tử
+       rời ấy khi trang bị ẩn rồi hiện lại. Chủ máy đo 21/09/2026: "chọn nghe trên thiết
+       bị này mà thoát app ra rồi vào lại là nghe được luôn, nhưng nếu không thoát thì
+       tiếng mãi không nghe được. iPhone tương tự" — đúng dấu hiệu ấy.
+       Thẻ «phicomm-r1-card» chủ máy đưa cũng gắn phần tử âm thanh của nó vào trang theo
+       đúng kiểu này (ẩn một điểm ảnh, có «playsinline»), và nó chạy được trên cả hai
+       nền tảng. */
+    audio.setAttribute("playsinline", "");
+    audio.setAttribute("webkit-playsinline", "");
+    Object.assign(audio.style, {
+      position: "fixed", top: "-9999px", left: "-9999px",
+      width: "1px", height: "1px", opacity: "0.01",
+    });
+    document.body.append(audio);
     audio.addEventListener("play", () => this.notify());
     audio.addEventListener("pause", () => this.notify());
     audio.addEventListener("ended", () => {
@@ -419,7 +434,11 @@ const deviceAudio = {
        12 giây thì báo hỏng oan. Chủ máy chốt "xem tách riêng iP và Android ra" —
        đây là chỗ đầu tiên áp nguyên tắc ấy, để Android chạy đúng đường 0.26.2.
        0.26.32: mở rộng sang Safari trên máy Mac, cũng là WebKit — xem «laSafari». */
-    if (!laTao()) return;
+    /* CANH CHO MỌI NỀN TẢNG. Trước đây chỉ canh trên máy nhà Táo vì Android được cho
+       là không vướng; chủ máy đo 21/09/2026 thì Android vướng y hệt ("không thoát app
+       ra vào lại là tiếng mãi không nghe được"). Phép nhắc lại vẫn an toàn cho Android
+       vì nó chỉ nổ khi đồng hồ ĐỨNG YÊN sau ba giây — luồng đang chạy bình thường thì
+       nhánh này thoát ngay. */
     const moc = audio.currentTime;
     /* THỬ LẠI MỘT LẦN sau 3 giây. Người dùng iPhone thấy "lượn qua app khác rồi quay
        lại thì lại phát" — tức lệnh phát chỉ cần được nhắc lại một lần nữa là chạy.
@@ -2146,7 +2165,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           container-type: inline-size;
           container-name: ytcot;
           min-width: 0;
-          height: var(--yt-col-min-h, 640px);
+          /* CAO THEO NỘI DUNG, CHẶN TRÊN — trước đây đặt «height» cứng nên thu gọn kết
+             quả tìm kiếm xong cột phải vẫn chiếm trọn 640px. Chủ máy gửi ảnh
+             21/09/2026: một ô rỗng to tướng ngay dưới nút "Xem 20 kết quả tìm kiếm".
+             Đo trong Chrome ở thẻ rộng 1100px: nội dung cao 173px mà cột vẫn 660px.
+             Chặn trên vẫn giữ nguyên ý cũ — danh sách dài không được phép kéo giãn bố
+             cục, phần dư thì cuộn bên trong. */
+          max-height: var(--yt-col-min-h, 640px);
           align-self: start;
           overflow: hidden;
         }
@@ -2156,11 +2181,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            chừng đó (inset:0). Nhờ vậy dù tìm được 20-30 bài thì bố cục vẫn cân,
            khối "Loa / màn hình" không bị kéo giãn thành khung rỗng nữa. */
         .yt-playlist-inner {
-          position: absolute;
-          inset: 0;
+          /* Nằm theo dòng chảy bình thường (trước là «absolute; inset:0» để khỏi đóng
+             góp chiều cao) — nay chính nội dung quyết chiều cao cột, còn chặn trên của
+             «.yt-zone-playlist» lo việc không cho nó kéo giãn bố cục. Bố cục hẹp vốn
+             đã chạy kiểu này từ trước, nên không phải đường mới. */
           display: flex;
           flex-direction: column;
           min-height: 0;
+          overflow: auto;
         }
         .yt-zone-playlist .source-switch { margin-top: 0; }
         /* Danh sách kết quả: chiếm phần trống còn lại của cột phải, cao tối đa
@@ -3698,7 +3726,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       }
       if (!session) return false;
       const target = Number(session.queue_index) + step;
-      return Number(session.queue_index) >= 0 && target >= 0 && target < Number(session.queue_size || 0);
+      if (Number(session.queue_index) >= 0 && target >= 0 && target < Number(session.queue_size || 0)) return true;
+      // Phiên của loa chỉ có một bài mà thẻ còn giữ hàng đợi: vẫn qua bài được, thẻ tự
+      // gửi bài kế cho loa. Xem «_skip».
+      return this._hangCuaTheDungDuoc(step);
     };
     this.shadowRoot.querySelector(".previous").disabled = !canSkip(-1);
     this.shadowRoot.querySelector(".next").disabled = !canSkip(1);
@@ -6402,6 +6433,36 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
+  /** Thẻ còn hàng đợi dùng được cho phiên loa hiện tại không?
+   *
+   *  Chỉ đúng khi phiên bên máy chủ có ĐÚNG MỘT bài — tức bài ấy do thẻ giao sang chứ
+   *  không phải do máy chủ dựng cả hàng đợi. Phiên nào có hàng đợi thật thì để máy chủ
+   *  lo, thẻ đừng tranh.
+   */
+  _hangCuaTheDungDuoc(step) {
+    const session = this._focusedSession();
+    if (!session || Number(session.queue_size || 0) > 1) return false;
+    const target = this._queueIndex + step;
+    return this._queueIndex >= 0 && target >= 0 && target < this._queue.length;
+  }
+
+  /** Gửi một bài của hàng đợi thẻ tới đúng những loa của phiên đang xem. */
+  async _guiBaiToiLoa(item, entityIds) {
+    const entryId = this._entryId();
+    if (!item || !entryId || !entityIds?.length) return;
+    try {
+      await this._hass.callService("tritue_youtube_player", "play_on_players", {
+        entry_id: entryId,
+        source: item.source || "youtube",
+        target: item.url || item.id,
+        entity_id: [...entityIds],
+      });
+      this._setStatus(`Đang gửi “${item.title || item.id}” tới loa…`);
+    } catch (error) {
+      this._setStatus(error?.message || "Không chuyển được bài.", true);
+    }
+  }
+
   async _skip(step) {
     if (deviceAudio.item) {
       if (!deviceAudio.next(step)) this._setStatus(step > 0 ? "Đã ở cuối hàng đợi." : "Đã ở đầu hàng đợi.");
@@ -6419,6 +6480,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
     const session = this._focusedSession();
     if (!session) return;
+    if (this._hangCuaTheDungDuoc(step)) {
+      const target = this._queueIndex + step;
+      const item = this._queue[target];
+      this._queueIndex = target;
+      await this._guiBaiToiLoa(item, session.output_entity_ids);
+      return;
+    }
     try {
       await this._hass.callService("tritue_youtube_player", "skip", {
         entry_id: this._entryId(),
@@ -6471,6 +6539,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         entity_id: [entityId],
       });
       this._dongBoLoaVeGiay(entityId, giay, moc);
+      /* GIỮ LẠI HÀNG ĐỢI CỦA MÁY. Phiên bên máy chủ chỉ có ĐÚNG MỘT bài (ta gửi một
+         bài), nên không giữ thì hai nút qua bài / lùi bài bị khoá ngay khi giao xong —
+         chủ máy báo 21/09/2026: "mất cả nút qua bài hoặc lùi bài", và nói rõ là nút vẫn
+         hiện nhưng bấm không được. Xem «_hangCuaTheDungDuoc». */
+      if (deviceAudio.queue.length > 1 && deviceAudio.index >= 0) {
+        this._queue = deviceAudio.queue.slice();
+        this._queueIndex = deviceAudio.index;
+      }
       // Tiếng trên máy chạy tiếp tới lúc loa kêu — xem «_nhuongTiengChoLoa».
       this._nhuongTiengChoLoa(entityId, () => {
         deviceAudio.stop();
