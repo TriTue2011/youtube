@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.26.60 - 2026-09-21
+
+### Sửa lỗi của chính bản trước: khung ẩn thì không bao giờ hiện ra được
+
+0.26.59 cho khung mở **ẩn sẵn**, và hẹn: quá 2,5 giây không chạy thì hiện ra để người
+dùng chạm. Nhưng vòng canh ấy mở đầu bằng một dòng chặn viết từ thời khung mở *hiện*
+rồi mới thu:
+
+```js
+if (!v.open || v.soundOnly) { clearInterval(...); return; }
+```
+
+Khung nay mở ẩn nên `v.soundOnly` đúng ngay nhịp đầu — vòng canh **tự tắt**, và cú
+hiện khung không bao giờ nổ. Hộp đen trên iPhone chủ máy lúc 21:29–21:32 cho thấy
+đúng hậu quả:
+
+```
+21:29:49  (+1s)  chitieng=1  trangthai=3    ← iOS cho khởi động
+21:29:51  (+3s)  chitieng=1  trangthai=-1   ← rồi chặn lại
+21:29:56  (+8s)  chitieng=1  trangthai=-1   ← khung vẫn ẩn, không ai chạm được
+```
+
+Nay vòng canh chỉ dừng khi khung **đóng**. Đo trên Chrome giả iPhone: đúng 2,5 giây
+thì khung hiện ra kèm dòng "Chạm một lần vào video để bắt đầu"; chạm xong nó **tự thu
+lại** về chế độ nghe.
+
+### Còn lại một việc chưa xử lý
+
+Một số video **YouTube không cho nhúng** (hộp đen 21:30:41, 21:32:31, 21:32:41 ghi
+"YouTube từ chối nhúng"). Với những video đó, khung không phát được dù có chạm — cần
+một đường khác, sẽ làm riêng.
+
 ## 0.26.59 - 2026-09-21
 
 ### Kích là chạy: không hiện video, không báo gì, không hỏi gì

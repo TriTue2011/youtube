@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.59";
+const PHIEN_BAN_THE = "0.26.60";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5463,7 +5463,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const batDau = Date.now();
     this._henThuKhung = setInterval(() => {
       const v = this._video;
-      if (!v.open || v.soundOnly) {
+      /* CHỈ DỪNG KHI KHUNG ĐÓNG. Dòng chặn cũ còn xét «v.soundOnly», viết từ hồi
+         khung mở HIỆN rồi mới thu — nay khung mở ẨN SẴN (0.26.59) nên điều kiện ấy
+         đúng ngay nhịp đầu, vòng canh tự tắt, và cú "hiện khung ra để chạm" không
+         bao giờ nổ. Hộp đen iPhone chủ máy 21:29–21:32 ngày 21/09/2026: «chitieng=1»
+         suốt tới +8s trong khi «trangthai» đi 3 rồi tụt về -1 — tức iOS cho khởi
+         động rồi chặn lại, mà thẻ thì không hiện gì ra để người dùng chạm. */
+      if (!v.open) {
         clearInterval(this._henThuKhung);
         return;
       }

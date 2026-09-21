@@ -784,6 +784,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("MỞ ẨN SẴN", script)
         self.assertIn("      soundOnly: true,\n      startSeconds:", script)
         self.assertIn("QUÁ 2,5 GIÂY VẪN KHÔNG CHẠY", script)
+        # 0.26.60 — vòng canh CHỈ được dừng khi khung ĐÓNG. Dòng chặn cũ còn xét
+        # «v.soundOnly», viết từ hồi khung mở HIỆN rồi mới thu; nay khung mở ẨN SẴN
+        # nên điều kiện ấy đúng ngay nhịp đầu, vòng canh tự tắt và cú "hiện khung ra
+        # để chạm" không bao giờ nổ. Hộp đen iPhone 21:29–21:32 ngày 21/09/2026:
+        # chitieng=1 suốt tới +8s trong khi trangthai đi 3 rồi tụt về -1.
+        self.assertIn("CHỈ DỪNG KHI KHUNG ĐÓNG", script)
+        self.assertNotIn("if (!v.open || v.soundOnly) {", script)
         # Chỉ nghe phải TRÔNG NHƯ nghe nhạc: có tên bài, ảnh bìa, và còn nút Xem.
         self.assertIn("CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC", script)
         self.assertIn("if (video.open && video.soundOnly && video.item && !video.withSpeakers) {", script)
