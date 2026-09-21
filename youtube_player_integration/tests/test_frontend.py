@@ -713,7 +713,9 @@ class LovelaceCardContractTests(unittest.TestCase):
         #     chitieng=0 (hiện ra) → trangthai=1, giay=2.4, đang chạy
         # iOS đòi một cú chạm vào CHÍNH video, mà khung một điểm ảnh thì không ai chạm
         # vào được — chủ máy: "không tự động phát video nhỉ, phải kích vào".
-        self.assertIn("soundHere: true, soundOnly: false });", script)
+        # Khung mở ở dạng HIỆN (soundOnly false) để còn chạm được; 0.26.53 gom đoạn
+        # này vào «_ngheBangKhungMotMinh» nên chuỗi nằm trên nhiều dòng.
+        self.assertIn("      soundOnly: false,", script)
         self.assertIn("_thuKhungKhiDaChay() {", script)
         self.assertIn("this._thuKhungKhiDaChay();", script)
         # 0.26.53 — CHẶN Ở ĐÚNG MỘT CỬA, đừng vá từng nhánh. 0.26.50 chỉ chặn nhánh
