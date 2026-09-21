@@ -431,6 +431,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # luôn". Chỉ YouTube mới có khung để mượn, nên Zing/Facebook giữ nguyên đường
         # cũ.
         self.assertIn("MÁY NHÀ TÁO NGHE BẰNG KHUNG, KHÔNG BẰNG PHẦN TỬ ÂM THANH", script)
+        self.assertIn('if (laTao() && isVideo && source === "youtube"', script)
         # Loa Cast mất vài giây mới bắt đầu phát, nên tua phải CHỜ loa báo "playing"
         # rồi mới tua, và chỉ MỘT lần — tua liên tiếp là sinh ra giật.
         self.assertIn("_dongBoLoaVeGiay(entityId, giay, moc) {", script)
@@ -721,17 +722,6 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('phien.playbackState = v.state === 1 ? "playing"', script)
         self.assertIn('dat("play", () => this._videoCommand("playVideo"));', script)
         self.assertIn("this._khaiPhienTruyenThong();", script)
-        # 0.26.71 — MÁY CHỦ NHÀ LÀM NGUỒN, không mượn trình phát của YouTube nữa.
-        # Chủ máy 21/09/2026: "tại sao không nghĩ đến HA mới là cầu nối nội bộ".
-        # Số liệu đỡ lưng: YouTube chặn nhúng từ địa chỉ IP trên MỌI nền tảng (hộp đen
-        # 23:02:06 bắt được Android cũng ma=150), còn luồng từ máy chủ nhà thì phát
-        # được ở cả ba — Safari 23:06:21 và Android 23:02:09 đều "nap=4 phat=ok".
-        # Thứ gỡ được nút thắt trên WebKit là lệnh load() tường minh của 0.26.64.
-        self.assertIn("MÁY CHỦ NHÀ LÀM NGUỒN, KHÔNG MƯỢN TRÌNH PHÁT CỦA YOUTUBE NỮA", script)
-        self.assertIn("MÁY NHÀ TÁO CŨNG NGHE BẰNG LUỒNG CỦA NHÀ", script)
-        # Khung chỉ còn là ĐƯỜNG LUI, bật khi luồng nhà không tải nổi.
-        self.assertIn("CỨU KHÔNG XONG THÌ MỚI MƯỢN KHUNG", script)
-        self.assertIn("luồng nhà không tải nổi (nap=0) — mượn khung YouTube", script)
         self.assertIn(f'const PHIEN_BAN_THE = "{manifest["version"]}";', script)
         # Đường KHUNG của máy nhà Táo cũng phải có hộp đen, nếu không nhánh ấy chạy
         # xong là im lặng tuyệt đối — không cách nào biết nó có phát được không.
@@ -756,6 +746,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # hai báo lỗi. Hậu quả đúng lời chủ máy: "cứ phải lỗi, dừng rồi play lại mới
         # được". Danh sách nhánh thì luôn thiếu; cửa chặn thì không.
         self.assertIn("nhuongChoKhung: null,", script)
+        self.assertIn("&& this.nhuongChoKhung(item, queue, index, startAt)) {", script)
         self.assertIn("_ngheBangKhungMotMinh(item, queue, index, batDau = 0) {", script)
         self.assertIn("deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>", script)
         # 0.26.55 — ba lỗi người dùng báo 21/09/2026 trên iOS, cùng một gốc: từ khi
@@ -805,6 +796,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # 0.26.59 — KÍCH LÀ CHẠY, KHÔNG BÁO GÌ, KHÔNG HỎI GÌ (chủ máy 21/09/2026).
         # Khung mở ẨN SẴN; chỉ hiện ra nếu quá 2,5 giây vẫn không chịu chạy.
         self.assertIn("MỞ ẨN SẴN", script)
+        self.assertIn("      soundOnly: true,\n      startSeconds:", script)
         self.assertIn("QUÁ 2,5 GIÂY VẪN KHÔNG CHẠY", script)
         # 0.26.60 — vòng canh CHỈ được dừng khi khung ĐÓNG. Dòng chặn cũ còn xét
         # «v.soundOnly», viết từ hồi khung mở HIỆN rồi mới thu; nay khung mở ẨN SẴN
@@ -853,6 +845,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # đo được trên chính iPhone ấy lúc 22:00:13: nap=4, phat=ok.
         self.assertIn("KHUNG KHÔNG DÙNG ĐƯỢC Ở NHÀ NÀY — LÙI VỀ PHẦN TỬ ÂM THANH", script)
         self.assertIn("deviceAudio.khungHong = true;", script)
+        self.assertIn("if (laTao() && !this.khungHong && typeof this.nhuongChoKhung === \"function\"", script)
         self.assertNotIn("this._boOrigin = !this._boOrigin;", script)
         # 0.26.67 — chép Y NGUYÊN bộ tham số của «phicomm-r1-card», thứ chạy được trên
         # đúng iPhone này ở đúng địa chỉ IP này. Đo từ máy chủ 21/09/2026 không phân

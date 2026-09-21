@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.26.72 - 2026-09-21
+
+### Lùi về đúng mã của 0.26.70 — bản 0.26.71 hỏng trên máy thật
+
+Chủ máy báo 0.26.71 "lỗi tùm lum". Mã của bản này **bằng đúng 0.26.70**, chỉ khác số
+phiên bản (HACS không lùi ngược được nên phải phát hành một số mới).
+
+Bản 0.26.71 đảo thứ tự: bắt mọi máy — kể cả nhà Táo — nghe bằng luồng của máy chủ
+nhà, khung YouTube chỉ còn là đường lui. Căn cứ khi ấy là ba phép đo `nap=4 phat=ok`
+lấy từ hộp đen. Nhưng ba phép đo ấy là **ba cú bấm lẻ**, không phải một buổi nghe
+thật: chúng chỉ chứng minh phần tử âm thanh *bắt đầu* tải được, không chứng minh nó
+chạy hết bài, đổi bài, hay sống qua lúc tắt màn hình. Đường khung thì đã qua hơn hai
+mươi bản vá mới trụ được ở nhà này, và bỏ nó dựa trên ba con số là quá vội.
+
+Nên quay lại nguyên trạng 0.26.70: máy nhà Táo (iOS và Safari) nghe bằng khung
+YouTube, các máy khác dùng phần tử âm thanh.
+
+Việc còn lại **không mất đi**: hộp đen của 0.26.69 vẫn ghi `may=`, `goc=` và `ban=`
+mỗi cú bấm. Câu hỏi đang treo là vì sao **Safari** hỏng trong khi app Android, app
+iOS và Chrome đều chạy — sẽ trả lời bằng nhật ký thật chứ không bằng suy đoán.
+
 ## 0.26.71 - 2026-09-21
 
 ### Máy chủ nhà làm nguồn, thôi mượn trình phát của YouTube
