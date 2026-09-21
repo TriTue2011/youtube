@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.26.46 - 2026-09-21
+
+### Chồng chữ trên điện thoại: danh sách tràn ra đè lên khối loa
+
+Chủ máy gửi ảnh và hỏi đúng câu làm tôi phải xem lại: *"ở Test có phicomm card đâu nhỉ"*.
+Đúng — view Test chỉ có **một thẻ duy nhất là thẻ này**, và chữ "LOA PHÁT NHẠC" trong ảnh
+cũng là của chính nó (trong mã ghi `Loa phát nhạc`, CSS viết hoa lên). Tôi đã đổ cho thẻ
+phicomm ở tin trước; sai, xin đính chính.
+
+Dựng lại với **đúng cấu hình của nhà** (`layout: vertical`, `opacity: 0`) ở bề rộng 412px:
+
+| Khối | Trước | Nay |
+|---|---|---|
+| Cột danh sách | bị chặn **640px** trong khi nội dung cao **701px** | 701px, vừa đúng nội dung |
+| Kết quả tìm kiếm | y 481→1019 | y 481→1019 |
+| Khối loa | bắt đầu y 966 → **đè nhau 53px** | bắt đầu y 1027 — **không chồng** |
+
+Gốc rễ là lỗi của bản 0.26.41: bố cục một cột vốn đã có sẵn dòng gỡ chặn `height: auto`,
+nhưng 0.26.41 đổi luật gốc từ `height` sang `max-height` — nên dòng gỡ ấy **không còn với
+tới**, cột vẫn bị chặn và nội dung tràn ra ngoài. Nay gỡ cả `max-height` cho bố cục một
+cột, và cho cả trường hợp người dùng tự chọn bố cục **dọc** dù thẻ rộng.
+
+Bố cục hai cột giữ nguyên như 0.26.41: thu gọn kết quả thì cột cao 203px, mở ra thì 662px
+và cuộn bên trong.
+
 ## 0.26.45 - 2026-09-21
 
 ### iPhone: hộp đen hỏi thêm một câu — mạng của máy có lấy được dữ liệu không?

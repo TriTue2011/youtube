@@ -2397,7 +2397,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              cột; khối này gỡ position và min-height nhưng QUÊN gỡ height, nên ở card
              hẹp cột vẫn cao 640px — mở Playlist chỉ có một dòng mà phía dưới trống
              toang một mảng. */
-          .yt-zone-playlist { position: static; height: auto; min-height: 0; overflow: visible; }
+          /* «max-height: none» PHẢI có, cùng lý do với «height: auto» ở trên. Bản
+             0.26.41 đổi luật gốc từ «height» sang «max-height» để cột thôi rỗng khi thu
+             gọn kết quả — nhưng quên rằng khối gỡ chặn này chỉ gỡ «height». Hậu quả đo
+             được 21/09/2026 ở bề rộng 412px với cấu hình thật của nhà: cột bị chặn
+             640px trong khi nội dung cao 701px, nên danh sách tràn ra và ĐÈ LÊN khối
+             loa 53px — đúng ảnh chồng chữ chủ máy gửi. */
+          .yt-zone-playlist { position: static; height: auto; max-height: none; min-height: 0; overflow: visible; }
+          .yt-playlist-inner { overflow: visible; }
           /* Giữ flex column (KHÔNG dùng display:block) để còn xếp lại thứ tự được.
              Bản cũ đổi về block, nên mọi khối rơi về đúng thứ tự trong tài liệu và
              khối "Đang phát" — vốn nằm CUỐI cột, sau cả dải gợi ý lẫn lưới kết quả —
@@ -2455,6 +2462,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           grid-template-columns: minmax(0, 1fr);
           grid-template-areas: "video" "playlist" "speakers";
         }
+        /* Người dùng tự chọn bố cục DỌC thì cột danh sách cũng nằm theo dòng chảy —
+           chặn trên 640px chỉ dành cho bố cục hai cột. */
+        .yt-layout--doc > .yt-zone-playlist {
+          position: static;
+          height: auto;
+          max-height: none;
+          overflow: visible;
+        }
+        .yt-layout--doc .yt-playlist-inner { overflow: visible; }
+
         .yt-suggested-section { --text-muted: var(--secondary-text-color, rgba(235,235,245,.6)); }
         .yt-suggested-section {
           grid-column: 1 / -1;
