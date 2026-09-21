@@ -6564,6 +6564,34 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._setStatus(`Đang xem “${name}” trên thẻ. Chọn loa để phát tiếng ra loa.`);
         return;
       }
+      /* MÁY NHÀ TÁO NGHE BẰNG KHUNG, KHÔNG BẰNG PHẦN TỬ ÂM THANH.
+         Đo trên iPhone của chủ máy 21/09/2026, sau khi đã sửa xong tốc độ luồng:
+         phần tử âm thanh nằm ở «nap=0 mang=2 loi=0 phat=cho» — tức lệnh phát không
+         bị từ chối mà cũng không được chấp nhận, nó treo chờ dữ liệu, và dữ liệu
+         không bao giờ tới. Tôi đã loại từng nghi can một, mỗi cái bằng một phép đo:
+           · định dạng: itag 140, m4a/AAC — iPhone giải mã thừa sức
+           · chữ ký: địa chỉ tự mang «authSig», sống 1 giờ, không hết hạn
+           · cú bấm: «cuchi=1», cử chỉ còn hiệu lực
+           · tranh chấp: «dem=1m/0k», đúng một phần tử, không khung nào
+           · đường truyền: cùng địa chỉ ấy, «fetch» của chính trang lấy được (206,
+             ~120ms); đo lại qua Cloudflare với danh tính Safari VÀ AppleCoreMedia
+             đều lấy 3,45 MB trong 1,4 giây
+         Không còn nghi can nào ngoài chính trình phát của iOS. Mà khung YouTube thì
+         chạy — chủ máy xác nhận cùng ngày: "nghe bài ghim bằng video được luôn".
+         Nên máy nhà Táo đi đường khung, thu còn một điểm ảnh để chỉ còn tiếng. Đây
+         cũng đúng cách thẻ «phicomm-r1-card» làm, thứ chạy được trên máy chủ máy.
+         Nguồn không phải YouTube (Zing, Facebook) không có khung để mượn, đành giữ
+         phần tử âm thanh — chưa có đường nào khác. */
+      if (laTao() && isVideo && source === "youtube" && VIDEO_ID.test(String(item.id || ""))
+        && !deviceAudio.laTrucTiep(item)) {
+        this._queue = queue;
+        this._queueIndex = position;
+        if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
+        this._openVideo(item, { withSpeakers: false, soundHere: true, soundOnly: true });
+        if (listenScreenOff()) this._giuTiengNen();
+        this._setStatus(`Đang nghe “${name}” trên máy này.`);
+        return;
+      }
       if (this._video.open) this._closeVideo();
       deviceAudio.listen(queue[position], queue, position);
       this._setStatus(`Đang nghe “${name}” trên máy này.`);

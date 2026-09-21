@@ -415,6 +415,17 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Đừng cứu lượt nạp của phần tử mà CHÍNH THẺ vừa tắt: «networkState === 0» là
         # không còn nguồn nào. Log HA 21/09/2026 17:25:08 bắt đúng một lần như vậy.
         self.assertIn("&& audio.networkState !== 0) {", script)
+        # 0.26.50 — MÁY NHÀ TÁO "CHỈ NGHE" ĐI BẰNG KHUNG, không bằng phần tử âm thanh.
+        # Đo trên iPhone của chủ máy 21/09/2026, TÁM lượt liên tiếp, sau khi đã sửa
+        # xong tốc độ luồng: phần tử âm thanh đứng ở «nap=0 mang=2 loi=0 phat=cho» —
+        # lệnh phát không bị từ chối mà cũng không được chấp nhận, dữ liệu không bao
+        # giờ tới, và KHÔNG lần nào báo lỗi. Cùng lúc «fetch» của chính trang lấy được
+        # địa chỉ ấy (206, 107-194ms) lần nào cũng được, và «dem=1m/0k» nên không có
+        # gì tranh chấp. Khung thì chạy — chủ máy: "nghe bài ghim bằng video được
+        # luôn". Chỉ YouTube mới có khung để mượn, nên Zing/Facebook giữ nguyên đường
+        # cũ.
+        self.assertIn("MÁY NHÀ TÁO NGHE BẰNG KHUNG, KHÔNG BẰNG PHẦN TỬ ÂM THANH", script)
+        self.assertIn('if (laTao() && isVideo && source === "youtube"', script)
         # Loa Cast mất vài giây mới bắt đầu phát, nên tua phải CHỜ loa báo "playing"
         # rồi mới tua, và chỉ MỘT lần — tua liên tiếp là sinh ra giật.
         self.assertIn("_dongBoLoaVeGiay(entityId, giay, moc) {", script)

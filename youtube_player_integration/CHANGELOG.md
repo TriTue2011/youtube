@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.26.50 - 2026-09-21
+
+### iPhone: "chỉ nghe" đi bằng khung YouTube, không bằng phần tử âm thanh
+
+Sau khi sửa xong tốc độ luồng, Android chạy tốt (`nap=4` trong 1 giây) mà iPhone vẫn
+câm. Hộp đen ghi **tám lượt liên tiếp**, không một ngoại lệ:
+
+```
+nap=0 mang=2 loi=0 giay=0.0 phat=cho cuchi=1 dem=1m/0k
+```
+
+Nghĩa là lệnh phát **không bị từ chối mà cũng không được chấp nhận** — nó treo chờ
+dữ liệu, và dữ liệu không bao giờ tới. Không một lần nào báo lỗi.
+
+Từng nghi can bị loại bằng một phép đo riêng:
+
+| Nghi can | Phép đo | Kết quả |
+|---|---|---|
+| Định dạng iPhone không giải mã được | itag của luồng | 140 — m4a/AAC, giải mã thừa sức |
+| Chữ ký hết hạn | `PROXY_SECONDS` | 3600 giây, thẻ chỉ nhớ 240 giây |
+| Thiếu giấy tờ | địa chỉ | tự mang `authSig` |
+| Cú bấm không hợp lệ | `cuchi=1` | cử chỉ còn hiệu lực |
+| Phần tử khác tranh chỗ | `dem=1m/0k` | một phần tử, không khung nào |
+| Đường truyền | `fetch` cùng địa chỉ ấy | 206, 107–194 ms, lần nào cũng được |
+| Cloudflare chặn trình tải của Apple | thử cả hai danh tính | Safari và AppleCoreMedia đều qua, 3,45 MB trong 1,4 giây |
+
+Không còn nghi can nào ngoài chính trình phát của iOS. Mà khung YouTube thì chạy —
+chủ máy xác nhận cùng ngày: *"nghe bài ghim bằng video được luôn"*.
+
+Nên máy nhà Táo nay nghe bằng khung, thu còn một điểm ảnh để chỉ còn tiếng. Đúng cách
+thẻ `phicomm-r1-card` làm, thứ vốn chạy được trên máy của chủ máy. Android và máy bàn
+không đổi một dòng nào.
+
+Nguồn không phải YouTube (Zing, Facebook) không có khung để mượn nên vẫn đi đường cũ.
+
 ## 0.26.49 - 2026-09-21
 
 ### Tích loa lúc đang chỉ nghe: nút "Nghe trên máy này" phải hiện lại
