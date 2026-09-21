@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.55";
+const PHIEN_BAN_THE = "0.26.56";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -6116,6 +6116,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _soundFromDevice() {
     const video = this._video;
     if (!video.open || !video.item || video.withSpeakers || video.followsDevice) return;
+    /* MÁY NHÀ TÁO KHÔNG CÓ ĐƯỜNG TIẾNG NÀO NGOÀI KHUNG.
+       Hàm này câm khung lại rồi giao tiếng cho phần tử âm thanh — đúng thứ đo được
+       là không bao giờ tải trên WebKit. Nút Phát gọi vào đây khi khung chưa khởi
+       động, nên trên iPhone bấm Phát là mất tiếng kèm dòng đỏ; chủ máy 21/09/2026:
+       "bấm play báo lỗi, rồi play lại thì nghe được". Ở đây chỉ cần bảo khung chạy. */
+    if (laTao()) {
+      this._videoCommand("playVideo");
+      this._setStatus("Chạm một lần vào video để bắt đầu — iPhone bắt buộc vậy.");
+      return;
+    }
     const item = { source: "youtube", ...video.item };
     deviceAudio.entryId = this._entryId();
     deviceAudio.listen(item, this._queue.length ? this._queue : [item], Math.max(0, this._queueIndex), this._videoTimeNow());
@@ -6851,7 +6861,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         return;
       }
       this._queueIndex = target;
-      this._openVideo(this._queue[target], { withSpeakers: false });
+      /* GIỮ NGUYÊN VAI CỦA KHUNG. Đang nghe bằng khung thu nhỏ (đường của máy nhà
+         Táo) mà qua bài thì bài sau phải vẫn là "chỉ nghe", không bung thành video —
+         nếu không, mỗi lần chuyển bài là màn hình lại hiện video mà người dùng không
+         hề yêu cầu. */
+      const dangChiNghe = this._video.soundOnly;
+      /* MỞ RA ĐÃ, RỒI TỰ THU — y như bài đầu. Mở thẳng ở dạng thu nhỏ là đánh cược
+         rằng iOS cho chạy tiếp mà không cần chạm; cược sai thì người dùng kẹt với một
+         khung một điểm ảnh không chạm vào được. Mở ra rồi thu lại khi trình phát báo
+         đang chạy thì đúng trong cả hai trường hợp. */
+      this._openVideo(this._queue[target], {
+        withSpeakers: false,
+        soundHere: true,
+        soundOnly: false,
+      });
+      if (dangChiNghe) this._thuKhungKhiDaChay();
       return;
     }
     const session = this._focusedSession();

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.26.56 - 2026-09-21
+
+### Soát nốt các nút còn lại trên iOS
+
+**Nút Phát khi khung chưa khởi động** rơi vào `_soundFromDevice`, và hàm ấy **câm
+khung** rồi giao tiếng cho phần tử âm thanh — đúng thứ đo được là không bao giờ tải
+trên WebKit. Đây chính là lời chủ máy sáng nay: *"bấm play báo lỗi, rồi play lại thì
+nghe được"*. Máy nhà Táo không có đường tiếng nào ngoài khung, nên nay chỉ bảo khung
+chạy. Đo trên Chrome: gửi `playVideo`, **không** đụng phần tử âm thanh, **không** câm
+khung.
+
+**Nút Qua bài / Lùi bài** mở bài sau mà quên vai "chỉ nghe", nên mỗi lần chuyển bài là
+video bung ra dù người dùng không hề yêu cầu. Nay giữ nguyên vai: mở ra cho chạm được
+rồi **tự thu lại** khi trình phát báo đang chạy — y như bài đầu, đúng trong cả trường
+hợp iOS đòi chạm lẫn không.
+
+### Các nút đã soát và không phải sửa
+
+| Nút | Trên iOS |
+|---|---|
+| Tạm dừng / Phát (khung đang chạy) | gửi thẳng lệnh vào khung ✓ |
+| Dừng | đóng hẳn khung (sửa ở 0.26.55) ✓ |
+| Xem / Chỉ nghe / Nghe trên máy này | đi qua cửa chặn, về khung ✓ |
+| Nghe cùng loa | vốn đã đi đường khung ✓ |
+
 ## 0.26.55 - 2026-09-21
 
 ### Ba lỗi iOS người dùng báo — cùng một gốc

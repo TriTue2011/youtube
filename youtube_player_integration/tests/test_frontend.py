@@ -741,6 +741,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         # (c) "kích vào nghe khi tắt màn hình không được" — nhánh ấy im lặng hoàn toàn,
         #     không cách nào biết nó rơi vào đâu. Nay có hộp đen.
         self.assertIn("bật/tắt nghe-khi-tắt-màn: bật=", script)
+        # 0.26.56 — soát NỐT CÁC NÚT CÒN LẠI, cùng lớp lỗi.
+        # Nút Phát khi khung chưa khởi động rơi vào «_soundFromDevice», hàm này CÂM
+        # khung rồi giao tiếng cho phần tử âm thanh — thứ không bao giờ tải trên
+        # WebKit. Đó đúng là "bấm play báo lỗi, rồi play lại thì nghe được".
+        self.assertIn("MÁY NHÀ TÁO KHÔNG CÓ ĐƯỜNG TIẾNG NÀO NGOÀI KHUNG", script)
+        self.assertIn('      this._videoCommand("playVideo");\n      this._setStatus("Chạm một lần', script)
+        # Qua bài phải GIỮ vai "chỉ nghe": mở ra cho chạm được rồi tự thu, y như bài
+        # đầu — mở thẳng ở dạng một điểm ảnh là đánh cược iOS không đòi chạm.
+        self.assertIn("const dangChiNghe = this._video.soundOnly;", script)
+        self.assertIn("if (dangChiNghe) this._thuKhungKhiDaChay();", script)
 
     def test_duong_cua_the_phai_gui_dia_chi_va_khong_nuot_ma_loi(self):
         """Đường lấy luồng của THẺ phải gửi gợi ý địa chỉ, y như đường ra loa.
