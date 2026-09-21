@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.70";
+const PHIEN_BAN_THE = "0.26.71";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -432,12 +432,19 @@ const deviceAudio = {
        "cứ phải lỗi, dừng rồi play lại mới được".
        Vá từng nhánh là danh sách, và danh sách thì luôn thiếu. Chặn ở đây thì mọi lối
        đều đi qua đúng một cửa. */
-    if (laTao() && !this.khungHong && typeof this.nhuongChoKhung === "function"
-      && (item?.source || "youtube") === "youtube" && VIDEO_ID.test(String(item?.id || ""))
-      && this.nhuongChoKhung(item, queue, index, startAt)) {
-      this.stop();
-      return;
-    }
+    /* MÁY CHỦ NHÀ LÀM NGUỒN, KHÔNG MƯỢN TRÌNH PHÁT CỦA YOUTUBE NỮA.
+       Chủ máy 21/09/2026: "tại sao không nghĩ đến HA mới là cầu nối nội bộ… có hướng
+       nào làm kiểu này không". Đúng hướng, và nay có số liệu đỡ lưng:
+         · YouTube chặn nhúng từ địa chỉ IP trên MỌI nền tảng — hộp đen 23:02:06 bắt
+           được Android cũng «ma=150», không riêng máy nhà Táo;
+         · còn luồng từ máy chủ nhà thì phát được ở cả ba: Safari 23:06:21 «nap=4
+           phat=ok», Android 23:02:09 «nap=4 phat=ok», iPhone sau bản 0.26.64.
+       Thứ làm nó chạy được trên WebKit là lệnh «load()» tường minh thêm ở 0.26.64 —
+       trước đó phần tử âm thanh nằm im nên thẻ mới phải đi mượn khung.
+       Nên nay nghe bằng chính luồng của nhà: không dính luật nhúng của YouTube, chạy
+       như nhau dù mở bằng IP hay tên miền, và tắt màn thì iOS tự giữ vì đây là phần
+       tử media thật chứ không phải khung của bên thứ ba.
+       Khung chỉ còn là ĐƯỜNG LUI, và chỉ khi luồng nhà thật sự không tải nổi. */
     if (this.laTrucTiep(item)) {
       this.notify(`“${item.title || item.id}” đang phát trực tiếp nên không nghe riêng`
         + " tiếng được — bấm nút xem để nghe.", true);
@@ -593,6 +600,18 @@ const deviceAudio = {
             && audio.networkState !== 0) {
           this.doThuLuong(audio);
           this.cuuLuotNap(audio);
+          /* CỨU KHÔNG XONG THÌ MỚI MƯỢN KHUNG. Đây là đường lui, không phải đường
+             chính — xem lý do ở «listen». */
+          setTimeout(() => {
+            if (!laTao() || typeof this.nhuongChoKhung !== "function") return;
+            if (!this.item || audio.readyState > 0 || audio.error) return;
+            const bai = this.item;
+            this.ghiThang(`luồng nhà không tải nổi (nap=0) — mượn khung YouTube`);
+            const hang = this.queue?.length ? this.queue : [bai];
+            const viTri = Math.max(0, this.index);
+            this.stop();
+            this.nhuongChoKhung(bai, hang, viTri, 0);
+          }, 2500);
         }
       }, cho));
   },
@@ -7138,23 +7157,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          cũng đúng cách thẻ «phicomm-r1-card» làm, thứ chạy được trên máy chủ máy.
          Nguồn không phải YouTube (Zing, Facebook) không có khung để mượn, đành giữ
          phần tử âm thanh — chưa có đường nào khác. */
-      if (laTao() && isVideo && source === "youtube" && VIDEO_ID.test(String(item.id || ""))
-        && !deviceAudio.laTrucTiep(item)) {
-        this._queue = queue;
-        this._queueIndex = position;
-        if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
-        /* HIỆN KHUNG RA ĐÃ, THU LẠI SAU KHI NÓ ĐÃ CHẠY.
-           0.26.50 mở thẳng ở chế độ một điểm ảnh, và hộp đen trên iPhone của chủ máy
-           18:24 ngày 21/09/2026 cho thấy đó là ngõ cụt:
-             chitieng=1 (thu bé)  → trangthai=-1 suốt 8 giây, chưa hề bắt đầu
-             chitieng=0 (hiện ra) → trangthai=1, giay=2.4, đang chạy
-           iOS đòi một cú chạm vào CHÍNH video, mà khung một điểm ảnh thì không ai
-           chạm vào được — kể cả chủ máy: "không tự động phát video nhỉ, phải kích
-           vào". Nên mở ra cho chạm, rồi tự thu khi đã chạy. */
-        this._ngheBangKhungMotMinh(item, queue, position);
-        this._setStatus(`Đang nghe “${name}” trên máy này.`);
-        return;
-      }
+      /* MÁY NHÀ TÁO CŨNG NGHE BẰNG LUỒNG CỦA NHÀ. Nhánh cũ ở đây rẽ thẳng sang khung
+         YouTube (0.26.50), từ hồi phần tử âm thanh chưa chịu tải trên WebKit. Lệnh
+         «load()» thêm ở 0.26.64 đã gỡ được chuyện đó — đo được «nap=4 phat=ok» trên
+         cả Safari lẫn Android — nên không còn lý do đi mượn khung, thứ bị YouTube
+         chặn khi Home Assistant mở bằng địa chỉ IP. Khung chỉ còn là đường lui, tự
+         bật khi luồng nhà không tải nổi (xem «hopDenTheoDoi»). */
       if (this._video.open) this._closeVideo();
       deviceAudio.listen(queue[position], queue, position);
       this._setStatus(`Đang nghe “${name}” trên máy này.`);

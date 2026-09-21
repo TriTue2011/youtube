@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.26.71 - 2026-09-21
+
+### Máy chủ nhà làm nguồn, thôi mượn trình phát của YouTube
+
+Chủ máy đặt đúng câu hỏi kiến trúc: *"tại sao không nghĩ đến HA mới là cầu nối nội
+bộ… có hướng nào làm kiểu này không"*. Có, và nay đã đủ số liệu để làm.
+
+**Vì sao trước đây phải mượn khung:** phần tử âm thanh không chịu tải luồng của nhà
+trên WebKit — nằm im ở `nap=0 mang=2` suốt tám giây, không báo lỗi. Đó là lý do
+0.26.50 đẩy máy nhà Táo sang khung YouTube.
+
+**Vì sao nay không cần nữa:** bản 0.26.64 thêm một lệnh `load()` tường minh, và nút
+thắt ấy được gỡ. Đo trên máy thật:
+
+| Máy | Kết quả phần tử âm thanh |
+|---|---|
+| Safari (23:06:21) | `nap=4 phat=ok giay=0.5` |
+| Android (23:02:09) | `nap=4 phat=ok giay=0.6` |
+| iPhone | chủ máy xác nhận nghe được |
+
+**Còn khung thì ngược lại:** hộp đen 23:02:06 bắt được **Android cũng `ma=150`** khi
+nó mở khung. Tức YouTube chặn nhúng từ địa chỉ IP trên **mọi** nền tảng — Android
+trước giờ không dính chỉ vì nó không cần khung.
+
+Nên đảo thứ tự: **luồng của nhà là đường chính** cho mọi máy, kể cả nhà Táo. Không
+dính luật nhúng của YouTube, chạy như nhau dù mở bằng IP hay tên miền, và tắt màn thì
+iOS tự giữ vì đây là phần tử media thật chứ không phải khung của bên thứ ba.
+
+Khung chỉ còn là **đường lui**: nếu luồng nhà thật sự không tải nổi (`nap=0` sau khi
+đã thử gọi lại), thẻ mới mượn khung, và ghi rõ vào hộp đen lý do.
+
 ## 0.26.70 - 2026-09-21
 
 ### Tắt màn hình: iOS không biết thẻ đang phát nhạc
