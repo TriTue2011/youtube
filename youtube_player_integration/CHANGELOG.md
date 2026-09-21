@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.26.47 - 2026-09-21
+
+### iPhone: phần tử âm thanh phải nằm TRONG khung nhìn
+
+Hộp đen trả lời dứt khoát. Ba lượt bấm trên iPhone, cùng một địa chỉ, cùng một lúc:
+
+| Ai hỏi | Kết quả |
+|---|---|
+| `fetch` của chính trang | **mã 206, 2 byte, `audio/mp4`, 118 mili giây** |
+| Phần tử âm thanh | `nap=0` suốt 8 giây, **không lỗi**, không gửi yêu cầu nào |
+
+Đường truyền, địa chỉ và máy chủ **đều bị loại**. Thứ còn lại: WebKit không cấp bộ giải mã
+cho phần tử nằm ngoài khung nhìn — mà từ 0.26.41 thẻ gắn nó ở `top: -9999px`.
+
+Nay phần tử nằm ở góc trên bên trái màn hình: vẫn **một điểm ảnh**, gần như trong suốt,
+không nhận cú chạm. Người dùng không thấy, trình duyệt thì thấy. Hộp đen ghi thêm `ochoy=`
+(toạ độ phần tử) để lần sau kiểm được ngay.
+
 ## 0.26.46 - 2026-09-21
 
 ### Chồng chữ trên điện thoại: danh sách tràn ra đè lên khối loa

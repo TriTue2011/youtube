@@ -264,9 +264,18 @@ const deviceAudio = {
        nền tảng. */
     audio.setAttribute("playsinline", "");
     audio.setAttribute("webkit-playsinline", "");
+    /* NẰM TRONG KHUNG NHÌN, đừng quăng ra «-9999px».
+       Số đo trên iPhone của chủ máy 21/09/2026 loại hết mọi nghi can khác: cùng một địa
+       chỉ, «fetch» của chính trang lấy được dữ liệu (mã 206, audio/mp4, 118ms) trong khi
+       phần tử âm thanh đứng ở «nap=0» suốt tám giây và KHÔNG báo lỗi — tức nó không hề
+       gửi yêu cầu nào. Đường truyền, địa chỉ và máy chủ đều đã bị loại.
+       Nghi can còn lại: WebKit không cấp bộ giải mã cho phần tử nằm ngoài khung nhìn.
+       Nên nay đặt ở góc trên bên trái, vẫn một điểm ảnh và gần như trong suốt, không
+       nhận cú chạm — người dùng không thấy, mà trình duyệt thì thấy. */
     Object.assign(audio.style, {
-      position: "fixed", top: "-9999px", left: "-9999px",
+      position: "fixed", top: "0", left: "0",
       width: "1px", height: "1px", opacity: "0.01",
+      pointerEvents: "none", zIndex: "0",
     });
     document.body.append(audio);
     audio.addEventListener("play", () => this.notify());
@@ -456,6 +465,7 @@ const deviceAudio = {
       ? `nap=${a.readyState} mang=${a.networkState} loi=${a.error ? a.error.code : 0}`
         + ` giay=${Number(a.currentTime || 0).toFixed(1)} tamdung=${a.paused ? 1 : 0}`
         + ` nguon=${a.currentSrc ? 1 : 0} dom=${a.isConnected ? 1 : 0}`
+        + ` ochoy=${(() => { const h = a.getBoundingClientRect(); return `${Math.round(h.left)},${Math.round(h.top)}`; })()}`
       : "(chưa có phần tử)";
     this.hass.callService("system_log", "write", {
       message: `[the youtube] ${nhan} — ${so}`,
