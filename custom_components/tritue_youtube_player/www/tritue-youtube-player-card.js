@@ -496,8 +496,9 @@ const deviceAudio = {
     this.notify();
   },
 
-  /** Load the speakers' song (nothing to do when it already is). */
-  async loadAlong(item) {
+  /** Load the speakers' song (nothing to do when it already is); `batDau` = giây loa
+   *  đang ở. */
+  async loadAlong(item, batDau = 0) {
     const key = `${item.source}:${item.url || item.id}`;
     if (!this.along || this.alongKey === key) return;
     this.alongKey = key;
@@ -511,6 +512,13 @@ const deviceAudio = {
     }
     const audio = this.audio();
     audio.src = url;
+    /* VÀO ĐÚNG CHỖ TRƯỚC KHI PHÁT. Trước đây phát từ giây 0 rồi vòng canh bên dưới
+       mới kéo về chỗ loa: người nghe được một quãng SAI CHỖ rồi mới bị giật sang chỗ
+       đúng — và cú kéo ấy tốn thêm một lượt xin dữ liệu (đo 20/09/2026: YouTube mất
+       1,64 giây để trả byte đầu khi nhảy vào giữa bài). */
+    if (batDau >= 1) {
+      audio.addEventListener("loadedmetadata", () => { audio.currentTime = batDau; }, { once: true });
+    }
     audio.play().catch(() => this.notify("Trình duyệt chặn tự phát có tiếng — bấm lại “Nghe trên máy này”.", true));
     this.canhTieng(audio, generation);
   },
@@ -970,6 +978,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._waveTimer = null;
     clearInterval(this._henNhuongTieng);
     this._henNhuongTieng = null;
+    clearInterval(this._henCanhChiTieng);
+    this._henCanhChiTieng = null;
     if (this._onFullscreenChange) {
       document.removeEventListener("fullscreenchange", this._onFullscreenChange);
       this._onFullscreenChange = null;
@@ -4952,7 +4962,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     clearTimeout(this._soundCheckTimer);
     if (this._video.soundHere) {
       this._thucTiengKhung();
-      this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
+      // Khung chỉ mang tiếng: canh tới lúc có câu trả lời dứt khoát, đừng hỏi một lần.
+      if (this._video.soundOnly) this._canhKhungChiTieng();
+      else this._soundCheckTimer = setTimeout(() => this._checkVideoSound(), 2500);
     }
     window.addEventListener("message", this._onVideoMessage);
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
@@ -5268,6 +5280,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       deviceAudio.stopAlong();
       return;
     }
+    /* Tính giây của loa TRƯỚC khi nạp, để phần tử âm thanh vào thẳng chỗ ấy. */
+    const nhip = this._loaDanNhip(session);
+    const speakerTime = nhip ? this._speakerPosition(nhip, session) : null;
     deviceAudio.loadAlong({
       source: session.source,
       id: session.id,
@@ -5276,7 +5291,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       channel: session.artist,
       duration: session.duration,
       thumbnail: session.thumbnail,
-    });
+    }, Math.max(0, Math.floor(Number(speakerTime) || 0)));
     const audio = deviceAudio.real();
     if (!audio || (document.visibilityState === "hidden" && !listenScreenOff())) return;
     const lead = session.output_entity_ids.find((entityId) =>
@@ -5288,8 +5303,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     /* ĐỒNG HỒ có thể nằm ở loa KHÁC loa dẫn trạng thái — xem «_loaDanNhip». Đọc
        giây của đúng loa đầu danh sách rồi thấy rỗng là thoát, nghĩa là cả phiên
        nhiều loa mất canh tiếng chỉ vì loa đầu không báo giây. */
-    const nhip = this._loaDanNhip(session);
-    const speakerTime = nhip ? this._speakerPosition(nhip, session) : null;
     if (speaker.state !== "playing" || speakerTime === null || Date.now() < this._alongSeekHold) return;
     /* VỪA LOA VỪA NGHE TRÊN MÁY: loa báo kẹt thì dòng dưới lôi tiếng trên máy về
        chỗ kẹt ấy — cứ 4 giây một lần, tức bài tự phát lại mãi. Đúng lời chủ máy
@@ -5609,6 +5622,49 @@ class TriTueYouTubePlayerCard extends HTMLElement {
    * the tap that opened the video) and the picture follows muted — muted pictures
    * may play on their own. With speakers, ask once more, then hint to tap the video.
    */
+  /** CANH KHUNG CHỈ-MANG-TIẾNG — CHỈ bỏ cuộc khi có BẰNG CHỨNG là bị chặn.
+   *
+   *  Bản 0.26.36 hỏi đúng MỘT lần ở giây 2,5 rồi kết luận, mà «_soundBlocked» coi
+   *  «trạng thái -1» (chưa chạy) là bị chặn. Trên điện thoại khung YouTube mất vài
+   *  giây mới nạp xong và báo về, nên thẻ dỡ bỏ một khung SẮP kêu rồi quay về đường
+   *  máy chủ — mất thêm cả quãng giải bài và nhảy vào giữa bài. Chủ máy đo
+   *  21/09/2026: "bị giật, tiếng thì mất 10s mới có". Đúng phép cộng ấy.
+   *
+   *  Hai câu trả lời được tính là DỨT KHOÁT, ngoài ra thì đợi tiếp:
+   *    - khung báo ĐANG PHÁT mà «câm = true» → bị chặn thật, lùi ngay;
+   *    - quá 8 giây vẫn chưa hề kêu → coi như không xong, lùi.
+   *  Khung báo đang phát và không câm thì thôi canh, để yên cho nó chạy.
+   */
+  _canhKhungChiTieng() {
+    clearInterval(this._henCanhChiTieng);
+    const batDau = Date.now();
+    this._henCanhChiTieng = setInterval(() => {
+      const video = this._video;
+      const thoi = () => {
+        clearInterval(this._henCanhChiTieng);
+        this._henCanhChiTieng = null;
+      };
+      if (!video.open || !video.soundOnly || !video.soundHere) return thoi();
+      const dangChay = [1, 3].includes(video.state);
+      if (dangChay && video.muted === false) return thoi();
+      const giay = (Date.now() - batDau) / 1000;
+      if (!(dangChay && video.muted === true) && giay < 8) return;
+      thoi();
+      this._luiVeThePhatTieng(`câm=${video.muted} trạng thái=${video.state} giây=${giay.toFixed(1)}`);
+    }, 400);
+  }
+
+  /** Khung không mang được tiếng: trả việc về phần tử âm thanh (chậm hơn nhưng còn
+   *  nghe được). Nói kèm SỐ ĐO để lần sau biết vì sao, thay vì lại đoán. */
+  _luiVeThePhatTieng(chiTiet) {
+    this._closeVideo();
+    deviceAudio.entryId = this._entryId();
+    deviceAudio.startAlong();
+    this._syncAlong();
+    this._setStatus(`Khung YouTube không tự phát được tiếng (${chiTiet}); đang lấy tiếng qua máy chủ.`);
+    this._syncNowPlaying();
+  }
+
   _checkVideoSound() {
     const video = this._video;
     if (!video.open || video.picture || !video.soundHere || !this._soundBlocked()) return;
@@ -5617,12 +5673,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        nhưng còn nghe được). Nhờ vậy giả thuyết "đổi sang www.youtube.com thì Chrome
        cho tự phát" sai cũng chỉ mất vài giây, không mất tiếng. */
     if (video.soundOnly) {
-      this._closeVideo();
-      deviceAudio.entryId = this._entryId();
-      deviceAudio.startAlong();
-      this._syncAlong();
-      this._setStatus("Trình duyệt chặn tiếng tự phát của khung; đang lấy tiếng qua máy chủ.");
-      this._syncNowPlaying();
+      this._luiVeThePhatTieng(`câm=${video.muted} trạng thái=${video.state}`);
       return;
     }
     /* TRÊN iOS THÌ ĐỪNG CƯỚP TIẾNG CỦA KHUNG. «_soundFromDevice» tắt tiếng khung
@@ -6057,6 +6108,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     /* KHUNG ĐANG MANG TIẾNG thì mỗi cú tua là một lần tiếng nhảy trong tai người
        nghe. Khung câm lệch 2 giây thì tua cho khớp môi; khung có tiếng chỉ chữa khi
        lệch tới mức nghe ra là hai nơi đang ở hai chỗ khác nhau. */
+    /* KHUNG VỪA MỞ THÌ ĐỪNG TUA. Trình phát mất vài giây mới chạy ổn định; tua vào
+       quãng ấy là cú giật đầu tiên người nghe gặp, mà lệch lúc đó chỉ là do nó chưa
+       kịp chạy. «moUL» ghi lúc mở khung. */
+    if (video.soundOnly && Date.now() - video.moUL < 6000) return;
     const nguongLech = video.soundHere ? 5 : 2;
     if (Math.abs(speakerTime - this._videoTimeNow()) > nguongLech) {
       this._seekPicture(speakerTime);
@@ -6150,6 +6205,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._awayPictureOk = false;
     clearInterval(this._henNhuongTieng);
     this._henNhuongTieng = null;
+    clearInterval(this._henCanhChiTieng);
+    this._henCanhChiTieng = null;
     this._dungThucTieng();
     clearTimeout(this._soundCheckTimer);
     this._soundHintShown = false;

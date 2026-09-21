@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.26.37 - 2026-09-21
+
+### "Bị giật, tiếng thì mất 10s mới có" — thẻ kết luận vội rồi tự dỡ bỏ khung đang chạy tới
+
+> *"Tôi đang phát ra loa mà bật nghe trên máy này là bị giật, tiếng thì mất 10s mới có"*
+
+Bản 0.26.36 hỏi khung **đúng một lần ở giây 2,5** rồi kết luận. Mà phép thử "có bị chặn
+tiếng không" lại coi **trạng thái −1 (chưa chạy)** là bị chặn — trên điện thoại khung
+YouTube thường mất vài giây mới nạp xong và báo về. Kết quả: thẻ dỡ bỏ một khung **sắp
+kêu**, rồi quay về đường cũ qua máy chủ. Cộng lại đúng bằng mười giây, và cú chuyển giữa
+chừng chính là cái giật.
+
+Hai chỗ sửa, cùng một nguyên tắc: **chỉ kết luận khi có bằng chứng**.
+
+1. **Canh thay vì hỏi một lần.** Nay chỉ hai câu trả lời được tính là dứt khoát: khung báo
+   *đang phát* mà *câm* → bị chặn thật, lùi ngay; hoặc quá 8 giây vẫn chưa hề kêu. Còn
+   "chưa báo gì" thì đợi tiếp và thúc tiếng. Khung báo đang phát mà không câm thì thôi
+   canh, để yên cho nó chạy.
+2. **Không tua khung trong 6 giây đầu.** Trình phát mới mở còn đang ổn định; tua vào quãng
+   ấy là cú giật đầu tiên người nghe gặp, mà lệch lúc đó chỉ vì nó chưa kịp chạy.
+
+### Đường lùi cũng hết giật, và nhanh hơn một nhịp
+
+Khi phải lùi về thẻ âm thanh, trước đây nó **phát từ giây 0** rồi vòng canh mới kéo về chỗ
+loa — nghe một quãng sai chỗ rồi giật sang chỗ đúng, và cú kéo ấy tốn thêm một lượt xin dữ
+liệu (đo 20/09/2026: YouTube mất **1,64 giây** để trả byte đầu khi nhảy vào giữa bài). Nay
+nó vào thẳng giây của loa ngay khi nạp.
+
+### Và nếu vẫn không có tiếng, thẻ sẽ NÓI RA VÌ SAO
+
+Dòng trạng thái lúc lùi nay kèm số đo: `câm=… trạng thái=… giây=…`. Lần sau chỉ cần đọc
+dòng ấy là biết khung bị trình duyệt chặn thật hay chỉ chưa kịp nạp — khỏi đoán thêm vòng
+nào nữa.
+
 ## 0.26.36 - 2026-09-21
 
 ### Tích loa lúc đang nghe trên máy: hết quãng im lặng ở giữa
