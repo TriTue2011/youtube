@@ -411,11 +411,47 @@ const deviceAudio = {
     audio.src = url;
     if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
     audio.play().catch((error) => this.playRefused(error));
+    this.hopDenTheoDoi(coSan ? "nghe một mình, địa chỉ có sẵn" : "nghe một mình, phải hỏi máy chủ", audio);
     this.canhTieng(audio, generation);
     this.notify();
     // Lấy sẵn bài kế tiếp để cú chuyển bài không phải chờ.
     const ke = this.queue?.[this.index + 1];
     if (ke) this.chuanBi(ke);
+  },
+
+  /** HỘP ĐEN — ghi trạng thái phần tử âm thanh vào NHẬT KÝ CỦA HOME ASSISTANT.
+   *
+   *  Vì sao cần: lỗi chỉ xảy ra trên máy thật của chủ máy, mà máy ấy thì không cắm dây
+   *  vào đâu được — ADB đòi gọi ngược vào điện thoại, VPN nhà không cho, Simulator thì
+   *  phải có Mac. Nhật ký HA là chỗ duy nhất cả hai phía cùng thấy: thẻ ghi vào, máy chủ
+   *  đọc ra. Chủ máy chỉ việc bấm một lần rồi thôi.
+   *
+   *  Ý nghĩa từng số: «nap» = readyState (0 = chưa có dữ liệu nào), «mang» =
+   *  networkState (2 = đang tải, 3 = không tìm được nguồn), «loi» = mã lỗi media,
+   *  «giay» = đồng hồ của tiếng, «tamdung», «nguon» = đã chọn được nguồn phát chưa,
+   *  «dom» = phần tử có nằm trong trang không.
+   */
+  hopDen(nhan, audio) {
+    if (!this.hass?.callService) return;
+    const a = audio || this.element;
+    const so = a
+      ? `nap=${a.readyState} mang=${a.networkState} loi=${a.error ? a.error.code : 0}`
+        + ` giay=${Number(a.currentTime || 0).toFixed(1)} tamdung=${a.paused ? 1 : 0}`
+        + ` nguon=${a.currentSrc ? 1 : 0} dom=${a.isConnected ? 1 : 0}`
+      : "(chưa có phần tử)";
+    this.hass.callService("system_log", "write", {
+      message: `[the youtube] ${nhan} — ${so}`,
+      level: "warning",
+      logger: "tritue_youtube_player.the",
+    }).catch(() => {});
+  },
+
+  /** Ghi hộp đen ngay lúc bấm rồi thêm ba mốc sau đó — đủ để thấy tiếng có chảy không. */
+  hopDenTheoDoi(nhan, audio) {
+    (this.hopDenTimers || []).forEach((id) => clearTimeout(id));
+    this.hopDen(`${nhan} (ngay lúc bấm)`, audio);
+    this.hopDenTimers = [1000, 3000, 8000].map((cho) =>
+      setTimeout(() => this.hopDen(`${nhan} (+${cho / 1000}s)`, audio), cho));
   },
 
   /** Canh xem tiếng có THẬT SỰ chạy không, sau 12 giây kể từ lúc bảo nó phát.
@@ -541,6 +577,7 @@ const deviceAudio = {
       this.mediaSession(item, false);
       audio.src = batDau >= 1 ? `${san.url}#t=${Math.floor(batDau)}` : san.url;
       audio.play().catch((error) => this.playRefused(error));
+      this.hopDenTheoDoi("nghe cùng loa, phát ngay trong cú bấm", audio);
       this.canhTieng(audio, generation);
     }
     this.notify();
@@ -572,6 +609,7 @@ const deviceAudio = {
        Dựng lại cảnh này trong Chrome 21/09/2026: cú tua muộn ấy còn ĐÈ LÊN vị trí mới
        hơn mà vòng canh vừa đặt — tiếng nhảy lùi hai giây ngay khi vừa bắt đầu. */
     audio.src = batDau >= 1 ? `${url}#t=${Math.floor(batDau)}` : url;
+    this.hopDenTheoDoi("nghe cùng loa, nạp sau cú bấm", audio);
     /* PHÂN LOẠI LỖI, ĐỪNG KÊU OAN. Đổi bài là lệnh phát cũ bị huỷ («AbortError») —
        chuyện bình thường, mà bản cũ đem hiện thành "trình duyệt chặn tự phát có
        tiếng", đúng dòng chữ đỏ chủ máy gặp trong ảnh 21/09/2026. */

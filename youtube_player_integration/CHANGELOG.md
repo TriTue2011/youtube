@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.26.43 - 2026-09-21
+
+### Hộp đen: thẻ tự ghi số đo vào nhật ký Home Assistant
+
+Lỗi chỉ xảy ra trên máy thật, mà máy thật thì không nối vào đâu được: ADB đòi gọi ngược
+vào điện thoại (VPN nhà không cho), Simulator thì phải có Mac, chụp màn hình thì chỉ bắt
+được một khoảnh khắc. Nhật ký Home Assistant là chỗ **cả hai phía cùng thấy** — thẻ ghi
+vào, người sửa đọc ra từ xa.
+
+Nay mỗi lần bấm nghe trên máy, thẻ ghi bốn dòng vào nhật ký HA: ngay lúc bấm, rồi +1, +3
+và +8 giây. Mỗi dòng mang đủ số để biết tiếng có chảy hay không:
+
+| Số | Nghĩa |
+|---|---|
+| `nap` | `readyState` — 0 là chưa nhận được byte nào |
+| `mang` | `networkState` — 2 là đang tải, 3 là không tìm được nguồn |
+| `loi` | mã lỗi media (0 là không lỗi) |
+| `giay` | đồng hồ của tiếng — đứng yên nghĩa là mở được mà không chảy |
+| `tamdung`, `nguon`, `dom` | có đang dừng không, đã chọn được nguồn chưa, phần tử có nằm trong trang không |
+
+Người dùng chỉ cần **bấm một lần** rồi thôi. Xem bằng: Cài đặt → Hệ thống → Nhật ký, lọc
+chữ `the youtube`.
+
 ## 0.26.42 - 2026-09-21
 
 ### Một cú chạm chỉ chứng nhận MỘT lần phát — nên đừng phát đoạn im lặng trước
