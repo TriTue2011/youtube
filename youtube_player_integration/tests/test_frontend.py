@@ -833,6 +833,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("deviceAudio.khungHong = true;", script)
         self.assertIn("if (laTao() && !this.khungHong && typeof this.nhuongChoKhung === \"function\"", script)
         self.assertNotIn("this._boOrigin = !this._boOrigin;", script)
+        # 0.26.67 — chép Y NGUYÊN bộ tham số của «phicomm-r1-card», thứ chạy được trên
+        # đúng iPhone này ở đúng địa chỉ IP này. Đo từ máy chủ 21/09/2026 không phân
+        # giải được (trang nhúng trả về bình thường cho cả năm kiểu khai báo), nghĩa là
+        # YouTube quyết định ngay trong trình duyệt — nên chép thứ đang chạy được.
+        self.assertIn("CHÉP Y NGUYÊN BỘ THAM SỐ CỦA «phicomm-r1-card»", script)
+        self.assertNotIn('cc_load_policy: "0"', script)
+        self.assertIn("accelerometer; autoplay; clipboard-write;", script)
         # 0.26.63 — đường giữ tiếng nền phải TỰ NÓI ĐƯỢC nó chạy hay hỏng, và phải
         # có đường lui khi bộ trộn tiếng chưa thức.
         self.assertIn("giữ tiếng nền: bắt đầu", script)

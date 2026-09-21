@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.66";
+const PHIEN_BAN_THE = "0.26.67";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5307,7 +5307,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         // embeds without a Referer ("Error 153 — Video player configuration error").
         // The iframe's own policy overrides the page's; it must be set before src.
         iframe.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
-        iframe.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+        // Danh sách quyền chép y nguyên của «phicomm-r1-card» — xem «_ytEmbedSrc».
+        iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write;"
+          + " encrypted-media; gyroscope; picture-in-picture; web-share");
         iframe.setAttribute("allowfullscreen", "");
         iframe.title = "Video YouTube";
         iframe.addEventListener("load", () => this._frameLoaded());
@@ -5353,13 +5355,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        của «modestbranding» nên logo vẫn còn, và không cho đặt độ phân giải qua
        khung nhúng — người xem tự chọn ở nút bánh răng của trình phát.
        enablejsapi + origin để thẻ điều khiển được trình phát qua postMessage. */
+    /* CHÉP Y NGUYÊN BỘ THAM SỐ CỦA «phicomm-r1-card».
+       Thẻ ấy chạy được trên đúng iPhone này ở đúng địa chỉ IP này, còn thẻ ta thì
+       YouTube trả 150 (có «origin») hoặc 153 (không «origin»). Đo từ máy chủ 21/09/2026
+       không phân giải được: trang nhúng trả về bình thường cho cả năm kiểu khai báo,
+       nghĩa là YouTube quyết định ngay trong trình duyệt chứ không phải ở máy chủ.
+       Chưa chứng minh được vì sao, nên làm cách rẻ nhất và chắc nhất: chép đúng bộ
+       tham số của thẻ đang chạy được, bỏ hai tham số riêng của ta
+       («cc_load_policy», «iv_load_policy»). Phụ đề và chú thích nổi mặc định tắt là
+       thứ đáng đánh đổi để lấy tiếng. */
     const params = new URLSearchParams({
-      enablejsapi: "1",
       autoplay: "1",
-      rel: "0",
+      mute: "0",
+      enablejsapi: "1",
       playsinline: "1",
-      cc_load_policy: "0",
-      iv_load_policy: "3",
+      rel: "0",
     });
     /* «origin» — GỬI HAY KHÔNG ĐỀU CÓ THỂ BỊ TỪ CHỐI, nên thẻ tự thử cả hai.
        Đo trên iPhone chủ máy 21/09/2026, Home Assistant mở bằng địa chỉ IP
@@ -5383,7 +5393,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        «playsinline», «rel». Đây là khác biệt cuối cùng còn lại giữa hai thẻ.
        «enablejsapi» vẫn chạy khi thiếu «origin»; tham số ấy chỉ là lớp kiểm tra thêm
        cho postMessage, mà chiều nhận thì thẻ đã tự lọc theo «EMBED_ORIGIN» rồi. */
-    if (muted) params.set("mute", "1");
+    if (muted) params.set("mute", "1");   // ghi đè giá trị mặc định ở trên
     if (start) params.set("start", String(Math.max(0, Math.floor(start))));
     return `${EMBED_ORIGIN}/embed/${id}?${params}`;
   }
@@ -6128,9 +6138,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // hai chỗ lại ra hai kiểu.
     // KHÔNG gửi «origin» — cùng lý do với «_ytEmbedSrc»: YouTube trả lỗi 150 khi
     // trang gọi đứng ở địa chỉ IP.
+    // Cùng bộ tham số với «_ytEmbedSrc» — chép của «phicomm-r1-card».
     const params = new URLSearchParams({
-      enablejsapi: "1", rel: "0", playsinline: "1",
-      cc_load_policy: "0", iv_load_policy: "3",
+      autoplay: "1", mute: "1", enablejsapi: "1", playsinline: "1", rel: "0",
     });
     iframe.setAttribute("src", `${EMBED_ORIGIN}/embed/?` + params);
   }
