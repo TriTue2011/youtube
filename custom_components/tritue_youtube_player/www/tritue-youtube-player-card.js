@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.54";
+const PHIEN_BAN_THE = "0.26.55";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5177,6 +5177,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        cũ: nó chỉ còn nói về đường NHÚNG. */
     const nguonMuc = item?.source || this._source;
     if (nguonMuc === "facebook") {
+      /* GỠ HẲN KHUNG CŨ TRƯỚC. «_xemFacebook» dựng lại trạng thái video và dùng lại
+         chính ô «.video-frame», nhưng KHÔNG gỡ thẻ khung YouTube đang nằm trong đó —
+         nên YouTube hát tiếp bên dưới hình Facebook. Người dùng báo 21/09/2026: "khi
+         đang nghe youtube mà mở face thì tiếng vẫn còn". Trên iOS lỗi này nặng hơn vì
+         từ 0.26.50 tiếng của máy nằm HẲN trong khung, không còn ở phần tử âm thanh. */
+      if (this._video.open) this._closeVideo();
       this._xemFacebook(item, { withSpeakers, followsDevice });
       return;
     }
@@ -5623,6 +5629,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const on = !listenScreenOff();
     setListenScreenOff(on);
     const video = this._video;
+    /* HỘP ĐEN CHO CÔNG TẮC NÀY. Người dùng báo 21/09/2026 "kích vào nghe khi tắt màn
+       hình không được" trên iOS, mà nhánh xử lý thì im lặng hoàn toàn — không cách
+       nào biết nó rơi vào nhánh nào, hay khung có bị tắt tiếng vì dòng im lặng giữ
+       nền tranh mất chỗ phát (iOS chỉ cho một luồng chạy một lúc). */
+    deviceAudio.hass = this._hass;
+    deviceAudio.ghiThang(`bật/tắt nghe-khi-tắt-màn: bật=${on ? 1 : 0}`
+      + ` khung mo=${video.open ? 1 : 0} tieng-o-day=${video.soundHere ? 1 : 0}`
+      + ` chitieng=${video.soundOnly ? 1 : 0} trangthai=${video.state}`
+      + ` co-bai=${video.item ? 1 : 0} loa=${video.withSpeakers ? 1 : 0}`);
+    setTimeout(() => {
+      deviceAudio.ghiThang(`sau bật/tắt nghe-khi-tắt-màn (+3s) — khung mo=${this._video.open ? 1 : 0}`
+        + ` trangthai=${this._video.state} giay=${Number(this._video.time || 0).toFixed(1)}`);
+    }, 3000);
     /* ĐIỀU KIỆN LÀ NỀN TẢNG, KHÔNG PHẢI "CÓ LOA HAY KHÔNG". Trước đây nhánh này còn
        đòi «!video.withSpeakers», nên đang vừa phát ra loa vừa nghe trên máy nhà Táo mà
        bật nghe-khi-tắt-màn là rơi xuống nhánh giao tiếng cho phần tử âm thanh — đúng
@@ -7086,6 +7105,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (deviceAudio.item) {
       deviceAudio.stop();
       if (this._video.open) this._closeVideo();
+      this._setStatus("Đã dừng nghe trên máy này.");
+      return;
+    }
+    /* KHUNG ĐANG MANG TIẾNG CHO MÁY NÀY thì "dừng" nghĩa là ĐÓNG HẲN, không phải
+       gửi mỗi lệnh «stopVideo» rồi để khung nằm đó.
+       Từ 0.26.50, máy nhà Táo nghe bằng khung nên «deviceAudio.item» rỗng — nhánh
+       dừng ở trên không còn khớp, và nhánh này chỉ gửi một lệnh vào khung rồi đi
+       tiếp. Người dùng báo 21/09/2026: "stop bằng nút điều khiển không dừng video". */
+    if (!deviceAudio.item && this._video.open && this._video.soundHere
+      && !this._video.withSpeakers) {
+      this._closeVideo();
+      this._thoiGiuTiengNen();
       this._setStatus("Đã dừng nghe trên máy này.");
       return;
     }

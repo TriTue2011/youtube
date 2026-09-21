@@ -729,6 +729,18 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("&& this.nhuongChoKhung(item, queue, index, startAt)) {", script)
         self.assertIn("_ngheBangKhungMotMinh(item, queue, index, batDau = 0) {", script)
         self.assertIn("deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>", script)
+        # 0.26.55 — ba lỗi người dùng báo 21/09/2026 trên iOS, cùng một gốc: từ khi
+        # tiếng nằm HẲN trong khung, các đường điều khiển vẫn tác động lên phần tử âm
+        # thanh nên không còn chạm tới thứ đang phát.
+        # (a) "khi đang nghe youtube mà mở face thì tiếng vẫn còn" — «_xemFacebook»
+        #     dùng lại chính ô «.video-frame» mà không gỡ thẻ khung YouTube bên trong.
+        self.assertIn("if (this._video.open) this._closeVideo();\n      this._xemFacebook(", script)
+        # (b) "stop bằng nút điều khiển không dừng video" — «deviceAudio.item» nay rỗng
+        #     nên nhánh dừng cũ không khớp, và nhánh còn lại chỉ gửi «stopVideo».
+        self.assertIn("if (!deviceAudio.item && this._video.open && this._video.soundHere", script)
+        # (c) "kích vào nghe khi tắt màn hình không được" — nhánh ấy im lặng hoàn toàn,
+        #     không cách nào biết nó rơi vào đâu. Nay có hộp đen.
+        self.assertIn("bật/tắt nghe-khi-tắt-màn: bật=", script)
 
     def test_duong_cua_the_phai_gui_dia_chi_va_khong_nuot_ma_loi(self):
         """Đường lấy luồng của THẺ phải gửi gợi ý địa chỉ, y như đường ra loa.

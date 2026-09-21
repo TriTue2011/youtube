@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.26.55 - 2026-09-21
+
+### Ba lỗi iOS người dùng báo — cùng một gốc
+
+Từ 0.26.50, trên máy nhà Táo tiếng nằm **hẳn trong khung YouTube**, không còn ở phần
+tử âm thanh. Nhưng vài đường điều khiển vẫn tác động lên phần tử âm thanh, nên chúng
+không còn chạm tới thứ đang phát.
+
+**"Khi đang nghe YouTube mà mở Facebook thì tiếng vẫn còn."** `_xemFacebook` dựng lại
+trạng thái video và dùng lại chính ô `.video-frame`, nhưng không gỡ thẻ khung YouTube
+đang nằm trong đó — nên YouTube hát tiếp bên dưới hình Facebook. Nay gỡ hẳn khung cũ
+trước. Đo trên Chrome: số khung YouTube còn lại **0**.
+
+**"Stop bằng nút điều khiển không dừng video."** Nhánh dừng cũ chỉ chạy khi
+`deviceAudio.item` có giá trị — mà nay nó rỗng, nên rơi xuống nhánh chỉ gửi một lệnh
+`stopVideo` rồi để khung nằm đó. Nay khung đang mang tiếng cho máy này thì "dừng"
+nghĩa là **đóng hẳn**. Đo trên Chrome: khung mở `true` → `false`, số khung **1 → 0**.
+
+**"Kích vào nghe khi tắt màn hình không được."** Nhánh này im lặng hoàn toàn nên chưa
+kết luận được. Nay nó ghi hộp đen trước và sau ba giây, kèm trạng thái trình phát —
+đủ để lần bấm tới nói rõ nó rơi vào nhánh nào và khung có bị tắt tiếng không.
+
+### Còn một giới hạn đã biết
+
+Facebook trên iPhone vẫn đi phần tử âm thanh (không có khung YouTube để mượn), nên
+có thể vẫn câm. Đó là việc riêng, chưa xử lý trong bản này.
+
 ## 0.26.54 - 2026-09-21
 
 ### Dùng add-on: thẻ báo "Không lấy được tiếng bài này" — thiếu địa chỉ, không phải hỏng luồng
