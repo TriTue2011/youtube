@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.65";
+const PHIEN_BAN_THE = "0.26.66";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -417,6 +417,10 @@ const deviceAudio = {
   /** Thẻ đặt hàm này để «listen» nhường việc cho khung YouTube trên máy nhà Táo. */
   nhuongChoKhung: null,
 
+  /** Khung đã bị YouTube từ chối ở nhà này (lỗi 150/153 vì mở bằng địa chỉ IP): từ
+   *  đó trở đi đừng nhường cho nó nữa, đi thẳng phần tử âm thanh. */
+  khungHong: false,
+
   /** Listen alone; `startAt` = second to start from (the sound of a video watched until now). */
   async listen(item, queue, index, startAt = 0) {
     /* MÁY NHÀ TÁO KHÔNG NGHE BẰNG PHẦN TỬ ÂM THANH — CHẶN Ở ĐÚNG MỘT CỬA.
@@ -428,7 +432,7 @@ const deviceAudio = {
        "cứ phải lỗi, dừng rồi play lại mới được".
        Vá từng nhánh là danh sách, và danh sách thì luôn thiếu. Chặn ở đây thì mọi lối
        đều đi qua đúng một cửa. */
-    if (laTao() && typeof this.nhuongChoKhung === "function"
+    if (laTao() && !this.khungHong && typeof this.nhuongChoKhung === "function"
       && (item?.source || "youtube") === "youtube" && VIDEO_ID.test(String(item?.id || ""))
       && this.nhuongChoKhung(item, queue, index, startAt)) {
       this.stop();
@@ -6217,17 +6221,30 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          nhà" — chẩn sai bệnh. Đo 21/09/2026: ba video chủ máy mở đều được YouTube
          khai «playable_in_embed = true», kể cả bài 1 giờ 25 phút, nên dòng "YouTube
          từ chối nhúng" trong nhật ký lúc 21:30–21:32 là kết luận sai của chính thẻ. */
-      if ((maLoi === 150 || maLoi === 153 || maLoi === 101) && !this._daDoiOrigin && this._video.item) {
-        /* ĐỔI CÁCH KHAI BÁO RỒI DỰNG LẠI ĐÚNG MỘT LẦN. */
-        this._daDoiOrigin = true;
-        this._boOrigin = !this._boOrigin;
-        deviceAudio.ghiThang(`đổi cách khai trang nhúng (${this._boOrigin ? "bỏ" : "gửi"} origin) rồi thử lại`);
+      if ((maLoi === 150 || maLoi === 153 || maLoi === 101) && laTao()
+        && this._video.soundHere && !this._video.withSpeakers && this._video.item) {
+        /* KHUNG KHÔNG DÙNG ĐƯỢC Ở NHÀ NÀY — LÙI VỀ PHẦN TỬ ÂM THANH, ĐỪNG DÒ NỮA.
+           Bản 0.26.65 cho dò qua lại giữa "gửi origin" và "bỏ origin". Hộp đen
+           22:27:34–22:27:36 ngày 21/09/2026 cho thấy nó vô nghĩa và tai hại:
+             ma=153 → đổi sang gửi origin
+             ma=150 → đổi sang bỏ origin
+             ma=153 → … mấy lần mỗi giây
+           CẢ HAI CÁCH ĐỀU TẮC, vì Home Assistant mở bằng địa chỉ IP — YouTube không
+           cho nhúng từ đó, kiểu khai báo nào cũng vậy. Chủ máy: "lỗi, nhảy loạn xạ
+           lên". Đó là lỗi của tôi.
+           Đường lui có thật: phần tử âm thanh, với lệnh «load()» tường minh của
+           0.26.64 — đo được trên chính iPhone ấy lúc 22:00:13 là «nap=4 … phat=ok»,
+           đồng hồ tiếng chạy 0,3 → 3,3. */
+        deviceAudio.ghiThang(`khung bị YouTube từ chối (ma=${maLoi}) — lùi về phần tử âm thanh`);
         const lai = { source: "youtube", ...this._video.item };
-        const giu = { withSpeakers: this._video.withSpeakers, soundHere: this._video.soundHere,
-          soundOnly: this._video.soundOnly, startSeconds: Math.floor(this._videoTimeNow() || 0) };
+        const giay = Math.floor(this._videoTimeNow() || 0);
+        const hang = this._queue.length ? this._queue : [lai];
+        const viTri = Math.max(0, this._queueIndex);
+        deviceAudio.khungHong = true;
         this._closeVideo();
-        this._openVideo(lai, giu);
-        if (giu.soundOnly) this._thuKhungKhiDaChay();
+        deviceAudio.entryId = this._entryId();
+        deviceAudio.listen(lai, hang, viTri, giay);
+        this._setStatus(`Đang nghe “${lai.title || lai.id}” trên máy này.`);
         return;
       }
       if (maLoi === 101 || maLoi === 150) {

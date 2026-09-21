@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.26.66 - 2026-09-21
+
+### Bỏ vòng dò "gửi origin / bỏ origin" — nó chạy loạn và không bao giờ thắng
+
+Vòng thử lại của 0.26.65 là một lỗi của tôi. Hộp đen 22:27:34–22:27:53 cho thấy nó
+chạy **mấy lần mỗi giây**:
+
+```
+ma=153 → đổi sang gửi origin
+ma=150 → đổi sang bỏ origin
+ma=153 → đổi sang gửi origin
+…
+```
+
+Hai chuyện cùng sai: (1) việc dựng lại khung tự xoá cờ "đã thử một lần", nên vòng lặp
+vô tận — chủ máy: *"lỗi, nhảy loạn xạ lên"*; và (2) **cả hai cách đều tắc**, vì Home
+Assistant mở bằng địa chỉ IP thì YouTube không cho nhúng, khai báo kiểu nào cũng vậy.
+Dò giữa hai lựa chọn đều sai thì không bao giờ có đáp án.
+
+### Đường lui thật: phần tử âm thanh kèm lệnh nạp tường minh
+
+Gặp lỗi 150/153, thẻ **thôi dùng khung** cho máy này và chuyển hẳn sang phần tử âm
+thanh — đường mà 0.26.64 vừa sửa bằng một lệnh `load()` tường minh, và đo được trên
+chính iPhone ấy lúc 22:00:13: `nap=4 … phat=ok`, đồng hồ tiếng chạy 0,3 → 3,3.
+
+Bài đang nghe và giây đang nghe được giữ nguyên khi chuyển.
+
+### Cách chữa tận gốc vẫn là bỏ địa chỉ IP
+
+Mở Home Assistant bằng **tên miền** thay vì `http://172.16.10.200:8123` là hết cả 150
+lẫn 153, và khung YouTube dùng lại được — mượt hơn hẳn đường phần tử âm thanh.
+
 ## 0.26.65 - 2026-09-21
 
 ### Lỗi 150 và 153: gốc rễ là địa chỉ IP, nên thẻ tự thử cả hai cách

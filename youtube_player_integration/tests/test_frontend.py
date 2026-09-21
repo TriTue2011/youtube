@@ -823,9 +823,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Gốc rễ là cái địa chỉ IP, không phải tham số — nhưng thẻ không bắt người
         # dùng đi sửa cấu hình mới nghe được nhạc.
         self.assertIn('if (!this._boOrigin) params.set("origin", location.origin);', script)
-        self.assertIn("ĐỔI CÁCH KHAI BÁO RỒI DỰNG LẠI ĐÚNG MỘT LẦN", script)
-        self.assertIn("this._boOrigin = !this._boOrigin;", script)
         self.assertIn("maLoi === 150 || maLoi === 153 || maLoi === 101", script)
+        # 0.26.66 — KHÔNG DÒ QUA LẠI. Hộp đen 22:27:34–22:27:36 ngày 21/09/2026 cho
+        # thấy vòng dò của 0.26.65 chạy mấy lần mỗi giây (153 → 150 → 153 …) vì CẢ HAI
+        # cách đều tắc khi Home Assistant mở bằng địa chỉ IP. Chủ máy: "lỗi, nhảy loạn
+        # xạ lên". Đường lui có thật là phần tử âm thanh kèm «load()» của 0.26.64 —
+        # đo được trên chính iPhone ấy lúc 22:00:13: nap=4, phat=ok.
+        self.assertIn("KHUNG KHÔNG DÙNG ĐƯỢC Ở NHÀ NÀY — LÙI VỀ PHẦN TỬ ÂM THANH", script)
+        self.assertIn("deviceAudio.khungHong = true;", script)
+        self.assertIn("if (laTao() && !this.khungHong && typeof this.nhuongChoKhung === \"function\"", script)
+        self.assertNotIn("this._boOrigin = !this._boOrigin;", script)
         # 0.26.63 — đường giữ tiếng nền phải TỰ NÓI ĐƯỢC nó chạy hay hỏng, và phải
         # có đường lui khi bộ trộn tiếng chưa thức.
         self.assertIn("giữ tiếng nền: bắt đầu", script)
