@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.26.52 - 2026-09-21
+
+### iPhone: khung phải HIỆN RA đã, thẻ tự thu lại sau khi nó đã chạy
+
+Bản 0.26.50 mở khung ngay ở dạng một điểm ảnh. Hộp đen trên iPhone của chủ máy lúc
+18:24 chứng minh đó là ngõ cụt:
+
+| Khung | Trạng thái trình phát YouTube |
+|---|---|
+| `chitieng=1` — thu một điểm ảnh | **`trangthai=-1`** suốt 8 giây: chưa hề bắt đầu |
+| `chitieng=0` — hiện ra | **`trangthai=1`, `giay=2.4`**: đang chạy |
+
+iOS đòi một cú chạm vào **chính video**, mà khung một điểm ảnh thì không ai chạm vào
+được — kể cả chủ máy: *"không tự động phát video nhỉ, phải kích vào"*.
+
+Nay khung mở ra bình thường kèm lời nhắc chạm một lần. Khi trình phát báo **đang
+chạy**, thẻ tự thu khung lại còn một điểm ảnh, rồi kiểm lại sau 2,5 giây: nếu WebKit
+dừng vì không còn thấy video thì bung khung ra và nói rõ lý do — thà thấy video còn
+hơn mất tiếng.
+
 ## 0.26.51 - 2026-09-21
 
 ### Hộp đen khai luôn MÁY NÀO gửi và ĐANG CHẠY BẢN NÀO

@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.51";
+const PHIEN_BAN_THE = "0.26.52";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5344,6 +5344,46 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._thucTiengKhung();
   }
 
+  /** THU KHUNG LẠI KHI NÓ ĐÃ THẬT SỰ CHẠY — và bung ra nếu thu xong bị tắt tiếng.
+   *
+   *  Chỉ thu khi trình phát báo «đang chạy» (mã 1), vì lúc chưa chạy thì thu bé là
+   *  giết luôn cơ hội chạm. Thu xong còn kiểm lại một nhịp: nếu WebKit dừng vì phần
+   *  tử không còn nhìn thấy thì trả khung về như cũ, thà thấy video còn hơn mất tiếng.
+   */
+  _thuKhungKhiDaChay() {
+    clearInterval(this._henThuKhung);
+    const batDau = Date.now();
+    this._henThuKhung = setInterval(() => {
+      const v = this._video;
+      if (!v.open || v.soundOnly) {
+        clearInterval(this._henThuKhung);
+        return;
+      }
+      if (Date.now() - batDau > 90000) {
+        clearInterval(this._henThuKhung);
+        return;
+      }
+      if (v.state !== 1) return;
+      clearInterval(this._henThuKhung);
+      v.soundOnly = true;
+      this._syncNowPlaying();
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang("thu khung lại sau khi đã chạy");
+      setTimeout(() => {
+        if (!this._video.open) return;
+        if (this._video.state === 1) {
+          this._setStatus("Đang nghe trên máy này.");
+          deviceAudio.ghiThang(`thu khung xong, vẫn chạy — trangthai=${this._video.state}`);
+          return;
+        }
+        this._video.soundOnly = false;
+        this._syncNowPlaying();
+        deviceAudio.ghiThang(`thu khung xong thì TẮT — trangthai=${this._video.state}, bung lại`);
+        this._setStatus("Máy này cần thấy video mới giữ được tiếng — để nguyên khung nhé.");
+      }, 2500);
+    }, 500);
+  }
+
   /** HỘP ĐEN CHO ĐƯỜNG KHUNG — cùng bốn mốc như đường phần tử âm thanh.
    *
    *  «trangthai» là mã của trình phát YouTube: -1 chưa bắt đầu, 0 hết bài, 1 đang
@@ -6631,10 +6671,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._queue = queue;
         this._queueIndex = position;
         if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
-        this._openVideo(item, { withSpeakers: false, soundHere: true, soundOnly: true });
+        /* HIỆN KHUNG RA ĐÃ, THU LẠI SAU KHI NÓ ĐÃ CHẠY.
+           0.26.50 mở thẳng ở chế độ một điểm ảnh, và hộp đen trên iPhone của chủ máy
+           18:24 ngày 21/09/2026 cho thấy đó là ngõ cụt:
+             chitieng=1 (thu bé)  → trangthai=-1 suốt 8 giây, chưa hề bắt đầu
+             chitieng=0 (hiện ra) → trangthai=1, giay=2.4, đang chạy
+           iOS đòi một cú chạm vào CHÍNH video, mà khung một điểm ảnh thì không ai
+           chạm vào được — kể cả chủ máy: "không tự động phát video nhỉ, phải kích
+           vào". Nên mở ra cho chạm, rồi tự thu khi đã chạy. */
+        this._openVideo(item, { withSpeakers: false, soundHere: true, soundOnly: false });
         if (listenScreenOff()) this._giuTiengNen();
         this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
-        this._setStatus(`Đang nghe “${name}” trên máy này.`);
+        this._thuKhungKhiDaChay();
+        this._setStatus(`Chạm một lần vào video để nghe “${name}” — iPhone bắt buộc vậy;`
+          + " chạy rồi thẻ tự thu video lại.");
         return;
       }
       if (this._video.open) this._closeVideo();

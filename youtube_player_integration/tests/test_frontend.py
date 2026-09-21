@@ -707,6 +707,15 @@ class LovelaceCardContractTests(unittest.TestCase):
         # xong là im lặng tuyệt đối — không cách nào biết nó có phát được không.
         self.assertIn("_hopDenKhungTheoDoi(nhan) {", script)
         self.assertIn('this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");', script)
+        # 0.26.52 — KHUNG PHẢI HIỆN RA ĐÃ, thu lại sau khi đã chạy. Hộp đen trên iPhone
+        # chủ máy 18:24 ngày 21/09/2026:
+        #     chitieng=1 (thu bé)  → trangthai=-1 suốt 8 giây, chưa hề bắt đầu
+        #     chitieng=0 (hiện ra) → trangthai=1, giay=2.4, đang chạy
+        # iOS đòi một cú chạm vào CHÍNH video, mà khung một điểm ảnh thì không ai chạm
+        # vào được — chủ máy: "không tự động phát video nhỉ, phải kích vào".
+        self.assertIn("soundHere: true, soundOnly: false });", script)
+        self.assertIn("_thuKhungKhiDaChay() {", script)
+        self.assertIn("this._thuKhungKhiDaChay();", script)
 
     def test_http_dependency_and_service_description_are_packaged(self):
         manifest = json.loads(
