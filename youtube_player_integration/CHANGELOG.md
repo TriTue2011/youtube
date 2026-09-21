@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.26.74 - 2026-09-22
+
+### iPhone tắt màn hình vẫn nghe nhạc YouTube
+
+Từ 0.26.50, iPhone nghe bài YouTube bằng khung YouTube thu còn một điểm ảnh. Cái giá
+đo được trong hộp đen: **khoá màn là khung dừng ngay tại giây ấy** — `trangthai=2
+giay=308.3`, 88 giây sau vẫn `308.3`. WebKit treo khung của bên thứ ba khi khoá máy,
+không vá được từ phía thẻ.
+
+Nay bài YouTube đi **đúng đường của Zing**: phần tử âm thanh của trang. Ba căn cứ, cả
+ba đều đo được:
+
+| Căn cứ | Số đo |
+|---|---|
+| Phần tử âm thanh chạy trên iPhone | lệnh `load()` của 0.26.64 — hộp đen 22:00:13 ngày 21/09 ghi `nap=4 phat=ok` |
+| App Home Assistant được phép phát tiếng nền | `Info.plist` của app khai `UIBackgroundModes: audio` |
+| Sống qua lúc khoá màn, ngay trong app | chủ máy thử bài Zing: *"tắt màn hình vẫn nghe được"* |
+
+**Chỉ đổi đường NGHE.** Đường XEM video giữ nguyên khung có tiếng — bản 0.26.71 từng
+đổi cả hai cùng lúc và chủ máy thấy *"mở video nhấp nháy khung liên tục"*. Cửa chặn
+trong `deviceAudio.listen` nay chỉ nhường cho khung khi **đang xem video có tiếng trên
+chính máy này**; nghe nhạc, chuyển bài hay mở lại sau khi tải trang đều đi phần tử âm
+thanh.
+
+Cũng cố ý **không** có hẹn giờ tự mượn khung khi tiếng chưa tải — đó là thứ 0.26.71
+thêm vào và là nghi can số một của vòng nhấp nháy. Tiếng không lên thì hộp đen ghi
+lại, không tự xoay sang đường khác.
+
+Kiểm trên Chrome giả làm iPhone: chỉ nghe → không mượn khung; đang xem có tiếng → vẫn
+nhường cho khung; khung chỉ-tiếng cũ đang mở → không nhường.
+
 ## 0.26.73 - 2026-09-22
 
 ### Lỗi 153 trên Safari: thẻ tự đổi sang địa chỉ nhúng còn lại

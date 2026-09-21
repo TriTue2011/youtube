@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.73";
+const PHIEN_BAN_THE = "0.26.74";
 
 /* HAI ĐỊA CHỈ NHÚNG, VÀ THẺ CHỈ ĐỔI KHI CHÍNH YOUTUBE TỪ CHỐI.
    «www.youtube.com» là đường mặc định, giữ nguyên từ 0.26.34. Chrome xét quyền tự
@@ -428,6 +428,9 @@ const deviceAudio = {
   /** Thẻ đặt hàm này để «listen» nhường việc cho khung YouTube trên máy nhà Táo. */
   nhuongChoKhung: null,
 
+  /** Thẻ đặt hàm này: true khi đang xem video có tiếng ngay trên máy này. */
+  dangXemCoTieng: null,
+
   /** Khung đã bị YouTube từ chối ở nhà này (lỗi 150/153 vì mở bằng địa chỉ IP): từ
    *  đó trở đi đừng nhường cho nó nữa, đi thẳng phần tử âm thanh. */
   khungHong: false,
@@ -443,7 +446,14 @@ const deviceAudio = {
        "cứ phải lỗi, dừng rồi play lại mới được".
        Vá từng nhánh là danh sách, và danh sách thì luôn thiếu. Chặn ở đây thì mọi lối
        đều đi qua đúng một cửa. */
+    /* 0.26.74 — CỬA CHỈ CÒN MỞ KHI ĐANG XEM VIDEO CÓ TIẾNG TRÊN MÁY NÀY.
+       Nghe nhạc thì máy nhà Táo đi phần tử âm thanh như mọi máy (xem chú thích ở
+       nhánh nghe của «_playResult»), kể cả khi chuyển bài hay mở lại sau khi tải
+       trang — không thì bài đầu đi âm thanh mà bài thứ hai lại rẽ sang khung.
+       Còn đang XEM mà có lối nào gọi vào đây thì tiếng ở lại trong khung như cũ,
+       để đường xem không đổi một li. */
     if (laTao() && !this.khungHong && typeof this.nhuongChoKhung === "function"
+      && typeof this.dangXemCoTieng === "function" && this.dangXemCoTieng()
       && (item?.source || "youtube") === "youtube" && VIDEO_ID.test(String(item?.id || ""))
       && this.nhuongChoKhung(item, queue, index, startAt)) {
       this.stop();
@@ -1214,6 +1224,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        trong «deviceAudio.listen». */
     deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>
       this._ngheBangKhungMotMinh(item, queue, index, batDau);
+    // Đang XEM video có tiếng ngay trên máy này (không phải khung chỉ-tiếng, không
+    // phải hình câm đi kèm loa) — chỉ lúc ấy cửa của «listen» mới nhường cho khung.
+    deviceAudio.dangXemCoTieng = () => {
+      const v = this._video;
+      return Boolean(v.open && v.soundHere && !v.soundOnly && !v.withSpeakers);
+    };
     // Back on the dashboard (the same card, or a new one after leaving it): show the
     // search and what is playing again.
     this._needsRestore = true;
@@ -7154,41 +7170,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._setStatus(`Đang xem “${name}” trên thẻ. Chọn loa để phát tiếng ra loa.`);
         return;
       }
-      /* MÁY NHÀ TÁO NGHE BẰNG KHUNG, KHÔNG BẰNG PHẦN TỬ ÂM THANH.
-         Đo trên iPhone của chủ máy 21/09/2026, sau khi đã sửa xong tốc độ luồng:
-         phần tử âm thanh nằm ở «nap=0 mang=2 loi=0 phat=cho» — tức lệnh phát không
-         bị từ chối mà cũng không được chấp nhận, nó treo chờ dữ liệu, và dữ liệu
-         không bao giờ tới. Tôi đã loại từng nghi can một, mỗi cái bằng một phép đo:
-           · định dạng: itag 140, m4a/AAC — iPhone giải mã thừa sức
-           · chữ ký: địa chỉ tự mang «authSig», sống 1 giờ, không hết hạn
-           · cú bấm: «cuchi=1», cử chỉ còn hiệu lực
-           · tranh chấp: «dem=1m/0k», đúng một phần tử, không khung nào
-           · đường truyền: cùng địa chỉ ấy, «fetch» của chính trang lấy được (206,
-             ~120ms); đo lại qua Cloudflare với danh tính Safari VÀ AppleCoreMedia
-             đều lấy 3,45 MB trong 1,4 giây
-         Không còn nghi can nào ngoài chính trình phát của iOS. Mà khung YouTube thì
-         chạy — chủ máy xác nhận cùng ngày: "nghe bài ghim bằng video được luôn".
-         Nên máy nhà Táo đi đường khung, thu còn một điểm ảnh để chỉ còn tiếng. Đây
-         cũng đúng cách thẻ «phicomm-r1-card» làm, thứ chạy được trên máy chủ máy.
-         Nguồn không phải YouTube (Zing, Facebook) không có khung để mượn, đành giữ
-         phần tử âm thanh — chưa có đường nào khác. */
-      if (laTao() && isVideo && source === "youtube" && VIDEO_ID.test(String(item.id || ""))
-        && !deviceAudio.laTrucTiep(item)) {
-        this._queue = queue;
-        this._queueIndex = position;
-        if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
-        /* HIỆN KHUNG RA ĐÃ, THU LẠI SAU KHI NÓ ĐÃ CHẠY.
-           0.26.50 mở thẳng ở chế độ một điểm ảnh, và hộp đen trên iPhone của chủ máy
-           18:24 ngày 21/09/2026 cho thấy đó là ngõ cụt:
-             chitieng=1 (thu bé)  → trangthai=-1 suốt 8 giây, chưa hề bắt đầu
-             chitieng=0 (hiện ra) → trangthai=1, giay=2.4, đang chạy
-           iOS đòi một cú chạm vào CHÍNH video, mà khung một điểm ảnh thì không ai
-           chạm vào được — kể cả chủ máy: "không tự động phát video nhỉ, phải kích
-           vào". Nên mở ra cho chạm, rồi tự thu khi đã chạy. */
-        this._ngheBangKhungMotMinh(item, queue, position);
-        this._setStatus(`Đang nghe “${name}” trên máy này.`);
-        return;
-      }
+      /* MÁY NHÀ TÁO NGHE NHẠC BẰNG PHẦN TỬ ÂM THANH — Y NHƯ ZING.
+         Từ 0.26.50 tới 0.26.73, iPhone «chỉ nghe» bài YouTube bằng khung YouTube thu
+         còn một điểm ảnh, vì hồi ấy phần tử âm thanh trên iPhone treo ở «nap=0». Cái
+         giá của đường khung đo được trong hộp đen 21/09/2026: khoá màn là khung DỪNG
+         ngay tại giây ấy — «trangthai=2 giay=308.3», 88 giây sau vẫn 308.3. WebKit
+         treo khung của bên thứ ba khi khoá máy, không có cách nào vá từ phía thẻ.
+         Ba điều nay đã đổi, cả ba đều đo được:
+           · bản 0.26.64 thêm lệnh «load()» tường minh — hộp đen iPhone 22:00:13 ngày
+             21/09 ghi «nap=4 phat=ok», đồng hồ tiếng chạy 0,3 → 3,3;
+           · app Home Assistant cho iOS khai «UIBackgroundModes: audio» trong
+             Info.plist (đọc thẳng kho mã chính thức 22/09/2026);
+           · chủ máy thử 22/09/2026: phát một bài Zing — CHÍNH phần tử âm thanh này —
+             rồi khoá màn, "tắt màn hình vẫn nghe được".
+         Nên bài YouTube đi đúng đường của Zing: phần tử âm thanh, sống qua lúc khoá
+         màn, điều khiển được từ màn khoá.
+         CHỈ đổi đường NGHE. Đường XEM giữ nguyên khung có tiếng — bản 0.26.71 đổi cả
+         hai cùng lúc và chủ máy thấy "mở video nhấp nháy khung liên tục". Và cố ý
+         KHÔNG có hẹn giờ tự mượn khung khi tiếng chưa tải: đó là thứ 0.26.71 thêm vào
+         và là nghi can số một của vòng nhấp nháy. Tiếng không lên thì hộp đen ghi
+         lại, không tự xoay sang đường khác. */
       if (this._video.open) this._closeVideo();
       deviceAudio.listen(queue[position], queue, position);
       this._setStatus(`Đang nghe “${name}” trên máy này.`);

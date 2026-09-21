@@ -446,8 +446,23 @@ class LovelaceCardContractTests(unittest.TestCase):
         # gì tranh chấp. Khung thì chạy — chủ máy: "nghe bài ghim bằng video được
         # luôn". Chỉ YouTube mới có khung để mượn, nên Zing/Facebook giữ nguyên đường
         # cũ.
-        self.assertIn("MÁY NHÀ TÁO NGHE BẰNG KHUNG, KHÔNG BẰNG PHẦN TỬ ÂM THANH", script)
-        self.assertIn('if (laTao() && isVideo && source === "youtube"', script)
+        # 0.26.74 — ĐẢO LẠI: máy nhà Táo NGHE bằng phần tử âm thanh, y như Zing.
+        # Đường khung dừng ngay khi khoá màn (hộp đen: «trangthai=2 giay=308.3», 88
+        # giây sau vẫn 308.3). Căn cứ để đổi: lệnh load() của 0.26.64 làm phần tử âm
+        # thanh chạy trên iPhone (22:00:13, nap=4 phat=ok); app HA cho iOS khai
+        # «UIBackgroundModes: audio»; và chủ máy thử bài Zing — chính phần tử này —
+        # khoá màn vẫn nghe được.
+        self.assertIn("MÁY NHÀ TÁO NGHE NHẠC BẰNG PHẦN TỬ ÂM THANH — Y NHƯ ZING.", script)
+        self.assertNotIn('if (laTao() && isVideo && source === "youtube"', script)
+        # CHỈ đổi đường NGHE: cửa của «listen» vẫn nhường cho khung khi đang XEM video
+        # có tiếng trên máy này, để đường xem không đổi — 0.26.71 đổi cả hai và khung
+        # nhấp nháy liên tục.
+        self.assertIn("dangXemCoTieng: null,", script)
+        self.assertIn('&& typeof this.dangXemCoTieng === "function" && this.dangXemCoTieng()', script)
+        self.assertIn("return Boolean(v.open && v.soundHere && !v.soundOnly && !v.withSpeakers);", script)
+        # Không được có hẹn giờ tự mượn khung khi tiếng chưa tải — nghi can số một
+        # của vòng nhấp nháy ở 0.26.71.
+        self.assertNotIn("mượn khung YouTube`", script)
         # Loa Cast mất vài giây mới bắt đầu phát, nên tua phải CHỜ loa báo "playing"
         # rồi mới tua, và chỉ MỘT lần — tua liên tiếp là sinh ra giật.
         self.assertIn("_dongBoLoaVeGiay(entityId, giay, moc) {", script)
