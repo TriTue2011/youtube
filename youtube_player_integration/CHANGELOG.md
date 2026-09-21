@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.26.65 - 2026-09-21
+
+### Lỗi 150 và 153: gốc rễ là địa chỉ IP, nên thẻ tự thử cả hai cách
+
+Bỏ tham số `origin` ở 0.26.62 làm lỗi đổi từ **150** sang **153**. Ghép hai số lại thì
+ra bức tranh đầy đủ, đo trên iPhone chủ máy với Home Assistant mở bằng
+`http://172.16.10.200:8123`:
+
+| Cách khai báo | YouTube trả lời |
+|---|---|
+| **Có** gửi `origin` (là địa chỉ IP) | **150** — không cho nhúng từ đây |
+| **Không** gửi `origin` | **153** — không biết ai đang nhúng |
+
+Gốc rễ là **cái địa chỉ IP**, không phải tham số. Mở Home Assistant bằng **tên miền**
+là hết cả hai lỗi.
+
+Nhưng thẻ không bắt người dùng đi sửa cấu hình mới nghe được nhạc. Nay nó gửi `origin`
+như cũ, và nếu gặp 150 hoặc 153 thì **tự dựng lại khung theo cách còn lại đúng một
+lần**, giữ nguyên bài và giây đang nghe, rồi ghi vào hộp đen cách nào ăn.
+
 ## 0.26.64 - 2026-09-21
 
 ### Facebook và Zing trên iPhone: cần một lệnh nạp tường minh

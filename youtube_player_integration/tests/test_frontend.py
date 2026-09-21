@@ -816,8 +816,16 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Hai điều đó chỉ cùng đúng khi YouTube từ chối vì TRANG GỌI đứng ở địa chỉ IP
         # (app HA ở nhà mở bằng http://172.16.10.200:8123). Thẻ phicomm-r1-card —
         # thứ chạy được trên đúng máy ấy — dựng địa chỉ khung KHÔNG có «origin».
-        self.assertNotIn("origin: location.origin", script)
-        self.assertIn("KHÔNG GỬI «origin»", script)
+        # 0.26.65 — gửi «origin» hay không ĐỀU có thể bị từ chối, nên thẻ tự thử cả
+        # hai. Đo trên iPhone chủ máy 21/09/2026, HA mở bằng địa chỉ IP:
+        #   có gửi origin    → lỗi 150 (không cho nhúng từ đây)
+        #   không gửi origin → lỗi 153 (không biết ai đang nhúng)
+        # Gốc rễ là cái địa chỉ IP, không phải tham số — nhưng thẻ không bắt người
+        # dùng đi sửa cấu hình mới nghe được nhạc.
+        self.assertIn('if (!this._boOrigin) params.set("origin", location.origin);', script)
+        self.assertIn("ĐỔI CÁCH KHAI BÁO RỒI DỰNG LẠI ĐÚNG MỘT LẦN", script)
+        self.assertIn("this._boOrigin = !this._boOrigin;", script)
+        self.assertIn("maLoi === 150 || maLoi === 153 || maLoi === 101", script)
         # 0.26.63 — đường giữ tiếng nền phải TỰ NÓI ĐƯỢC nó chạy hay hỏng, và phải
         # có đường lui khi bộ trộn tiếng chưa thức.
         self.assertIn("giữ tiếng nền: bắt đầu", script)

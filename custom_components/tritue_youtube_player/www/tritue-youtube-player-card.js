@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.64";
+const PHIEN_BAN_THE = "0.26.65";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5265,6 +5265,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.timeAt = 0;
     this._video.moUL = Date.now();
     this._loiKhungDaThu = false;
+    this._daDoiOrigin = false;
     let iframe = frame.querySelector("iframe");
     this._video.item = {
       id,
@@ -5356,6 +5357,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       cc_load_policy: "0",
       iv_load_policy: "3",
     });
+    /* «origin» — GỬI HAY KHÔNG ĐỀU CÓ THỂ BỊ TỪ CHỐI, nên thẻ tự thử cả hai.
+       Đo trên iPhone chủ máy 21/09/2026, Home Assistant mở bằng địa chỉ IP
+       «http://172.16.10.200:8123»:
+         có gửi «origin»    → YouTube trả lỗi 150 (không cho nhúng từ đây)
+         không gửi «origin» → YouTube trả lỗi 153 (không biết ai đang nhúng)
+       Gốc rễ là cái địa chỉ IP, không phải tham số. Mở Home Assistant bằng TÊN MIỀN
+       là hết cả hai. Nhưng thẻ không bắt người dùng đi sửa cấu hình mới nghe được
+       nhạc: nó gửi «origin» như cũ, gặp 150/153 thì dựng lại khung theo cách còn lại
+       đúng một lần, rồi nhớ cách nào ăn cho tới khi tải lại trang. */
+    if (!this._boOrigin) params.set("origin", location.origin);
     /* KHÔNG GỬI «origin».
        Hộp đen iPhone chủ máy 21:51–21:52 ngày 21/09/2026 ghi «khung báo lỗi: ma=150»
        ba lần liền — mã 150 là "chủ video không cho phát trong trình nhúng". Nhưng
@@ -6206,6 +6217,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          nhà" — chẩn sai bệnh. Đo 21/09/2026: ba video chủ máy mở đều được YouTube
          khai «playable_in_embed = true», kể cả bài 1 giờ 25 phút, nên dòng "YouTube
          từ chối nhúng" trong nhật ký lúc 21:30–21:32 là kết luận sai của chính thẻ. */
+      if ((maLoi === 150 || maLoi === 153 || maLoi === 101) && !this._daDoiOrigin && this._video.item) {
+        /* ĐỔI CÁCH KHAI BÁO RỒI DỰNG LẠI ĐÚNG MỘT LẦN. */
+        this._daDoiOrigin = true;
+        this._boOrigin = !this._boOrigin;
+        deviceAudio.ghiThang(`đổi cách khai trang nhúng (${this._boOrigin ? "bỏ" : "gửi"} origin) rồi thử lại`);
+        const lai = { source: "youtube", ...this._video.item };
+        const giu = { withSpeakers: this._video.withSpeakers, soundHere: this._video.soundHere,
+          soundOnly: this._video.soundOnly, startSeconds: Math.floor(this._videoTimeNow() || 0) };
+        this._closeVideo();
+        this._openVideo(lai, giu);
+        if (giu.soundOnly) this._thuKhungKhiDaChay();
+        return;
+      }
       if (maLoi === 101 || maLoi === 150) {
         this._embedRefused();
         return;
