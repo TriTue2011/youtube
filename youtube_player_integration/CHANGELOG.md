@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.26.40 - 2026-09-21
+
+### Nghe trên máy KHI KHÔNG CÓ LOA cũng phải phát ngay trong cú bấm
+
+Chủ máy hỏi thêm hai điều: iPhone thì sao, và ca **không dùng loa** thì sao. Tôi dựng lại
+cả hai trong Chrome bằng chính tệp thẻ, một lần với user-agent iPhone, một lần Android:
+
+| Cảnh | iPhone | Android |
+|---|---|---|
+| Loa đang phát → "Nghe trên máy này" | **khung YouTube** thu bé, vào thẳng `start=12`, không hỏi máy chủ | **thẻ `<audio>`**, phát ngay trong cú bấm với `#t=12` |
+| Không tích loa → bấm "Chỉ nghe" | lệnh phát rơi **ra ngoài** cú bấm | cũng rơi ra ngoài |
+
+Hàng cuối là lỗi còn sót: đường "nghe một mình" mở khoá phần tử âm thanh trong cú bấm,
+nhưng rồi đi qua một `await` mới phát. Chrome vẫn cho vì cử chỉ còn hiệu lực năm giây —
+**iOS thì không**: số đo trên iPhone của chủ máy ngày 20/09 là `nap=0 mang=2 loi=0`, tức
+phần tử được phép phát, đã có nguồn, mà không tải nổi một byte.
+
+Nay địa chỉ luồng đã xin sẵn thì thẻ lấy thẳng từ lớp nhớ và **phát ngay tại chỗ**, không
+`await` gì trước đó. Đo lại với user-agent iPhone: lệnh phát nằm gọn trong cú bấm.
+
+### Và phía máy chủ nay đã đúng hẳn cho máy nhà Táo
+
+Đo trên chính Home Assistant của nhà sáng nay, hỏi đúng kiểu iPhone hỏi:
+
+| Cách hỏi | Trước (0.26.34) | Nay |
+|---|---|---|
+| `HEAD` | **405** | **200**, `audio/mp4`, có `Accept-Ranges`, 0,04 giây |
+| `GET` một byte đầu | 206 | 206, 0,04 giây |
+| `GET` giữa bài | 206 | 206, 0,05 giây |
+
 ## 0.26.39 - 2026-09-21
 
 ### "Tiếng rất lâu mới nghe thấy, hoặc phải bấm thêm Nghe khi tắt màn hình"

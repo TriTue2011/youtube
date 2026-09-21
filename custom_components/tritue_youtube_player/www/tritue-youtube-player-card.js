@@ -372,7 +372,15 @@ const deviceAudio = {
     Object.assign(this, { item, queue, index, along: false, alongKey: "", pausedByHide: false });
     this.mediaSession(item);
     this.notify();
-    const url = await this.streamUrl(item);
+    /* ĐỊA CHỈ ĐÃ XIN SẴN THÌ KHÔNG ĐƯỢC `await` GÌ TRƯỚC KHI PHÁT.
+       Dựng lại trong Chrome 21/09/2026 với user-agent iPhone: bấm «Chỉ nghe» thì lệnh
+       phát rơi ra SAU cú bấm (đi qua một `await` là đã ra ngoài phần chạy đồng bộ).
+       Chrome vẫn cho vì cử chỉ còn hiệu lực năm giây, nhưng iOS thì không: đo
+       20/09/2026 trên iPhone của chủ máy là «nap=0 mang=2 loi=0» — phần tử được phép
+       phát, có nguồn, mà không tải một byte nào. Nên lấy thẳng từ lớp nhớ và phát ngay
+       tại chỗ; chỉ khi chưa xin sẵn mới đi hỏi (và lúc ấy đành chịu một vòng chờ). */
+    const san = this.nhoLuong.get(this.khoaLuong(item));
+    const url = san?.url && Date.now() - san.luc <= 240000 ? san.url : await this.streamUrl(item);
     if (generation !== this.generation) return;
     if (!url) {
       // One notification, carrying the error (the card keeps a video it was following).
