@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.74";
+const PHIEN_BAN_THE = "0.26.75";
 
 /* HAI ĐỊA CHỈ NHÚNG, VÀ THẺ CHỈ ĐỔI KHI CHÍNH YOUTUBE TỪ CHỐI.
    «www.youtube.com» là đường mặc định, giữ nguyên từ 0.26.34. Chrome xét quyền tự
@@ -601,7 +601,7 @@ const deviceAudio = {
   hopDenTheoDoi(nhan, audio) {
     (this.hopDenTimers || []).forEach((id) => clearTimeout(id));
     this.hopDen(`${nhan} (ngay lúc bấm)`, audio);
-    this.hopDenTimers = [1000, 3000, 8000].map((cho) =>
+    this.hopDenTimers = [1000, 3000, 8000, 12000].map((cho) =>
       setTimeout(() => {
         this.hopDen(`${nhan} (+${cho / 1000}s)`, audio);
         // Ba giây mà chưa có một byte nào: hỏi thẳng xem MẠNG của máy này có lấy được
@@ -610,11 +610,20 @@ const deviceAudio = {
         /* «networkState === 0» là phần tử KHÔNG còn nguồn nào — tức chính thẻ vừa
            tắt tiếng (đổi bài, giao cho loa, dừng hẳn). Cứu lúc ấy là dựng lại thứ
            vừa cố ý tắt. Log HA 21/09/2026 17:25:08 bắt đúng một lần như vậy. */
-        if (cho === 3000 && audio && audio.readyState === 0 && !audio.error
-            && audio.networkState !== 0) {
-          this.doThuLuong(audio);
-          this.cuuLuotNap(audio);
-        }
+        const chuaCoGi = audio && audio.readyState === 0 && !audio.error
+            && audio.networkState !== 0;
+        /* ĐO Ở GIÂY 3, CỨU Ở GIÂY 12 (0.26.75).
+           Hỏi mạng bằng «fetch» là phép đo thuần, không đụng vào phần tử — giữ ở giây 3.
+           Còn «cuuLuotNap» gọi lại «load()», mà «load()» XOÁ SẠCH lượt nạp đang chạy và
+           bắt đầu lại từ số 0. Hộp đen iPhone 22/09/2026, hai lượt nghe liên tiếp
+           (06:21:37 và 06:22:20): lần nào cũng cứu đúng giây 3, ngay sau đó
+           «phat=AbortError», rồi giây 8 vẫn «nap=0». Trong khi luồng thì máy chủ giao
+           byte đầu sau 0,04 giây (địa chỉ nội bộ) và 0,3 giây (tên miền) — đo cùng ngày
+           trên đúng đường thẻ đi. Nghĩa là iPhone đang nạp, chỉ chậm, và cú cứu ở
+           giây 3 cắt ngang nó. Android có dữ liệu trong 1 giây nên chưa bao giờ tới
+           lượt cứu, dời sang giây 12 không đổi gì với nó. */
+        if (cho === 3000 && chuaCoGi) this.doThuLuong(audio);
+        if (cho === 12000 && chuaCoGi) this.cuuLuotNap(audio);
       }, cho));
   },
 
@@ -5199,6 +5208,37 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!this._videoTimer) this._videoTimer = setInterval(() => this._syncVideo(), 2000);
   }
 
+  /** TIẾNG LÊN TRƯỚC, HÌNH BẬT SAU — đúng thứ tự chủ máy đã thử chạy được trên iPhone.
+   *
+   *  Đợi phần tử âm thanh THẬT SỰ phát (có dữ liệu, không tạm dừng) rồi mới mở hình
+   *  bằng «_watchCurrent», y như bấm nút "xem" lúc đang nghe. Có giới hạn: người dùng
+   *  đổi bài hay dừng thì thôi ngay; 30 giây chưa có tiếng thì cũng thôi và ghi hộp đen
+   *  — tiếng vẫn là thứ ưu tiên, không tự xoay sang đường khác.
+   */
+  _moHinhKhiTiengLen(id) {
+    clearInterval(this._henMoHinh);
+    const batDau = Date.now();
+    this._henMoHinh = setInterval(() => {
+      if (String(deviceAudio.item?.id || "") !== String(id)) {
+        clearInterval(this._henMoHinh);
+        return;
+      }
+      const a = deviceAudio.element;
+      if (a && !a.paused && a.readyState >= 2) {
+        clearInterval(this._henMoHinh);
+        deviceAudio.ghiThang(`tiếng đã lên sau ${((Date.now() - batDau) / 1000).toFixed(1)}s`
+          + " — bật hình bám theo tiếng");
+        this._syncNowPlaying();
+        this._watchCurrent();
+        return;
+      }
+      if (Date.now() - batDau > 30000) {
+        clearInterval(this._henMoHinh);
+        deviceAudio.ghiThang("tiếng chưa lên sau 30s — không bật hình, giữ đường nghe");
+      }
+    }, 500);
+  }
+
   _watchCurrent() {
     if (!this._nowWatchItem) return;
     /* ĐANG CHỈ NGHE BẰNG KHUNG: bấm Xem chỉ là bung khung ấy ra, KHÔNG dựng lại.
@@ -5970,6 +6010,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        bật nghe-khi-tắt-màn là rơi xuống nhánh giao tiếng cho phần tử âm thanh — đúng
        thứ không bao giờ tải trên WebKit, tức mất tiếng. Có loa hay không thì WebKit vẫn
        thế. */
+    /* ĐANG XEM MỘT MÌNH MÀ BẬT CÔNG TẮC (0.26.75): chuyển tiếng sang phần tử âm thanh
+       từ đúng giây đang xem, rồi hình quay lại bám theo — cùng thứ tự "tiếng trước,
+       hình sau" với nhánh xem của «_playResult», xem chú thích ở đó. Phải đóng hình
+       trước: khung đang phát mà phần tử âm thanh chen vào là ca xếp hàng mãi. */
+    if (on && laTao() && video.open && video.soundHere && !video.withSpeakers
+      && video.item && video.state === 1) {
+      const item = { source: "youtube", ...video.item };
+      const giay = this._videoTimeNow();
+      const hang = this._queue.length ? this._queue : [item];
+      const viTri = Math.max(0, this._queueIndex);
+      this._closeVideo();
+      deviceAudio.entryId = this._entryId();
+      deviceAudio.listen(item, hang, viTri, giay);
+      this._moHinhKhiTiengLen(item.id);
+      this._setStatus("Bật nghe khi tắt màn hình: chuyển tiếng sang máy này, hình hiện lại ngay sau.");
+      return;
+    }
+    /* Đang phát ra LOA mà máy này cũng nghe cùng: giữ đường cũ. Hình ở ca này bám theo
+       giây của loa, đổi nguồn tiếng ở đây là đụng vào phần đồng bộ với loa. */
     if (on && laTao() && video.open && video.soundHere && video.item && video.state === 1) {
       /* iOS: GIỮ TIẾNG TRONG KHUNG, đừng chuyển sang phần tử âm thanh.
          Đó là chỗ mọi bản trước hỏng — đo được phần tử ấy không bao giờ tải trên
@@ -7145,22 +7204,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           this._setStatus(`Đang xem “${name}”, tiếng phát trên máy này cả khi tắt màn hình.`);
           return;
         }
-        /* MÁY NHÀ TÁO: bấm XEM trong lúc công tắc "nghe khi tắt màn hình" đang bật
-           thì ĐỪNG giao tiếng cho phần tử âm thanh — giữ nguyên trong khung.
-           Đây chính là đường đã đưa chủ máy vào cảnh trong ảnh chụp Safari trên
-           iMac ngày 20/09/2026: hình chạy, phần tử âm thanh đứng ở «mang=3»
-           (NETWORK_NO_SOURCE) nên không có tiếng, và thẻ phải xin một cú chạm.
-           Xem «laSafari» để biết vì sao máy Mac để bàn trước đây lọt ra ngoài. */
+        /* MÁY NHÀ TÁO: bấm XEM khi công tắc "nghe khi tắt màn hình" đang bật —
+           TIẾNG LÊN TRƯỚC, HÌNH BẬT SAU (0.26.75).
+           Tới 0.26.74 nhánh này giữ tiếng trong khung và báo "tiếng giữ trong video nên
+           tắt màn hình vẫn nghe tiếp" — sai: hộp đen 22/09/2026 06:21:18, tắt màn ở giây
+           13,2 thì bật lại vẫn 13,2. iOS treo khung khi khoá máy.
+           Cùng buổi ấy chủ máy tìm ra tổ hợp CHẠY ĐƯỢC: đang nghe bằng phần tử âm thanh
+           rồi mới bật video — hộp đen 06:24:12 tắt màn ở giây 52,3, bật lại hai giây sau
+           đã là 60,1, tức tiếng chạy suốt lúc tắt màn và hình tự đuổi theo.
+           Nhận định cũ ở «_syncVideo» — "iPhone không cho vừa chạy khung vừa chạy phần tử
+           âm thanh" — đo từ hồi phần tử âm thanh còn treo (trước lệnh load() của 0.26.64).
+           Điểm khác giữa ca hỏng và ca chạy là THỨ TỰ: khung giành đường trước thì phần
+           tử âm thanh xếp hàng mãi; tiếng lên trước thì hình vào sau không sao.
+           Nên làm y hệt tay chủ máy đã làm: đóng hình cũ, phát tiếng TRONG cú bấm, đợi
+           tiếng thật sự chạy rồi mới mở hình tắt tiếng bằng đúng «_watchCurrent» — nút
+           "xem" chủ máy bấm hôm ấy. */
         if (listenScreenOff() && laTao()) {
-          /* KHÔNG gọi «deviceAudio.unlock» ở đây, dù nhánh xem thường có gọi: nó
-             phát một dòng im lặng qua phần tử âm thanh, mà iOS chỉ cho MỘT luồng
-             chạy một lúc (Apple ghi rõ) — đúng thứ sẽ tranh chỗ với tiếng trong
-             khung. Dòng im lặng duy nhất được phép chạy là của «_giuTiengNen»,
-             vì nó lặp vô hạn và là thứ giữ cho trang không bị cắt khi tắt màn. */
-          if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
-          this._openVideo(item, { withSpeakers: false });
-          this._giuTiengNen();
-          this._setStatus(`Đang xem “${name}”; tiếng giữ trong video nên tắt màn hình vẫn nghe tiếp.`);
+          if (this._video.open) this._closeVideo();
+          deviceAudio.entryId = this._entryId();
+          deviceAudio.listen(queue[position], queue, position);
+          this._moHinhKhiTiengLen(item.id);
+          this._setStatus(`Đang mở “${name}”: tiếng lên trước, hình hiện ngay sau — tắt màn hình vẫn nghe tiếp.`);
           return;
         }
         if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();

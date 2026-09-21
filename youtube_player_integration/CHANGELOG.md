@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.75 - 2026-09-22
+
+### iPhone: nạp tiếng nhanh hơn, và xem video mà tắt màn vẫn nghe
+
+Chủ máy thử 0.26.74: *"nghe video thì không được khi tắt màn; chỉ nghe audio thì nạp
+lâu nhưng nghe được tắt màn; bật lại video thì vẫn nghe được tắt màn"*. Hộp đen xác nhận
+cả ba, và chỉ ra hai chỗ sửa.
+
+**1. Đo ở giây 3, cứu ở giây 12.** Hai lượt nghe trên iPhone (06:21:37 và 06:22:20) cùng
+một chuỗi: đúng giây thứ 3 chưa có dữ liệu thì thẻ gọi lại `load()` để "cứu" — mà `load()`
+**xoá sạch lượt nạp đang chạy**, hộp đen ghi `phat=AbortError` ngay sau đó, và tới giây 8
+vẫn `nap=0`. Máy chủ thì vô can: dựng đúng luồng thẻ dùng rồi đo, byte đầu về sau
+**0,04 giây** qua địa chỉ nội bộ và **0,3 giây** qua tên miền, 3,5–39 MB/giây. Nên iPhone
+đang nạp, chỉ chậm, và cú cứu cắt ngang nó. Nay phép đo mạng bằng `fetch` (không đụng
+vào phần tử) vẫn chạy ở giây 3, còn cú cứu dời sang giây 12. Android có dữ liệu trong
+1 giây nên chưa bao giờ tới lượt cứu — không đổi gì.
+
+**2. Xem video khi bật "Nghe khi tắt màn hình": tiếng lên trước, hình bật sau.** Nhánh cũ
+giữ tiếng trong khung và còn báo sai *"tiếng giữ trong video nên tắt màn hình vẫn nghe
+tiếp"* — hộp đen 06:21:18: tắt màn ở giây 13,2, bật lại vẫn 13,2. Cùng buổi, chủ máy tìm
+ra tổ hợp chạy được: **đang nghe rồi mới bật video** — hộp đen 06:24:12 tắt màn ở giây
+52,3, bật lại hai giây sau đã là 60,1.
+
+Điểm khác giữa ca hỏng và ca chạy là **thứ tự**. Nhận định cũ trong `_syncVideo` — iPhone
+không cho vừa chạy khung vừa chạy phần tử âm thanh — được đo từ hồi phần tử âm thanh còn
+treo, trước lệnh `load()` của 0.26.64. Nên thẻ nay làm y hệt tay chủ máy: phát tiếng
+**trong** cú bấm, đợi tiếng thật sự chạy, rồi mới mở hình tắt tiếng bằng đúng
+`_watchCurrent` — nút "xem" chủ máy đã bấm. Người dùng đổi bài hay dừng thì thôi đợi;
+30 giây chưa có tiếng thì cũng thôi và ghi hộp đen.
+
+Bật công tắc lúc **đang xem một mình** cũng đi đúng thứ tự ấy: chuyển tiếng sang phần tử
+âm thanh từ đúng giây đang xem, rồi hình quay lại bám theo. Đang phát ra **loa** mà máy
+này nghe cùng thì giữ đường cũ, để không đụng phần đồng bộ với loa.
+
+Kiểm trên Chrome giả làm iPhone: bấm xem → gọi tiếng ngay trong cú bấm, chưa mở hình →
+tiếng lên ở giây 1,5 → mở hình đúng một lần, bám theo tiếng. Giả làm Android: mở hình ngay
+như trước.
+
 ## 0.26.74 - 2026-09-22
 
 ### iPhone tắt màn hình vẫn nghe nhạc YouTube

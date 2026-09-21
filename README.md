@@ -174,7 +174,7 @@ Chúng làm gì tuỳ vào việc bạn **có tích loa hay không**:
 | Nghe ra loa trong nhà | Tích một hoặc nhiều loa → bấm **nghe** | Loa | Loa vẫn phát, vẫn tự chuyển bài |
 | Xem video ra tivi | Tích tivi → bấm **xem** | Tivi (app YouTube gốc) | Tivi vẫn phát |
 | Nghe ngay trên điện thoại | Không tích loa nào → bấm **nghe** | Điện thoại | Xem [mục 4](#4-mỗi-thiết-bị-nghe-thế-nào) |
-| Xem video ngay trên thẻ | Không tích loa nào → bấm **xem** | Điện thoại / máy tính | Video dừng |
+| Xem video ngay trên thẻ | Không tích loa nào → bấm **xem** | Điện thoại / máy tính | Tắt công tắc «Nghe khi tắt màn hình»: dừng. Bật: tiếng vẫn chạy |
 | Loa phát, điện thoại nghe cùng | Loa đang phát → bấm **Nghe trên máy này** | Loa **và** điện thoại | Xem mục 4 |
 | Loa phát, thẻ hiện hình | Tích loa → bấm **xem** | Loa (hình trên thẻ tắt tiếng, chạy theo loa) | Loa vẫn phát |
 
@@ -283,7 +283,7 @@ từng máy. Bảng dưới là **số đo trên máy thật**, không phải l�
 | Thiết bị | Nghe trên máy | Xem video trên thẻ | Tắt màn hình khi đang nghe |
 |---|---|---|---|
 | **Android** (app HA hoặc Chrome) | Phần tử âm thanh | Khung YouTube | ✅ Nghe tiếp |
-| **iPhone / iPad** (app HA) | Phần tử âm thanh (từ 0.26.74) | Khung YouTube | ✅ Nghe tiếp khi đang **nghe**; ❌ video thì dừng |
+| **iPhone / iPad** (app HA) | Phần tử âm thanh (từ 0.26.74) | Khung YouTube | ✅ Nghe tiếp khi đang **nghe**, hoặc khi **xem** với công tắc «Nghe khi tắt màn hình» bật (từ 0.26.75) |
 | **Chrome trên máy tính** | Phần tử âm thanh | Khung YouTube | — |
 | **Safari trên máy Mac** | Phần tử âm thanh | ❌ Lỗi 153, thẻ tự chuyển sang chỉ nghe tiếng | — |
 
@@ -292,10 +292,19 @@ từng máy. Bảng dưới là **số đo trên máy thật**, không phải l�
 trang**; khung nhúng của bên thứ ba như YouTube thì bị treo ngay. Đo trong hộp đen: khoá
 màn lúc video ở giây 308,3 thì 88 giây sau vẫn là 308,3.
 
-Nên trên iPhone: muốn nghe khi tắt màn hình thì bấm **nghe**, đừng bấm **xem**. App Home
-Assistant cho iOS có khai quyền phát tiếng nền (`UIBackgroundModes: audio`), và đã thử
-thật với một bài Zing: khoá màn vẫn nghe tiếp. Từ 0.26.74, bài YouTube đi đúng phần tử âm
-thanh đó.
+Nên trên iPhone, tiếng khi tắt màn luôn phải đi qua phần tử âm thanh. App Home Assistant
+cho iOS có khai quyền phát tiếng nền (`UIBackgroundModes: audio`), và đã thử thật với một
+bài Zing: khoá màn vẫn nghe tiếp. Từ 0.26.74, bấm **nghe** một bài YouTube là đi đúng phần
+tử ấy.
+
+Muốn **xem** mà tắt màn vẫn nghe thì bật công tắc «Nghe khi tắt màn hình» trước. Từ
+0.26.75, lúc ấy thẻ **cho tiếng lên trước rồi mới bật hình**: tiếng phát ra từ phần tử âm
+thanh, hình tắt tiếng chạy theo. Khi khoá màn, hình đứng lại còn tiếng chạy tiếp; mở màn
+lên thì hình tự đuổi kịp. Thứ tự này là thứ đã đo chạy được trên iPhone — ngược lại, để
+khung video chạy trước thì phần tử âm thanh không chen vào được.
+
+Trên iPhone, tiếng thường cần vài giây mới lên, chậm hơn Android — trình phát của iOS nạp
+tệp dài lâu hơn.
 
 **Lần đầu phải tự bấm phát trên iPhone** là đúng thiết kế của Apple: trang phải được một
 cú chạm thật trước khi được phép phát tiếng. Chạm một lần, những lần sau trong cùng phiên
@@ -423,8 +432,9 @@ Safari thì vẫn chạy bình thường.
 
 ### 6.2. Video trên iPhone dừng khi khoá màn
 
-Khung YouTube bị iOS treo ngay khi khoá máy — xem [mục 4](#4-mỗi-thiết-bị-nghe-thế-nào).
-Không vá được từ phía thẻ. Muốn nghe khi tắt màn thì dùng nút **nghe**.
+Khung YouTube bị iOS treo ngay khi khoá máy — không vá được từ phía thẻ. Tiếng thì giữ
+được: bấm **nghe**, hoặc bật công tắc «Nghe khi tắt màn hình» rồi mới bấm **xem**. Xem
+[mục 4](#4-mỗi-thiết-bị-nghe-thế-nào).
 
 ### 6.3. Các loa không đồng bộ từng mẫu
 

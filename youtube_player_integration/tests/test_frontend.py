@@ -436,7 +436,28 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertNotIn("sound.hidden = !!deviceAudio.item", script)
         # Đừng cứu lượt nạp của phần tử mà CHÍNH THẺ vừa tắt: «networkState === 0» là
         # không còn nguồn nào. Log HA 21/09/2026 17:25:08 bắt đúng một lần như vậy.
-        self.assertIn("&& audio.networkState !== 0) {", script)
+        self.assertIn("&& audio.networkState !== 0;", script)
+        # 0.26.75 — ĐO Ở GIÂY 3, CỨU Ở GIÂY 12. «cuuLuotNap» gọi lại load(), mà load()
+        # xoá lượt nạp đang chạy: hộp đen iPhone 22/09/2026 cứu đúng giây 3, ngay sau
+        # đó «phat=AbortError», giây 8 vẫn «nap=0» — trong khi máy chủ giao byte đầu
+        # sau 0,04–0,3 giây. Phép đo bằng fetch không đụng phần tử nên giữ ở giây 3.
+        self.assertIn("this.hopDenTimers = [1000, 3000, 8000, 12000].map((cho) =>", script)
+        self.assertIn("if (cho === 3000 && chuaCoGi) this.doThuLuong(audio);", script)
+        self.assertIn("if (cho === 12000 && chuaCoGi) this.cuuLuotNap(audio);", script)
+        self.assertNotIn("this.doThuLuong(audio);\n          this.cuuLuotNap(audio);", script)
+        # 0.26.75 — MÁY NHÀ TÁO XEM KHI BẬT CÔNG TẮC: TIẾNG TRƯỚC, HÌNH SAU. Nhánh cũ
+        # giữ tiếng trong khung và báo sai "tắt màn vẫn nghe tiếp" (hộp đen 06:21:18:
+        # tắt màn ở giây 13,2, bật lại vẫn 13,2). Tổ hợp chạy được đo lúc 06:24:12 là
+        # đang nghe rồi mới bật hình — nên đợi tiếng thật sự chạy rồi mới _watchCurrent.
+        self.assertNotIn("tiếng giữ trong video nên tắt màn hình vẫn nghe tiếp", script)
+        self.assertIn("_moHinhKhiTiengLen(id) {", script)
+        self.assertIn("if (a && !a.paused && a.readyState >= 2) {", script)
+        self.assertIn("this._syncNowPlaying();\n        this._watchCurrent();", script)
+        self.assertIn("if (Date.now() - batDau > 30000) {", script)
+        self.assertEqual(script.count("this._moHinhKhiTiengLen(item.id);"), 2)
+        # Bật công tắc lúc đang xem MỘT MÌNH thì chuyển tiếng; đang có loa thì giữ
+        # đường cũ để không đụng phần đồng bộ với loa.
+        self.assertIn("if (on && laTao() && video.open && video.soundHere && !video.withSpeakers", script)
         # 0.26.50 — MÁY NHÀ TÁO "CHỈ NGHE" ĐI BẰNG KHUNG, không bằng phần tử âm thanh.
         # Đo trên iPhone của chủ máy 21/09/2026, TÁM lượt liên tiếp, sau khi đã sửa
         # xong tốc độ luồng: phần tử âm thanh đứng ở «nap=0 mang=2 loi=0 phat=cho» —
