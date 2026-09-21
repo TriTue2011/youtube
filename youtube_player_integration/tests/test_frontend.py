@@ -707,7 +707,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         )
 
         self.assertIn("dauMay() {", script)
-        self.assertIn('may=${may} ban=${PHIEN_BAN_THE}', script)
+        self.assertIn('may=${may} goc=${goc} ban=${PHIEN_BAN_THE}', script)
+        # 0.26.69 — ghi luôn ĐỊA CHỈ TRANG. Chủ máy 21/09/2026: "đang nói cùng bài hát
+        # nhưng cái chạy được video, cái không". Cùng một video mà iPhone phát được còn
+        # Safari trả 153 thì khác biệt nằm ở MÁY, và nghi can rõ nhất là địa chỉ mỗi
+        # máy dùng để mở Home Assistant (tên miền hay địa chỉ IP).
+        self.assertIn("GHI LUÔN ĐỊA CHỈ TRANG", script)
         self.assertIn(f'const PHIEN_BAN_THE = "{manifest["version"]}";', script)
         # Đường KHUNG của máy nhà Táo cũng phải có hộp đen, nếu không nhánh ấy chạy
         # xong là im lặng tuyệt đối — không cách nào biết nó có phát được không.

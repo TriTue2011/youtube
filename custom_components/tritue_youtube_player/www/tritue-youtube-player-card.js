@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.68";
+const PHIEN_BAN_THE = "0.26.69";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -533,7 +533,14 @@ const deviceAudio = {
   dauMay() {
     const ua = typeof navigator === "undefined" ? "" : navigator.userAgent || "";
     const may = laIOS() ? "ios" : /Android/.test(ua) ? "android" : laSafari() ? "safari" : "khac";
-    return `may=${may} ban=${PHIEN_BAN_THE}`;
+    /* GHI LUÔN ĐỊA CHỈ TRANG. Chủ máy 21/09/2026: "đang nói cùng bài hát nhưng cái
+       chạy được video, cái không" — cùng một video, iPhone phát được còn Safari trả
+       lỗi 153. Khác biệt nằm ở MÁY, và nghi can rõ nhất là địa chỉ mỗi máy dùng để mở
+       Home Assistant: đi qua tên miền thì YouTube cho nhúng, đi qua địa chỉ IP thì
+       không. Ghi ra đây là hết đoán: một cú bấm từ mỗi máy đủ kết luận.
+       Chỉ ghi TÊN MÁY CHỦ, không ghi đường dẫn — trong đó không có gì riêng tư. */
+    const goc = typeof location === "undefined" ? "?" : location.hostname;
+    return `may=${may} goc=${goc} ban=${PHIEN_BAN_THE}`;
   },
 
   /** Ghi thẳng một dòng vào nhật ký Home Assistant (không kèm phần tử âm thanh). */

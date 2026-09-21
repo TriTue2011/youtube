@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.26.69 - 2026-09-21
+
+### Hộp đen ghi luôn địa chỉ trang
+
+Chủ máy 21/09/2026: *"đang nói cùng bài hát nhưng cái chạy được video, cái không"*.
+
+Đó là câu bác bỏ hai giả thuyết liên tiếp của tôi: không phải do **video** (cùng một
+bài), cũng không phải do bộ tham số (hai máy dùng chung một thẻ). Khác biệt nằm ở
+**máy** — và nghi can rõ nhất là **địa chỉ mỗi máy dùng để mở Home Assistant**:
+
+- đi qua **tên miền** → YouTube cho nhúng
+- đi qua **địa chỉ IP** → 150 hoặc 153
+
+Nay mỗi dòng hộp đen kèm `goc=<tên máy chủ>`. Một cú bấm từ mỗi máy là đủ kết luận,
+không phải đoán nữa. Chỉ ghi tên máy chủ, không ghi đường dẫn.
+
 ## 0.26.68 - 2026-09-21
 
 ### Tắt màn là WebKit tạm dừng khung — phải bảo nó chạy tiếp
