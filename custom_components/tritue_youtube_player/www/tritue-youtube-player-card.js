@@ -419,6 +419,24 @@ const deviceAudio = {
     if (ke) this.chuanBi(ke);
   },
 
+    /* ĐỪNG NHẢY VÀO GIỮA BÀI NGAY TỪ ĐỊA CHỈ. Số đo từ máy chủ máy 21/09/2026:
+       đặt «#t=» rồi phát thì phần tử dừng ở «nap=1» suốt tám giây — chỉ đọc được phần
+       mô tả tệp, không có một mẫu âm thanh nào ở chỗ đang phát, nên máy im dù đồng hồ
+       vẫn nhích. Cùng lúc ấy đường phát TỪ ĐẦU đạt «nap=4» và chạy ngon.
+       Nay nạp từ đầu (một lượt tải tuần tự, thứ khung web chịu làm), rồi chỉ nhảy tới
+       chỗ của loa KHI ĐÃ CÓ DỮ LIỆU THẬT («canplay»). Không có dữ liệu thì thà nghe từ
+       đầu còn hơn im lặng. */
+  nhayKhiSanSang(audio, batDau) {
+    if (!(batDau >= 1)) return;
+    const nhay = () => {
+      if (audio.readyState < 3 || audio.currentTime >= batDau - 0.5) return;
+      audio.currentTime = batDau;
+    };
+    audio.addEventListener("canplay", nhay, { once: true });
+    // Có máy không bắn «canplay» nữa nếu đã từng nạp bài khác: chốt thêm một mốc.
+    setTimeout(nhay, 2500);
+  },
+
   /** HỘP ĐEN — ghi trạng thái phần tử âm thanh vào NHẬT KÝ CỦA HOME ASSISTANT.
    *
    *  Vì sao cần: lỗi chỉ xảy ra trên máy thật của chủ máy, mà máy ấy thì không cắm dây
@@ -575,7 +593,8 @@ const deviceAudio = {
       this.alongKey = this.khoaLuong(item);
       const generation = ++this.generation;
       this.mediaSession(item, false);
-      audio.src = batDau >= 1 ? `${san.url}#t=${Math.floor(batDau)}` : san.url;
+      audio.src = san.url;
+      this.nhayKhiSanSang(audio, batDau);
       audio.play().catch((error) => this.playRefused(error));
       this.hopDenTheoDoi("nghe cùng loa, phát ngay trong cú bấm", audio);
       this.canhTieng(audio, generation);
@@ -608,7 +627,8 @@ const deviceAudio = {
     /* VÀO ĐÚNG CHỖ NGAY TRONG ĐỊA CHỈ («#t=»), đừng chờ «loadedmetadata» rồi mới tua.
        Dựng lại cảnh này trong Chrome 21/09/2026: cú tua muộn ấy còn ĐÈ LÊN vị trí mới
        hơn mà vòng canh vừa đặt — tiếng nhảy lùi hai giây ngay khi vừa bắt đầu. */
-    audio.src = batDau >= 1 ? `${url}#t=${Math.floor(batDau)}` : url;
+    audio.src = url;
+    this.nhayKhiSanSang(audio, batDau);
     this.hopDenTheoDoi("nghe cùng loa, nạp sau cú bấm", audio);
     /* PHÂN LOẠI LỖI, ĐỪNG KÊU OAN. Đổi bài là lệnh phát cũ bị huỷ («AbortError») —
        chuyện bình thường, mà bản cũ đem hiện thành "trình duyệt chặn tự phát có
@@ -6596,12 +6616,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._queue = deviceAudio.queue.slice();
         this._queueIndex = deviceAudio.index;
       }
-      // Tiếng trên máy chạy tiếp tới lúc loa kêu — xem «_nhuongTiengChoLoa».
-      this._nhuongTiengChoLoa(entityId, () => {
-        deviceAudio.stop();
-        this._syncNowPlaying();
-        this._updateTransportState();
-      });
+      /* GIỮ LUÔN TIẾNG TRÊN MÁY. Chủ máy chốt 21/09/2026: tích loa lúc đang nghe thì
+         "giữ luôn cả trên máy". Trước đây thẻ tắt tiếng máy ngay khi loa lên tiếng, nên
+         muốn nghe cả hai lại phải bấm thêm một nút — mà đúng nút ấy đang hỏng. Nay
+         không tắt gì cả: máy hát tiếp bài của nó, loa hát cùng bài từ cùng chỗ. */
       this._syncNowPlaying();
       this._updateTransportState();
       this._setStatus(`${name} đang phát “${ten}” tiếp từ chỗ đang nghe.`);

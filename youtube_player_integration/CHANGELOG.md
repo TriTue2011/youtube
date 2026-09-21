@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.26.44 - 2026-09-21
+
+### Hộp đen chỉ đúng thủ phạm: nhảy vào giữa bài ngay từ địa chỉ
+
+Số đo thật từ máy chủ máy (thẻ tự ghi vào nhật ký Home Assistant):
+
+| Cảnh | Ngay lúc bấm | +3 giây | +8 giây | Kết luận |
+|---|---|---|---|---|
+| Nghe một mình (phát **từ đầu**) | `nap=0` | **`nap=4`** giây 0,5 | `nap=4` giây **5,0** | chạy tốt |
+| Nghe cùng loa (**nhảy vào giữa** bằng `#t=`) | `nap=0` | **`nap=1`** giây 4,9 | `nap=1` giây 9,9 | **đói dữ liệu** |
+
+`nap=1` nghĩa là trình duyệt mới đọc được phần mô tả tệp, **chưa có một mẫu âm thanh nào
+ở chỗ đang phát** — nên máy im dù đồng hồ vẫn nhích đều. Khác biệt duy nhất giữa hai dòng
+là cú nhảy vào giữa bài, thứ thêm vào ở 0.26.39 để "vào đúng chỗ ngay". Nó chạy trong
+Chrome trên máy bàn và hỏng trong khung web của app.
+
+Nay nạp **từ đầu** (một lượt tải tuần tự, thứ khung web chịu làm), rồi chỉ nhảy tới chỗ
+của loa **khi đã thật sự có dữ liệu** (`canplay`, `readyState ≥ 3`). Không có dữ liệu thì
+thà nghe từ đầu còn hơn ngồi im.
+
+### Tích loa lúc đang nghe: giữ luôn tiếng trên máy
+
+Chủ máy chốt: *"1 giữ luôn cả trên máy"*. Trước đây thẻ tắt tiếng máy ngay khi loa lên
+tiếng, nên muốn nghe cả hai lại phải bấm thêm một nút — mà đúng nút ấy đang hỏng vì lỗi
+trên. Nay tích loa là **loa hát cùng bài từ cùng chỗ, máy vẫn hát tiếp**, không phải bấm
+gì thêm.
+
 ## 0.26.43 - 2026-09-21
 
 ### Hộp đen: thẻ tự ghi số đo vào nhật ký Home Assistant

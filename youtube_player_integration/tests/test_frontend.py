@@ -314,13 +314,15 @@ class LovelaceCardContractTests(unittest.TestCase):
         # gộp về một qua «batDau»; bản ấy đã được trả về nguyên trạng 0.26.2 vì đo trên
         # máy thật thấy nó không nghe được.)
         self.assertEqual(script.count("this.canhTieng(audio, generation);"), 3)
-        # 0.26.39 — vào đúng giây bằng mảnh địa chỉ, không chờ «loadedmetadata» rồi tua:
-        # cú tua muộn ấy đè lên vị trí mới hơn mà vòng canh vừa đặt (dựng lại được trong
-        # Chrome 21/09/2026: tiếng nhảy lùi hai giây).
-        self.assertIn("audio.src = batDau >= 1 ? `${url}#t=${Math.floor(batDau)}` : url;", script)
-        self.assertNotIn(
-            'audio.addEventListener("loadedmetadata", () => { audio.currentTime = batDau; }',
-            script)
+        # 0.26.44 — ĐỪNG NHẢY VÀO GIỮA BÀI NGAY TỪ ĐỊA CHỈ. Số đo từ máy chủ máy
+        # 21/09/2026 (hộp đen ghi vào nhật ký HA): đặt «#t=» rồi phát thì phần tử đứng ở
+        # «nap=1» suốt tám giây — chỉ có phần mô tả tệp, không một mẫu âm thanh nào ở chỗ
+        # đang phát, nên máy im dù đồng hồ vẫn nhích. Cùng lúc ấy đường phát TỪ ĐẦU đạt
+        # «nap=4» và chạy ngon. Nay nạp từ đầu rồi chỉ nhảy khi ĐÃ CÓ dữ liệu thật.
+        self.assertNotIn("#t=${Math.floor(batDau)}", script)
+        self.assertIn("  nhayKhiSanSang(audio, batDau) {", script)
+        self.assertIn('audio.addEventListener("canplay", nhay, { once: true });', script)
+        self.assertIn("if (audio.readyState < 3 || audio.currentTime >= batDau - 0.5) return;", script)
         # Hai số đo thêm để phân định phần còn lại: đã chọn được nguồn phát chưa, và
         # phần tử có nằm trong trang không.
         self.assertIn("nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}", script)
