@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.52";
+const PHIEN_BAN_THE = "0.26.53";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -414,8 +414,26 @@ const deviceAudio = {
     return !Number(item?.duration);
   },
 
+  /** Thẻ đặt hàm này để «listen» nhường việc cho khung YouTube trên máy nhà Táo. */
+  nhuongChoKhung: null,
+
   /** Listen alone; `startAt` = second to start from (the sound of a video watched until now). */
   async listen(item, queue, index, startAt = 0) {
+    /* MÁY NHÀ TÁO KHÔNG NGHE BẰNG PHẦN TỬ ÂM THANH — CHẶN Ở ĐÚNG MỘT CỬA.
+       0.26.50 chặn ở nhánh «bấm chỉ nghe» trong «_playResult», nhưng còn sáu lối khác
+       cùng gọi vào đây: chuyển bài, mở lại bài đang nghe, khôi phục sau khi tải lại
+       trang, đổi bài theo loa… Chủ máy gửi ảnh 18:30 ngày 21/09/2026 với dòng đỏ
+       "Máy này chưa chạy được tiếng — [nap=0 mang=2 loi=0 nguon=1 dom=1]" — đó là
+       cảnh báo của phần tử âm thanh, tức một trong sáu lối ấy đã lọt, và kết quả là
+       "cứ phải lỗi, dừng rồi play lại mới được".
+       Vá từng nhánh là danh sách, và danh sách thì luôn thiếu. Chặn ở đây thì mọi lối
+       đều đi qua đúng một cửa. */
+    if (laTao() && typeof this.nhuongChoKhung === "function"
+      && (item?.source || "youtube") === "youtube" && VIDEO_ID.test(String(item?.id || ""))
+      && this.nhuongChoKhung(item, queue, index, startAt)) {
+      this.stop();
+      return;
+    }
     if (this.laTrucTiep(item)) {
       this.notify(`“${item.title || item.id}” đang phát trực tiếp nên không nghe riêng`
         + " tiếng được — bấm nút xem để nghe.", true);
@@ -1154,6 +1172,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       }, 1000);
     }
     deviceAudio.listeners.add(this._onDeviceAudio);
+    /* Máy nhà Táo: mọi lối gọi «listen» đều nhường việc cho khung — xem cửa chặn
+       trong «deviceAudio.listen». */
+    deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>
+      this._ngheBangKhungMotMinh(item, queue, index, batDau);
     // Back on the dashboard (the same card, or a new one after leaving it): show the
     // search and what is playing again.
     this._needsRestore = true;
@@ -5344,6 +5366,28 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._thucTiengKhung();
   }
 
+  /** NGHE MỘT MÌNH BẰNG KHUNG (máy nhà Táo) — dùng chung cho mọi lối vào.
+   *
+   *  Trả về «true» nghĩa là đã nhận việc, bên gọi đừng đụng tới phần tử âm thanh nữa.
+   */
+  _ngheBangKhungMotMinh(item, queue, index, batDau = 0) {
+    if (!item || deviceAudio.laTrucTiep(item)) return false;
+    if (Array.isArray(queue) && queue.length) {
+      this._queue = queue;
+      this._queueIndex = Math.max(0, Number(index) || 0);
+    }
+    this._openVideo(item, {
+      withSpeakers: false,
+      soundHere: true,
+      soundOnly: false,
+      startSeconds: Math.max(0, Math.floor(Number(batDau) || 0)),
+    });
+    if (listenScreenOff()) this._giuTiengNen();
+    this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
+    this._thuKhungKhiDaChay();
+    return true;
+  }
+
   /** THU KHUNG LẠI KHI NÓ ĐÃ THẬT SỰ CHẠY — và bung ra nếu thu xong bị tắt tiếng.
    *
    *  Chỉ thu khi trình phát báo «đang chạy» (mã 1), vì lúc chưa chạy thì thu bé là
@@ -6679,10 +6723,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            iOS đòi một cú chạm vào CHÍNH video, mà khung một điểm ảnh thì không ai
            chạm vào được — kể cả chủ máy: "không tự động phát video nhỉ, phải kích
            vào". Nên mở ra cho chạm, rồi tự thu khi đã chạy. */
-        this._openVideo(item, { withSpeakers: false, soundHere: true, soundOnly: false });
-        if (listenScreenOff()) this._giuTiengNen();
-        this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
-        this._thuKhungKhiDaChay();
+        this._ngheBangKhungMotMinh(item, queue, position);
         this._setStatus(`Chạm một lần vào video để nghe “${name}” — iPhone bắt buộc vậy;`
           + " chạy rồi thẻ tự thu video lại.");
         return;

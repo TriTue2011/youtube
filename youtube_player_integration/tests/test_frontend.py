@@ -716,6 +716,17 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("soundHere: true, soundOnly: false });", script)
         self.assertIn("_thuKhungKhiDaChay() {", script)
         self.assertIn("this._thuKhungKhiDaChay();", script)
+        # 0.26.53 — CHẶN Ở ĐÚNG MỘT CỬA, đừng vá từng nhánh. 0.26.50 chỉ chặn nhánh
+        # "bấm chỉ nghe", còn sáu lối khác cùng gọi «deviceAudio.listen»: chuyển bài,
+        # mở lại bài đang nghe, khôi phục sau khi tải lại trang… Chủ máy gửi ảnh 18:30
+        # ngày 21/09/2026: khung video đang mở MÀ vẫn hiện dòng đỏ của phần tử âm thanh
+        # ("nap=0 mang=2 loi=0 nguon=1 dom=1") — hai trình phát cùng chạy, và cái thứ
+        # hai báo lỗi. Hậu quả đúng lời chủ máy: "cứ phải lỗi, dừng rồi play lại mới
+        # được". Danh sách nhánh thì luôn thiếu; cửa chặn thì không.
+        self.assertIn("nhuongChoKhung: null,", script)
+        self.assertIn("&& this.nhuongChoKhung(item, queue, index, startAt)) {", script)
+        self.assertIn("_ngheBangKhungMotMinh(item, queue, index, batDau = 0) {", script)
+        self.assertIn("deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>", script)
 
     def test_http_dependency_and_service_description_are_packaged(self):
         manifest = json.loads(

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.26.53 - 2026-09-21
+
+### iPhone: chặn ở ĐÚNG MỘT CỬA, đừng vá từng nhánh
+
+Ảnh chủ máy gửi lúc 18:30 cho thấy chuyện tôi chưa xử lý: **khung video đang mở mà
+vẫn hiện dòng đỏ của phần tử âm thanh** — `nap=0 mang=2 loi=0 nguon=1 dom=1`. Tức
+trên iPhone có **hai trình phát cùng chạy**, và cái thứ hai báo lỗi. Đúng vòng luẩn
+quẩn chủ máy mô tả: *"cứ phải lỗi, dừng rồi play lại mới được"*.
+
+0.26.50 chỉ chặn một nhánh — nhánh "bấm chỉ nghe". Còn **sáu lối khác** cùng gọi vào
+`deviceAudio.listen`: chuyển bài, mở lại bài đang nghe, khôi phục sau khi tải lại
+trang, đổi bài theo loa… Vá từng nhánh là làm danh sách, mà danh sách thì luôn thiếu.
+
+Nay chặn ngay trong `deviceAudio.listen`: máy nhà Táo + bài YouTube thì nhường hẳn
+cho khung, mọi lối đều đi qua cửa ấy. Đo lại trên Chrome giả iPhone: **trang không
+còn một phần tử âm thanh nào**, nên không còn gì để báo lỗi.
+
+Đây cũng đúng cách thẻ `phicomm-r1-card` làm — nó chỉ có một trình phát duy nhất là
+khung YouTube, nên không bao giờ có hai cái đánh nhau.
+
 ## 0.26.52 - 2026-09-21
 
 ### iPhone: khung phải HIỆN RA đã, thẻ tự thu lại sau khi nó đã chạy
