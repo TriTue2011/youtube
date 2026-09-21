@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.61 - 2026-09-21
+
+### Xem video → chuyển sang nghe: đừng đóng khung, chỉ thu lại
+
+`_listenOnly` gọi phần tử âm thanh rồi **đóng khung**. Trên máy nhà Táo, tiếng nằm
+trong chính cái khung ấy — đóng là mất sạch. Chủ máy 21/09/2026: *"đang xem video
+chuyển sang nghe audio không được, ngắt video luôn"*. Nay chỉ thu khung lại, nhạc chạy
+tiếp không đứt một nhịp.
+
+### "YouTube từ chối nhúng" là kết luận SAI của thẻ
+
+Thẻ bắt **mọi** mã lỗi của trình phát rồi kết luận "không cho nhúng", và đi mở hình
+bằng luồng thẳng — từ đó đẻ ra cả câu "ở ngoài mạng nhà". Nhưng mã 2 là tham số sai,
+5 là lỗi trình phát, 100 là không tìm thấy; **chỉ 101 và 150** mới là cấm nhúng.
+
+Hỏi thẳng YouTube về ba video chủ máy mở, kể cả bài **1 giờ 25 phút**:
+
+| Video | Thời lượng | Cho nhúng? |
+|---|---|---|
+| Rick Astley | 3:33 | có |
+| Bài dài chủ máy mở | 1:24:59 | **có** |
+| Nhạc cafe buổi sáng | 1:19:29 | **có** |
+
+Nên giả thuyết "video dài không cho phát" là **sai** — và dòng "YouTube từ chối nhúng"
+trong nhật ký lúc 21:30–21:32 là thẻ tự chẩn sai. Nay mã lỗi được ghi vào hộp đen, chỉ
+101/150 mới đi đường dự phòng, mã khác thì thử phát lại một lần.
+
+### Thoát ra màn hình chính là mất tiếng — lỗi của chính bản 0.26.57
+
+iOS chỉ cho đánh thức bộ trộn tiếng (`AudioContext`) **trong một cú chạm**. Bản 0.26.57
+dời việc giữ tiếng nền sang một vòng hẹn giờ để nó khỏi giành chỗ phát của khung —
+đúng ý, nhưng hẹn giờ **không phải** cử chỉ, nên việc đánh thức hỏng và dòng nền không
+bao giờ chạy.
+
+Nay tách đôi: **mở khoá ngay trong cú chạm** (ba nơi: bấm nghe, nút chỉ nghe, công tắc
+nghe-khi-tắt-màn), còn **phát dòng nền** thì vẫn để sau khi khung đã chạy. Chỉ mở khoá
+thì chưa chiếm chỗ phát của ai.
+
 ## 0.26.60 - 2026-09-21
 
 ### Sửa lỗi của chính bản trước: khung ẩn thì không bao giờ hiện ra được

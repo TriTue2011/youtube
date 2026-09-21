@@ -791,6 +791,24 @@ class LovelaceCardContractTests(unittest.TestCase):
         # chitieng=1 suốt tới +8s trong khi trangthai đi 3 rồi tụt về -1.
         self.assertIn("CHỈ DỪNG KHI KHUNG ĐÓNG", script)
         self.assertNotIn("if (!v.open || v.soundOnly) {", script)
+        # 0.26.61 — ba lỗi tiếp, đều do tiếng nay nằm TRONG khung.
+        # (a) "đang xem video chuyển sang nghe audio không được, ngắt video luôn":
+        #     «_listenOnly» gọi listen rồi ĐÓNG khung — mà tiếng nằm trong chính khung
+        #     ấy. Máy nhà Táo chỉ được THU khung lại.
+        self.assertIn("MÁY NHÀ TÁO: THU KHUNG LẠI, ĐỪNG ĐÓNG", script)
+        # (b) "YouTube từ chối nhúng" là kết luận SAI: thẻ bắt mọi mã lỗi của trình
+        #     phát. Đo 21/09/2026: ba video chủ máy mở đều playable_in_embed = true,
+        #     kể cả bài 1 giờ 25 phút. Chỉ 101 và 150 mới là cấm nhúng.
+        self.assertIn('CHỈ 101 VÀ 150 MỚI LÀ "KHÔNG CHO NHÚNG"', script)
+        self.assertIn("if (maLoi === 101 || maLoi === 150) {", script)
+        self.assertIn("khung báo lỗi: ma=", script)
+        # (c) "bật khi nghe màn hình nhưng thoát ra màn hình chính không nghe được":
+        #     iOS chỉ cho đánh thức AudioContext TRONG CÚ CHẠM, mà 0.26.57 dời việc
+        #     giữ tiếng nền sang một vòng hẹn giờ. Tách đôi: mở khoá trong cú chạm,
+        #     phát dòng nền sau khi khung đã chạy.
+        self.assertIn("async _moKhoaTiengNen() {", script)
+        self.assertIn("MỞ KHOÁ BỘ TRỘN TIẾNG — PHẢI gọi NGAY TRONG CÚ CHẠM", script)
+        self.assertEqual(script.count("this._moKhoaTiengNen();"), 3)
         # Chỉ nghe phải TRÔNG NHƯ nghe nhạc: có tên bài, ảnh bìa, và còn nút Xem.
         self.assertIn("CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC", script)
         self.assertIn("if (video.open && video.soundOnly && video.item && !video.withSpeakers) {", script)

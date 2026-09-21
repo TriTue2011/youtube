@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.60";
+const PHIEN_BAN_THE = "0.26.61";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5185,6 +5185,21 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
     const item = { source: "youtube", ...video.item };
     const at = this._videoTimeNow();
+    /* MÁY NHÀ TÁO: THU KHUNG LẠI, ĐỪNG ĐÓNG.
+       Tiếng của máy nằm TRONG chính cái khung này, nên đóng nó là mất sạch — chủ máy
+       21/09/2026: "đang xem video chuyển sang nghe audio không được, ngắt video
+       luôn". Chuyển sang nghe chỉ là giấu hình đi, nhạc chạy tiếp không đứt một
+       nhịp. */
+    if (laTao()) {
+      this._daHienKhungDeCham = false;
+      // Cú bấm này cũng là cử chỉ hợp lệ để đánh thức bộ trộn tiếng.
+      this._moKhoaTiengNen();
+      video.soundOnly = true;
+      video.soundHere = true;
+      this._syncNowPlaying();
+      this._setStatus(`Đang nghe “${item.title}” trên máy này.`);
+      return;
+    }
     deviceAudio.entryId = this._entryId();
     // Inside the tap, before the picture goes: the audio element is unlocked here.
     deviceAudio.listen(item, this._queue.length ? this._queue : [item], Math.max(0, this._queueIndex), at);
@@ -5233,6 +5248,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._video.time = 0;
     this._video.timeAt = 0;
     this._video.moUL = Date.now();
+    this._loiKhungDaThu = false;
     let iframe = frame.querySelector("iframe");
     this._video.item = {
       id,
@@ -5432,6 +5448,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        Chỉ khi quá 2,5 giây vẫn nằm im thì mới hiện khung ra để còn chạm được; xem
        «_thuKhungKhiDaChay». */
     this._daHienKhungDeCham = false;
+    // Mở khoá bộ trộn tiếng NGAY TRONG CÚ CHẠM; dòng nền chạy sau, khi khung đã phát.
+    this._moKhoaTiengNen();
     this._openVideo(item, {
       withSpeakers: false,
       soundHere: true,
@@ -5656,6 +5674,28 @@ class TriTueYouTubePlayerCard extends HTMLElement {
    *   - nằm TRONG trang, 1×1 điểm ảnh, mờ 0,01 — KHÔNG dùng «display:none», vì
    *     WebKit bỏ qua phần tử media bị ẩn hẳn.
    */
+  /** MỞ KHOÁ BỘ TRỘN TIẾNG — PHẢI gọi NGAY TRONG CÚ CHẠM.
+   *
+   *  iOS chỉ cho đánh thức «AudioContext» khi đang trong một cử chỉ người dùng. Bản
+   *  0.26.57 dời việc giữ tiếng nền sang một vòng hẹn giờ (để nó không giành chỗ phát
+   *  của khung) — đúng ý, nhưng hẹn giờ thì KHÔNG phải cử chỉ, nên «resume()» hỏng và
+   *  dòng nền không bao giờ chạy. Chủ máy 21/09/2026: "bật khi nghe màn hình nhưng
+   *  thoát ra màn hình chính không nghe được nữa rồi".
+   *  Nên tách đôi: mở khoá ở đây (trong cú chạm), còn phát dòng nền thì để sau khi
+   *  khung đã chạy. Chỉ mở khoá thì chưa chiếm chỗ phát của ai.
+   */
+  async _moKhoaTiengNen() {
+    if (!laTao() || !listenScreenOff()) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      this._nenCtx = this._nenCtx || new Ctx();
+      if (this._nenCtx.state === "suspended") await this._nenCtx.resume();
+    } catch (_error) {
+      // Máy không cho thì thôi; dòng nền sẽ chạy bằng đoạn im lặng data: URI.
+    }
+  }
+
   async _giuTiengNen() {
     if (!laTao()) return;
     try {
@@ -5709,6 +5749,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _toggleScreenOff() {
     const on = !listenScreenOff();
     setListenScreenOff(on);
+    // Chính cú bấm này là cử chỉ hợp lệ để đánh thức bộ trộn tiếng.
+    if (on) this._moKhoaTiengNen();
     const video = this._video;
     /* HỘP ĐEN CHO CÔNG TẮC NÀY. Người dùng báo 21/09/2026 "kích vào nghe khi tắt màn
        hình không được" trên iOS, mà nhánh xử lý thì im lặng hoàn toàn — không cách
@@ -6069,7 +6111,25 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!data || typeof data !== "object" || this._video.picture) return;
     this._video.ready = true;
     if (data.event === "onError") {
-      this._embedRefused();
+      const maLoi = Number(data.info) || 0;
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang(`khung báo lỗi: ma=${maLoi}`);
+      /* CHỈ 101 VÀ 150 MỚI LÀ "KHÔNG CHO NHÚNG".
+         Mã 2 là tham số sai, 5 là lỗi trình phát HTML5, 100 là không tìm thấy video.
+         Bản cũ đem CẢ BỐN đi mở hình bằng luồng thẳng rồi kết luận "ở ngoài mạng
+         nhà" — chẩn sai bệnh. Đo 21/09/2026: ba video chủ máy mở đều được YouTube
+         khai «playable_in_embed = true», kể cả bài 1 giờ 25 phút, nên dòng "YouTube
+         từ chối nhúng" trong nhật ký lúc 21:30–21:32 là kết luận sai của chính thẻ. */
+      if (maLoi === 101 || maLoi === 150) {
+        this._embedRefused();
+        return;
+      }
+      if (!this._loiKhungDaThu) {
+        this._loiKhungDaThu = true;
+        this._videoCommand("playVideo");
+        return;
+      }
+      this._setStatus(`Video này báo lỗi ${maLoi} nên chưa phát được.`, true);
       return;
     }
     const info = data.info;
