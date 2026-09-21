@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.61";
+const PHIEN_BAN_THE = "0.26.62";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5339,8 +5339,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       playsinline: "1",
       cc_load_policy: "0",
       iv_load_policy: "3",
-      origin: location.origin,
     });
+    /* KHÔNG GỬI «origin».
+       Hộp đen iPhone chủ máy 21:51–21:52 ngày 21/09/2026 ghi «khung báo lỗi: ma=150»
+       ba lần liền — mã 150 là "chủ video không cho phát trong trình nhúng". Nhưng
+       hỏi thẳng YouTube thì chính những video ấy đều khai «playable_in_embed = true»,
+       kể cả bài 1 giờ 25 phút. Hai điều đó chỉ cùng đúng trong một trường hợp: YouTube
+       từ chối vì TRANG GỌI nó đứng ở địa chỉ IP (app Home Assistant ở nhà mở bằng
+       «http://172.16.10.200:8123»), chứ không phải vì video.
+       Thẻ «phicomm-r1-card» của chủ máy — thứ chạy được trên đúng máy ấy — dựng địa
+       chỉ khung KHÔNG có «origin»: chỉ «autoplay», «mute», «enablejsapi»,
+       «playsinline», «rel». Đây là khác biệt cuối cùng còn lại giữa hai thẻ.
+       «enablejsapi» vẫn chạy khi thiếu «origin»; tham số ấy chỉ là lớp kiểm tra thêm
+       cho postMessage, mà chiều nhận thì thẻ đã tự lọc theo «EMBED_ORIGIN» rồi. */
     if (muted) params.set("mute", "1");
     if (start) params.set("start", String(Math.max(0, Math.floor(start))));
     return `${EMBED_ORIGIN}/embed/${id}?${params}`;
@@ -6027,9 +6038,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // Khung hình đi kèm cũng phát video thật khi loa dẫn nhịp, nên phụ đề và chú
     // thích nổi phải tắt giống khung chính — để lệch nhau thì cùng một bài, xem ở
     // hai chỗ lại ra hai kiểu.
+    // KHÔNG gửi «origin» — cùng lý do với «_ytEmbedSrc»: YouTube trả lỗi 150 khi
+    // trang gọi đứng ở địa chỉ IP.
     const params = new URLSearchParams({
       enablejsapi: "1", rel: "0", playsinline: "1",
-      cc_load_policy: "0", iv_load_policy: "3", origin: location.origin,
+      cc_load_policy: "0", iv_load_policy: "3",
     });
     iframe.setAttribute("src", `${EMBED_ORIGIN}/embed/?` + params);
   }

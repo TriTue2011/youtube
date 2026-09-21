@@ -809,6 +809,15 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("async _moKhoaTiengNen() {", script)
         self.assertIn("MỞ KHOÁ BỘ TRỘN TIẾNG — PHẢI gọi NGAY TRONG CÚ CHẠM", script)
         self.assertEqual(script.count("this._moKhoaTiengNen();"), 3)
+        # 0.26.62 — KHÔNG gửi «origin» trong địa chỉ khung nhúng.
+        # Hộp đen iPhone chủ máy 21:51–21:52 ngày 21/09/2026 ghi "khung báo lỗi:
+        # ma=150" ba lần (150 = chủ video không cho nhúng). Nhưng hỏi thẳng YouTube
+        # thì chính những video ấy đều playable_in_embed = true, kể cả bài 1:24:59.
+        # Hai điều đó chỉ cùng đúng khi YouTube từ chối vì TRANG GỌI đứng ở địa chỉ IP
+        # (app HA ở nhà mở bằng http://172.16.10.200:8123). Thẻ phicomm-r1-card —
+        # thứ chạy được trên đúng máy ấy — dựng địa chỉ khung KHÔNG có «origin».
+        self.assertNotIn("origin: location.origin", script)
+        self.assertIn("KHÔNG GỬI «origin»", script)
         # Chỉ nghe phải TRÔNG NHƯ nghe nhạc: có tên bài, ảnh bìa, và còn nút Xem.
         self.assertIn("CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC", script)
         self.assertIn("if (video.open && video.soundOnly && video.item && !video.withSpeakers) {", script)

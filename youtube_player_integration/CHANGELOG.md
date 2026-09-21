@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.26.62 - 2026-09-21
+
+### Lỗi 150 của YouTube: không phải video bị cấm, mà tại thẻ tự khai địa chỉ IP
+
+Hộp đen nay ghi cả mã lỗi, và nó nói thẳng:
+
+```
+21:51:13  khung báo lỗi: ma=150
+21:51:42  khung báo lỗi: ma=150
+21:52:45  khung báo lỗi: ma=150
+```
+
+Mã **150** là "chủ video không cho phát trong trình nhúng". Nhưng hỏi thẳng YouTube
+thì chính những video ấy đều khai `playable_in_embed = true`, kể cả bài **1 giờ 25
+phút**. Hai điều đó chỉ cùng đúng trong một trường hợp: YouTube từ chối vì **trang gọi
+nó đứng ở địa chỉ IP** — app Home Assistant ở nhà mở bằng `http://172.16.10.200:8123`
+— chứ không phải vì video.
+
+Thẻ đang gửi kèm `origin=<địa chỉ trang>` trong địa chỉ khung. Thẻ `phicomm-r1-card`
+của chủ máy — thứ chạy được trên đúng máy ấy — **không gửi** tham số đó. Đây là khác
+biệt cuối cùng còn lại giữa hai thẻ.
+
+Nay bỏ `origin` ở cả hai chỗ dựng khung. `enablejsapi` vẫn chạy khi thiếu nó; tham số
+ấy chỉ là lớp kiểm tra thêm cho `postMessage`, mà chiều nhận thì thẻ đã tự lọc theo
+`EMBED_ORIGIN` rồi.
+
 ## 0.26.61 - 2026-09-21
 
 ### Xem video → chuyển sang nghe: đừng đóng khung, chỉ thu lại
