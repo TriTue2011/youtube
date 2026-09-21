@@ -447,7 +447,14 @@ class LovelaceCardContractTests(unittest.TestCase):
         # 0.26.39 — và lệnh phát phải nằm NGAY TRONG cú bấm ấy khi đã có sẵn địa chỉ
         # luồng: đi qua một «await» là ra ngoài cử chỉ người dùng, Chrome đòi chạm lại.
         self.assertIn("""    const san = item ? this.nhoLuong.get(this.khoaLuong(item)) : null;
-    if (san?.url && Date.now() - san.luc <= 240000) {""", script)
+    const coSan = !!san?.url && Date.now() - san.luc <= 240000;""", script)
+        # 0.26.42 — MỘT CÚ CHẠM CHỈ CHỨNG NHẬN MỘT LẦN PHÁT. Mở khoá bằng đoạn im lặng
+        # rồi mới đổi src sang bài thật nghĩa là cú chạm chứng nhận cho đoạn im lặng;
+        # bài thật bị coi là tự phát và nằm im (nap=0 mang=2) tới khi app được đánh thức
+        # lại — chủ máy 21/09/2026: "vẫn phải ẩn app xuống, bật app khác rồi chọn lại
+        # app HA mới hát". Có sẵn địa chỉ thì KHÔNG được phát đoạn im lặng trước.
+        self.assertIn("    const audio = coSan ? this.audio() : this.unlock();", script)
+        self.assertEqual(script.count("const audio = coSan ? this.audio() : this.unlock();"), 2)
         self.assertIn("if (video.soundOnly) {", script)
         # Ràng buộc cũ đã bỏ: chủ máy báo "Phải bật nghe khi tắt màn hình kèm theo
         # thì mới bật được nghe trên máy này".

@@ -382,7 +382,11 @@ const deviceAudio = {
         + " tiếng được — bấm nút xem để nghe.", true);
       return;
     }
-    const audio = this.unlock();
+    /* CÓ SẴN ĐỊA CHỈ THÌ ĐỪNG PHÁT ĐOẠN IM LẶNG TRƯỚC — xem «startAlong» để biết vì
+       sao: một cú chạm chỉ chứng nhận cho một lần phát. */
+    const san = this.nhoLuong.get(this.khoaLuong(item));
+    const coSan = !!san?.url && Date.now() - san.luc <= 240000;
+    const audio = coSan ? this.audio() : this.unlock();
     const generation = ++this.generation;
     Object.assign(this, { item, queue, index, along: false, alongKey: "", pausedByHide: false });
     this.mediaSession(item);
@@ -394,8 +398,7 @@ const deviceAudio = {
        20/09/2026 trên iPhone của chủ máy là «nap=0 mang=2 loi=0» — phần tử được phép
        phát, có nguồn, mà không tải một byte nào. Nên lấy thẳng từ lớp nhớ và phát ngay
        tại chỗ; chỉ khi chưa xin sẵn mới đi hỏi (và lúc ấy đành chịu một vòng chờ). */
-    const san = this.nhoLuong.get(this.khoaLuong(item));
-    const url = san?.url && Date.now() - san.luc <= 240000 ? san.url : await this.streamUrl(item);
+    const url = coSan ? san.url : await this.streamUrl(item);
     if (generation !== this.generation) return;
     if (!url) {
       // One notification, carrying the error (the card keeps a video it was following).
@@ -520,11 +523,19 @@ const deviceAudio = {
    */
   startAlong(item = null, batDau = 0) {
     if (this.item) this.stop();
-    const audio = this.unlock();
+    const san = item ? this.nhoLuong.get(this.khoaLuong(item)) : null;
+    const coSan = !!san?.url && Date.now() - san.luc <= 240000;
+    /* CÓ SẴN ĐỊA CHỈ THÌ ĐỪNG PHÁT ĐOẠN IM LẶNG TRƯỚC.
+       Khung web của app chỉ chứng nhận MỘT lần phát cho MỘT cú chạm. Mở khoá bằng đoạn
+       im lặng rồi mới đổi `src` sang bài thật nghĩa là cú chạm chứng nhận cho đoạn im
+       lặng, còn bài thật bị coi là tự phát — nó nằm im ở «đang tải mà không có byte
+       nào» (nap=0 mang=2) cho tới khi app được đánh thức lại. Chủ máy 21/09/2026: "vẫn
+       phải ẩn app xuống, bật app khác rồi chọn lại app HA mới hát".
+       Chưa có địa chỉ thì vẫn mở khoá như cũ — lúc ấy không còn cách nào khác. */
+    const audio = coSan ? this.audio() : this.unlock();
     this.along = true;
     this.alongKey = "";
-    const san = item ? this.nhoLuong.get(this.khoaLuong(item)) : null;
-    if (san?.url && Date.now() - san.luc <= 240000) {
+    if (coSan) {
       this.alongKey = this.khoaLuong(item);
       const generation = ++this.generation;
       this.mediaSession(item, false);

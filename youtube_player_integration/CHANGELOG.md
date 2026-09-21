@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.26.42 - 2026-09-21
+
+### Một cú chạm chỉ chứng nhận MỘT lần phát — nên đừng phát đoạn im lặng trước
+
+> *"Vẫn phải ẩn app xuống, bật app khác rồi chọn lại app HA mới hát."*
+
+Bản này sửa **đúng một thứ**, vì chính câu trên chỉ ra cơ chế.
+
+Khung web của app (cả Android lẫn iOS) chỉ cho **một lần phát gắn với một cú chạm**. Mã cũ
+làm thế này: chạm → phát **một đoạn im lặng** để "mở khoá" → rồi **đổi `src` sang bài
+thật** → phát lần hai. Cú phát được cú chạm chứng nhận là cú im lặng; lần đổi `src` sau đó
+bị coi là tự phát, nên nó nằm im ở trạng thái *đang tải mà không có byte nào*
+(`nap=0 mang=2` — đúng số đo lấy trên iPhone ngày 20/09) cho tới khi app được đánh thức
+lại. Đó chính là "ẩn app rồi quay lại thì hát".
+
+Nay khi địa chỉ luồng đã xin sẵn thì **bỏ hẳn đoạn im lặng**: đặt thẳng bài thật rồi phát
+ngay trong cú chạm. Chưa xin sẵn thì vẫn mở khoá như cũ — lúc ấy không còn cách nào khác.
+
+Đo bằng **cú chạm thật** trong hai lõi trình duyệt, sau khi đã xin sẵn địa chỉ:
+
+| Lõi | Trước | Nay |
+|---|---|---|
+| WebKit (lõi của Safari) | im lặng mở khoá → rồi mới đổi sang bài thật | **một** lần phát, bài thật, +4 ms |
+| Chromium | như trên | **một** lần phát, bài thật, +3 ms |
+
 ## 0.26.41 - 2026-09-21
 
 ### Phải thoát app ra vào lại mới nghe được — phần tử âm thanh chưa hề nằm trong trang
