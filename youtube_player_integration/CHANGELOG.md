@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.26.49 - 2026-09-21
+
+### Tích loa lúc đang chỉ nghe: nút "Nghe trên máy này" phải hiện lại
+
+Chủ máy gửi ảnh chụp lúc 17:24: đang chỉ nghe trên máy, tích loa xong thì nút "Nghe
+trên máy này" biến mất.
+
+Gốc là hệ quả còn sót của bản "giữ luôn tiếng trên máy" sáng nay. Thẻ ẩn nút theo
+`deviceAudio.item` — tức ẩn khi máy đang nghe MỘT MÌNH. Hồi ấy đúng, vì nghe một mình
+thì chưa có loa nào để chạy theo. Nhưng từ khi tích loa mà vẫn giữ tiếng trên máy,
+trạng thái "một mình" còn nguyên trong khi thực tế đã là loa + máy, nên nút biến mất
+đúng lúc cần nó nhất.
+
+Nay giao bài cho loa xong thì thẻ **đổi vai** sang "nghe cùng loa" — không đặt lại
+`src`, không gọi phát lại, nên tiếng đang chạy không hụt một nhịp. Và nút chỉ ẩn khi
+không có loa nào đang phát.
+
+Đo trên Chrome, cùng một kịch bản:
+
+| Bước | 0.26.48 | 0.26.49 |
+|---|---|---|
+| đang chỉ nghe, chưa có loa | nút ẩn | nút ẩn |
+| vừa tích loa | **nút ẩn** | **nút hiện, đang bật** |
+| bấm tắt tiếng máy | — | nút hiện, đã tắt |
+
+### Đừng cứu lượt nạp mà chính thẻ vừa tắt
+
+Cú tự cứu của 0.26.48 nổ cả khi phần tử vừa bị thẻ tắt đi (đổi bài, giao cho loa).
+Log HA 17:25:08 bắt đúng một lần. Nay bỏ qua khi phần tử không còn nguồn nào.
+
+### Android đã chạy tốt
+
+Hộp đen 17:23–17:26 trên máy chủ máy, sau bản sửa luồng của c2a:
+
+```
+chỉ nghe       (+1s) — nap=4 phat=ok giay=0.4
+nghe cùng loa  (+1s) — nap=4 phat=ok giay=7.7
+```
+
+`nap=4` là đủ dữ liệu chạy trọn, đạt trong **1 giây** — trước phải 8 giây mới bò tới
+`nap=2` (vừa đủ nghe).
+
 ## 0.26.48 - 2026-09-21
 
 ### Tìm ra vì sao điện thoại câm: Google bóp luồng khi không xin theo khúc

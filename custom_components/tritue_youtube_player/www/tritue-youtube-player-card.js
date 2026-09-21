@@ -518,7 +518,11 @@ const deviceAudio = {
         // Ba giây mà chưa có một byte nào: hỏi thẳng xem MẠNG của máy này có lấy được
         // dữ liệu từ đúng địa chỉ ấy không. Tách được hai chuyện hay bị lẫn — "máy không
         // với tới được luồng" với "với tới được mà trình phát không thèm tải".
-        if (cho === 3000 && audio && audio.readyState === 0 && !audio.error) {
+        /* «networkState === 0» là phần tử KHÔNG còn nguồn nào — tức chính thẻ vừa
+           tắt tiếng (đổi bài, giao cho loa, dừng hẳn). Cứu lúc ấy là dựng lại thứ
+           vừa cố ý tắt. Log HA 21/09/2026 17:25:08 bắt đúng một lần như vậy. */
+        if (cho === 3000 && audio && audio.readyState === 0 && !audio.error
+            && audio.networkState !== 0) {
           this.doThuLuong(audio);
           this.cuuLuotNap(audio);
         }
@@ -4108,7 +4112,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     // picture's own sound, or an audio element following the speakers).
     const soundOn = deviceAudio.along || (video.open && video.withSpeakers && video.soundHere);
     const sound = this.shadowRoot.querySelector(".device-sound");
-    sound.hidden = !!deviceAudio.item || (video.open ? !video.withSpeakers : !session?.title);
+    /* ẨN NÚT KHI KHÔNG CÓ LOA NÀO ĐỂ CHẠY THEO — chỉ thế thôi.
+       Điều kiện cũ ẩn luôn khi «deviceAudio.item» có giá trị, tức khi máy đang nghe
+       một mình. Hồi ấy đúng, vì nghe một mình thì chưa có loa. Nhưng từ khi tích loa
+       mà VẪN GIỮ tiếng trên máy (chủ máy chốt 21/09/2026), trạng thái "một mình" còn
+       nguyên trong khi thực tế đã là loa + máy — và nút biến mất đúng lúc cần nó
+       nhất. Nay nút hiện bất cứ khi nào có loa đang phát, để tắt tiếng máy được. */
+    sound.hidden = video.open ? !video.withSpeakers : !session?.title;
     sound.setAttribute("aria-pressed", String(soundOn));
     sound.querySelector("ha-icon").setAttribute("icon", soundOn ? "mdi:volume-high" : "mdi:volume-off");
     sound.title = soundOn ? "Tắt tiếng trên máy này — chỉ nghe loa" : "Nghe cả trên máy này, chạy theo loa";
@@ -6734,6 +6744,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          "giữ luôn cả trên máy". Trước đây thẻ tắt tiếng máy ngay khi loa lên tiếng, nên
          muốn nghe cả hai lại phải bấm thêm một nút — mà đúng nút ấy đang hỏng. Nay
          không tắt gì cả: máy hát tiếp bài của nó, loa hát cùng bài từ cùng chỗ. */
+      /* ĐỔI VAI: từ «nghe một mình» thành «nghe cùng loa» — mà KHÔNG đụng vào tiếng
+         đang chạy (không đặt lại «src», không gọi phát lại, nên không có quãng hụt).
+         Thiếu bước này thì thẻ vẫn tự coi là đang nghe MỘT MÌNH trong khi thực tế đã
+         có loa, nên nút «Nghe trên máy này» không bao giờ hiện lại — chủ máy báo
+         21/09/2026 kèm ảnh chụp lúc 17:24: "đang chỉ nghe, tích vào loa sao không ra
+         chế độ nghe trên máy này".
+         «alongKey» đặt đúng bài đang chạy để vòng chạy theo loa («loadAlong») biết bài
+         này đã có rồi mà không nạp lại. */
+      deviceAudio.along = true;
+      deviceAudio.alongKey = deviceAudio.khoaLuong(item);
+      deviceAudio.item = null;
       this._syncNowPlaying();
       this._updateTransportState();
       this._setStatus(`${name} đang phát “${ten}” tiếp từ chỗ đang nghe.`);

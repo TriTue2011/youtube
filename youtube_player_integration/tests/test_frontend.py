@@ -400,6 +400,21 @@ class LovelaceCardContractTests(unittest.TestCase):
         # «along» là nghe GHÉP theo loa (loa đã có bài rồi) nên phải loại ra.
         self.assertIn("if (deviceAudio.item && !deviceAudio.along) {", script)
         self.assertIn("async _loaNhanBaiDangNghe(entityId) {", script)
+        # 0.26.49 — GIAO BÀI CHO LOA XONG PHẢI ĐỔI VAI sang "nghe cùng loa". Từ khi
+        # tích loa mà vẫn giữ tiếng trên máy, thẻ còn tự coi là "nghe một mình" trong
+        # khi thực tế đã là loa + máy, nên nút "Nghe trên máy này" không hiện lại được
+        # — chủ máy 21/09/2026 kèm ảnh chụp 17:24: "đang chỉ nghe, tích vào loa sao
+        # không ra chế độ nghe trên máy này". Đổi vai mà KHÔNG đụng vào tiếng đang
+        # chạy: không đặt lại «src», không gọi phát lại, nên không có quãng hụt.
+        self.assertIn("deviceAudio.along = true;", script)
+        self.assertIn("deviceAudio.alongKey = deviceAudio.khoaLuong(item);", script)
+        # Nút chỉ ẩn khi KHÔNG có loa nào để chạy theo. Điều kiện cũ ẩn luôn theo
+        # «deviceAudio.item», tức ẩn đúng lúc cần nó nhất.
+        self.assertIn("sound.hidden = video.open ? !video.withSpeakers : !session?.title;", script)
+        self.assertNotIn("sound.hidden = !!deviceAudio.item", script)
+        # Đừng cứu lượt nạp của phần tử mà CHÍNH THẺ vừa tắt: «networkState === 0» là
+        # không còn nguồn nào. Log HA 21/09/2026 17:25:08 bắt đúng một lần như vậy.
+        self.assertIn("&& audio.networkState !== 0) {", script)
         # Loa Cast mất vài giây mới bắt đầu phát, nên tua phải CHỜ loa báo "playing"
         # rồi mới tua, và chỉ MỘT lần — tua liên tiếp là sinh ra giật.
         self.assertIn("_dongBoLoaVeGiay(entityId, giay, moc) {", script)
