@@ -72,6 +72,24 @@ STATIC_FILES = {
 APP_VERSION = "0.8.1"
 API_VERSION = "1"
 
+#: Size of each chunk the proxy asks Google for. Measured 21/09/2026 on an 82 MB
+#: track: asking open-ended gives 0.033 MB/s, asking for 4 MB chunks gives 15 MB/s
+#: (~450x). Smaller chunks mean more connections; 4 MB already arrives at full rate
+#: on the first chunk (0.09 s), so sound still starts promptly.
+STREAM_CHUNK = 4 * 1024 * 1024
+
+
+def stream_total_size(response) -> int:
+    """The REAL size of the whole file, read from "Content-Range: bytes a-b/TOTAL".
+
+    Content-Length is no help for a chunk: it only describes that chunk.
+    """
+    total = str(response.headers.get("Content-Range") or "").rsplit("/", 1)[-1].strip()
+    if total.isdigit():
+        return int(total)
+    length = str(response.headers.get("Content-Length") or "").strip()
+    return int(length) if length.isdigit() else 0
+
 
 FACEBOOK_ID = re.compile(r"^[0-9]{5,25}$")
 FACEBOOK_HOSTS = {
@@ -1021,34 +1039,46 @@ class PlayerHandler(BaseHTTPRequestHandler):
             if range_header and not re.fullmatch(r"bytes=\d*-\d*", range_header):
                 self.send_json(400, {"error": "invalid_range"})
                 return
-            response, resolved = self.open_upstream(source, target, range_header)
-            with response:
-                ma = response.getcode() or 200
-                gui = {h: v for h in ("Content-Length", "Content-Range", "Accept-Ranges")
-                       if (v := response.headers.get(h))}
-                if not range_header and ma == 206:
-                    # May nghe khong hoi theo khuc thi phai nhan nguyen tep: tra 200 chu
-                    # khong phai 206, va bo Content-Range di. Khuc xin o tren la chuyen
-                    # rieng giua proxy nay voi Google.
-                    ma = 200
-                    tong = str(gui.pop("Content-Range", "")).rsplit("/", 1)[-1]
-                    if tong.isdigit():
-                        gui["Content-Length"] = tong
-                    gui.setdefault("Accept-Ranges", "bytes")
-                self.send_response(ma)
-                self.send_header(
-                    "Content-Type",
-                    response.headers.get(
-                        "Content-Type", resolved.get("content_type", "audio/mpeg")
-                    ),
+            # "bytes=-500" (the LAST 500 bytes) cannot be turned into chunks without
+            # knowing the size first, and players hardly ever send it: leave it whole.
+            asked = re.fullmatch(r"bytes=(\d+)-(\d*)", range_header or "bytes=0-")
+            start = int(asked.group(1)) if asked else 0
+            asked_end = int(asked.group(2)) if asked and asked.group(2) else None
+            first_end = None if not asked else start + STREAM_CHUNK - 1
+            if asked_end is not None:
+                first_end = asked_end if first_end is None else min(first_end, asked_end)
+            response, resolved = self.open_upstream(source, target, start, first_end)
+            total = stream_total_size(response)
+            end = asked_end if asked_end is not None else (total - 1 if total else None)
+            self.send_response(206 if (range_header and total) else 200)
+            self.send_header(
+                "Content-Type",
+                response.headers.get(
+                    "Content-Type", resolved.get("content_type", "audio/mpeg")
+                ),
+            )
+            self.send_header("Accept-Ranges", "bytes")
+            if end is not None:
+                self.send_header("Content-Length", str(end - start + 1))
+            if range_header and total:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+            self.send_header("Cache-Control", "private, no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            response_started = True
+            # Read the open chunk out, then fetch the next one: the listener sees a
+            # single unbroken stream.
+            at = start
+            while True:
+                with response:
+                    while piece := response.read(64 * 1024):
+                        at += len(piece)
+                        self.wfile.write(piece)
+                if end is None or at > end:
+                    break
+                response, resolved = self.open_upstream(
+                    source, target, at, min(at + STREAM_CHUNK - 1, end)
                 )
-                for header, value in gui.items():
-                    self.send_header(header, value)
-                self.send_header("Cache-Control", "private, no-store")
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.end_headers()
-                response_started = True
-                shutil.copyfileobj(response, self.wfile, length=64 * 1024)
         except InvalidStreamTokenError:
             self.send_json(403, {"error": "invalid_stream_token"})
         except (BrokenPipeError, ConnectionResetError):
@@ -1057,21 +1087,26 @@ class PlayerHandler(BaseHTTPRequestHandler):
             if not response_started:
                 self.send_json(502, {"error": "stream_unavailable"})
 
-    def open_upstream(self, source, target, range_header):
-        """Open the audio upstream; a cached URL YouTube already refused is
-        resolved once more (URLs are reused for hours, see stream_cache_seconds)."""
+    def open_upstream(self, source, target, tu, den):
+        """Open one BOUNDED chunk of the audio upstream.
+
+        Google throttles every OPEN-ENDED request down to listening speed and only
+        serves at full rate when asked for a chunk with a start and an end. Measured
+        on the server 21/09/2026 against an 82 MB track, at the same moment:
+
+            no Range, or "bytes=0-"      ->  0.033 MB/s
+            chunks of "bytes=a-b", 4 MB  ->  15 MB/s      (~450x faster)
+
+        A short track hides this (the whole file is smaller than one chunk), which is
+        what made the first fix look finished.
+
+        A cached URL YouTube already refused is resolved once more (URLs are reused
+        for hours, see stream_cache_seconds).
+        """
         for attempt in (1, 2):
             resolved = self.server.resolve_stream(source, target)
-            headers = {**resolved["headers"], "Accept-Encoding": "identity"}
-            # LUON XIN THEO KHUC, ke ca khi may nghe khong xin.
-            #
-            # Do tren may chu 21/09/2026, hoi THANG googlevideo cung mot luong da am:
-            #   khong kem Range  -> byte dau tien 1,87 s, roi 0,33 MB trong 10 giay
-            #   Range: bytes=0-  -> byte dau tien 0,04 s, va 3,45 MB trong 0,1 giay
-            # Google bop bang thong dung nhung yeu cau khong kem Range, xuong co toc do
-            # nghe (~33 KB/s). Ma cu DAU TIEN trinh phat cua WebKit gui thi khong kem
-            # Range - nen phan tu am thanh nam o "dang tai ma khong co du lieu".
-            headers["Range"] = range_header or "bytes=0-"
+            headers = {**resolved["headers"], "Accept-Encoding": "identity",
+                       "Range": f"bytes={tu}-{den}" if den is not None else f"bytes={tu}-"}
             try:
                 response = urlopen(Request(resolved["url"], headers=headers), timeout=30)
             except HTTPError as error:

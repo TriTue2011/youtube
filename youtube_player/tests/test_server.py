@@ -667,13 +667,13 @@ class YouTubePlayerHttpTests(unittest.TestCase):
     def test_a_request_without_a_range_still_asks_upstream_for_one(
         self, resolve, open_upstream
     ):
-        """Google throttles range-less requests; a player's first request has no range.
+        """Upstream is always asked for a BOUNDED chunk, whatever the listener sends.
 
-        Measured against googlevideo on 21/09/2026, same warm stream: with no Range
-        header the first byte took 1.87 s and only 0.33 MB arrived in 10 seconds; with
-        "Range: bytes=0-" the first byte took 0.04 s and 3.45 MB arrived in 0.1 s.
-        WebKit's first media request carries no Range, which left the element loading
-        without data until the user switched apps and back.
+        Measured on the server 21/09/2026 against an 82 MB track: asking open-ended
+        (no Range, or "bytes=0-") gives 0.033 MB/s, asking for 4 MB chunks gives
+        15 MB/s — about 450x. Google throttles every open-ended request down to
+        listening speed. A Google Cast speaker gave up with "Failed to cast media",
+        and phones sat at "loading, no data".
         """
         target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
         self.remember_public_zing_target(target)
@@ -709,7 +709,109 @@ class YouTubePlayerHttpTests(unittest.TestCase):
             self.assertEqual("bytes", response.headers["Accept-Ranges"])
             self.assertEqual(b"MP3!", response.read())
 
-        self.assertEqual("bytes=0-", open_upstream.call_args.args[0].get_header("Range"))
+        self.assertEqual(
+            "bytes=0-4194303", open_upstream.call_args.args[0].get_header("Range")
+        )
+
+    @patch("server.STREAM_CHUNK", 4)
+    @patch("server.urlopen")
+    @patch("server.resolve_zing_stream")
+    def test_a_long_stream_is_stitched_from_several_chunks(self, resolve, open_upstream):
+        """A file longer than one chunk is fetched chunk by chunk, seamlessly.
+
+        This is where the first fix fell short: a 3.45 MB track slipped through
+        because the whole file was smaller than one chunk, while an 82 MB one still
+        trickled.
+        """
+        target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
+        self.remember_public_zing_target(target)
+        resolve.return_value = {
+            "url": "https://audio.zmdcdn.me/song.mp3",
+            "headers": {"Referer": "https://zingmp3.vn/"},
+            "content_type": "audio/mpeg",
+        }
+        whole = b"0123456789"
+        asked = []
+
+        def one_chunk(request, timeout=None):
+            header = request.get_header("Range")
+            asked.append(header)
+            start, end = header.removeprefix("bytes=").split("-")
+            start, end = int(start), int(end)
+            part = io.BytesIO(whole[start : end + 1])
+            part.headers = {
+                "Content-Type": "audio/mpeg",
+                "Content-Length": str(end - start + 1),
+                "Content-Range": f"bytes {start}-{end}/{len(whole)}",
+                "Accept-Ranges": "bytes",
+            }
+            part.getcode = lambda: 206
+            return part
+
+        open_upstream.side_effect = one_chunk
+        _, created = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={"source": "zing", "target": target},
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        token = created["stream_url"].rsplit("/", 1)[-1]
+
+        with urllib.request.urlopen(
+            urllib.request.Request(f"{self.base_url}/api/stream/{token}"), timeout=2
+        ) as response:
+            self.assertEqual(200, response.status)
+            self.assertEqual("10", response.headers["Content-Length"])
+            self.assertEqual(whole, response.read())
+
+        self.assertEqual(["bytes=0-3", "bytes=4-7", "bytes=8-9"], asked)
+
+    @patch("server.STREAM_CHUNK", 4)
+    @patch("server.urlopen")
+    @patch("server.resolve_zing_stream")
+    def test_a_listener_seeking_gets_back_the_range_it_asked_for(
+        self, resolve, open_upstream
+    ):
+        """Seeking mid-track returns 206 for the listener's range, not the proxy's."""
+        target = "https://zingmp3.vn/bai-hat/Thuc-Giac/ZZ90FD0B.html"
+        self.remember_public_zing_target(target)
+        resolve.return_value = {
+            "url": "https://audio.zmdcdn.me/song.mp3",
+            "headers": {"Referer": "https://zingmp3.vn/"},
+            "content_type": "audio/mpeg",
+        }
+        whole = b"0123456789"
+
+        def one_chunk(request, timeout=None):
+            start, end = request.get_header("Range").removeprefix("bytes=").split("-")
+            start, end = int(start), int(end)
+            part = io.BytesIO(whole[start : end + 1])
+            part.headers = {
+                "Content-Type": "audio/mpeg",
+                "Content-Length": str(end - start + 1),
+                "Content-Range": f"bytes {start}-{end}/{len(whole)}",
+                "Accept-Ranges": "bytes",
+            }
+            part.getcode = lambda: 206
+            return part
+
+        open_upstream.side_effect = one_chunk
+        _, created = self.request(
+            "/api/integration/stream",
+            method="POST",
+            payload={"source": "zing", "target": target},
+            headers={"Authorization": "Bearer test-integration-token"},
+        )
+        token = created["stream_url"].rsplit("/", 1)[-1]
+        request = urllib.request.Request(
+            f"{self.base_url}/api/stream/{token}", headers={"Range": "bytes=6-"}
+        )
+
+        with urllib.request.urlopen(request, timeout=2) as response:
+            self.assertEqual(206, response.status)
+            self.assertEqual("bytes 6-9/10", response.headers["Content-Range"])
+            self.assertEqual("4", response.headers["Content-Length"])
+            self.assertEqual(b"6789", response.read())
 
     @patch("server.resolve_zing_stream")
     def test_stream_creation_reports_an_unplayable_zing_result(self, resolve):
