@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.26.54 - 2026-09-21
+
+### Dùng add-on: thẻ báo "Không lấy được tiếng bài này" — thiếu địa chỉ, không phải hỏng luồng
+
+Lỗi này dính **mọi người dùng add-on**, và nguyên nhân bị giấu sau một mã lỗi chung.
+
+Add-on nằm sau NAT của Supervisor: mọi lời gọi của tích hợp tới nó đều xuất phát từ
+`172.30.32.1`, dải mà chính add-on từ chối (loa không với tới được địa chỉ nội bộ ấy).
+Nên nó **không bao giờ tự học ra** một địa chỉ dùng được, và phải được Home Assistant
+gửi kèm gợi ý.
+
+`actions.py` đã gửi gợi ý ấy ở hai chỗ phát ra loa. Riêng đường mà **thẻ** gọi để nghe
+trên máy thì bị bỏ quên — nên add-on trả `409 public_base_url_required`, tích hợp quy
+hết về `502 stream_unavailable`, và thẻ chỉ hiện "Không lấy được tiếng bài này".
+
+Đo trên máy .28 ngày 21/09/2026 (add-on 0.9.7, yt-dlp mới nhất):
+
+| Thử | Kết quả |
+|---|---|
+| Xin luồng YouTube (3 video khác nhau) | 502 |
+| Xin luồng **Zing** (không dùng yt-dlp) | 502 |
+| Tìm kiếm YouTube | **200, có kết quả thật** |
+| Nhật ký add-on | `POST /api/integration/stream` → **409** |
+
+Zing cũng hỏng là dấu hiệu quyết định: nếu là yt-dlp thì Zing phải chạy. Và nhật ký
+add-on nói thẳng 409 — thứ mà tích hợp đã che mất.
+
+Đã sửa hai việc:
+
+- Đường của thẻ nay gửi kèm địa chỉ, y như đường ra loa.
+- Tích hợp **không nuốt mã lỗi** của máy phát nữa: chuyển nguyên văn ra ngoài và ghi
+  một dòng nhật ký nêu đích danh. Lần sau chỉ cần mở log là thấy, không phải mò.
+
 ## 0.26.53 - 2026-09-21
 
 ### iPhone: chặn ở ĐÚNG MỘT CỬA, đừng vá từng nhánh

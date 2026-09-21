@@ -730,6 +730,31 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("_ngheBangKhungMotMinh(item, queue, index, batDau = 0) {", script)
         self.assertIn("deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>", script)
 
+    def test_duong_cua_the_phai_gui_dia_chi_va_khong_nuot_ma_loi(self):
+        """Đường lấy luồng của THẺ phải gửi gợi ý địa chỉ, y như đường ra loa.
+
+        Add-on nằm sau NAT của Supervisor: mọi lời gọi của tích hợp tới nó đều từ
+        172.30.32.1, dải mà chính add-on từ chối (loa không với tới được), nên nó
+        KHÔNG BAO GIỜ tự học ra địa chỉ dùng được. Thiếu gợi ý thì nó trả 409
+        «public_base_url_required».
+
+        Đo trên máy .28 (add-on 0.9.7) ngày 21/09/2026: nhật ký add-on ghi
+        «POST /api/integration/stream 409» cho MỌI nguồn — kể cả Zing vốn không dùng
+        yt-dlp — trong khi tích hợp quy hết về 502 «stream_unavailable» nên thẻ chỉ
+        hiện "Không lấy được tiếng bài này". Mã thật bị giấu, và người soát lỗi đi tìm
+        yt-dlp suốt một tiếng.
+        """
+        source = (COMPONENT_DIR / "http.py").read_text(encoding="utf-8")
+
+        self.assertIn("from .actions import speaker_base_url", source)
+        self.assertIn(
+            "public_base_url=speaker_base_url(hass, entry.runtime_data.client),", source
+        )
+        # Mã lỗi của máy phát phải ra tới ngoài, không bị thay bằng một mã chung.
+        self.assertIn("except YouTubePlayerApiError as loi:", source)
+        self.assertIn('ma = str(loi).strip() or "stream_unavailable"', source)
+        self.assertIn("return self.json({\"error\": ma}, HTTPStatus.BAD_GATEWAY)", source)
+
     def test_http_dependency_and_service_description_are_packaged(self):
         manifest = json.loads(
             (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import secrets
 import time
@@ -18,6 +19,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
+from .actions import speaker_base_url
 from .api import YouTubePlayerApiError
 from .const import DOMAIN
 from .hidden_players import (
@@ -37,6 +39,8 @@ from .suggestions import (
 )
 from .playback import build_target_capabilities
 
+
+_LOGGER = logging.getLogger(__name__)
 
 PROXY_URL = "/api/tritue_youtube_player/proxy/{token}"
 PROXY_DATA = f"{DOMAIN}_proxy_links"
@@ -160,12 +164,34 @@ class TriTueStreamView(HomeAssistantView):
             max_height = 0
         try:
             stream = await entry.runtime_data.client.async_create_stream(
-                source, target, max_height=max_height or None
+                source, target, max_height=max_height or None,
+                # ĐỊA CHỈ LOA/MÁY TẢI ĐƯỢC — phải gửi kèm, y như đường dịch vụ.
+                #
+                # Add-on nằm sau NAT của Supervisor: mọi lời gọi của tích hợp đến nó
+                # đều xuất phát từ 172.30.32.1, mà dải ấy bị chính add-on từ chối (loa
+                # không với tới được), nên nó KHÔNG BAO GIỜ tự học ra địa chỉ dùng được.
+                # Thiếu gợi ý thì add-on trả 409 «public_base_url_required», tích hợp
+                # quy hết về 502 «stream_unavailable», và thẻ chỉ hiện "Không lấy được
+                # tiếng bài này" — giấu mất nguyên nhân.
+                #
+                # Đo trên máy chủ máy (.28, add-on 0.9.7) ngày 21/09/2026: nhật ký
+                # add-on ghi «POST /api/integration/stream 409» cho MỌI nguồn, kể cả
+                # Zing vốn không dùng yt-dlp. «actions.py» đã gửi gợi ý này ở hai chỗ
+                # phát ra loa; riêng đường của THẺ đây thì bị bỏ quên.
+                public_base_url=speaker_base_url(hass, entry.runtime_data.client),
             )
-        except YouTubePlayerApiError:
-            return self.json(
-                {"error": "stream_unavailable"}, HTTPStatus.BAD_GATEWAY
+        except YouTubePlayerApiError as loi:
+            # ĐỪNG NUỐT MÃ LỖI CỦA MÁY PHÁT.
+            # Add-on nói rõ "public_base_url_required", tích hợp đổi thành
+            # "stream_unavailable", thế là nguyên nhân biến mất và người soát lỗi đi
+            # tìm yt-dlp suốt một tiếng (21/09/2026, máy .28). Mã của máy phát là thứ
+            # duy nhất nêu đích danh nguyên nhân — chuyển nguyên văn ra ngoài, và ghi
+            # một dòng nhật ký để lần sau chỉ cần mở log là thấy.
+            ma = str(loi).strip() or "stream_unavailable"
+            _LOGGER.warning(
+                "Máy phát từ chối dựng luồng (%s/%s): %s", source, target[:60], ma
             )
+            return self.json({"error": ma}, HTTPStatus.BAD_GATEWAY)
         body = {
             key: stream.get(key)
             for key in ("stream_url", "media_content_type", "direct_url", "height", "bitrate_kbps")
