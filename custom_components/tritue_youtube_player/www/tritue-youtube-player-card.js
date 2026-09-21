@@ -83,20 +83,31 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.72";
+const PHIEN_BAN_THE = "0.26.73";
 
-/* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
-   Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
-   người dùng với CHÍNH tên miền ấy (Media Engagement Index). Máy nào cũng xem
-   YouTube nên «youtube.com» có điểm cao, còn «youtube-nocookie.com» gần như không
-   ai mở bao giờ nên điểm bằng không — cùng một đoạn mã, khung nocookie bị chặn
-   tiếng còn khung youtube.com thì không. Đây đúng là điểm khác về địa chỉ giữa thẻ
-   này và thẻ «phicomm-r1-card» chủ máy đưa 20/09/2026 (thẻ ấy dùng www.youtube.com
-   và nghe được ngay trên cả Android lẫn iPhone), và nó khớp với thứ đo được cùng
-   ngày: dựng khung có tiếng trên Android thì rơi về nút play của YouTube.
-   ĐÂY LÀ GIẢ THUYẾT CHƯA ĐO TRỰC TIẾP, nên mọi đường bật tiếng đều phải có lối
-   lùi tự động — xem «_checkVideoSound». */
+/* HAI ĐỊA CHỈ NHÚNG, VÀ THẺ CHỈ ĐỔI KHI CHÍNH YOUTUBE TỪ CHỐI.
+   «www.youtube.com» là đường mặc định, giữ nguyên từ 0.26.34. Chrome xét quyền tự
+   phát KÈM TIẾNG theo mức gắn bó với chính tên miền ấy (Media Engagement Index),
+   mà nocookie thì gần như không máy nào có điểm.
+   «youtube-nocookie.com» là đường lui. Thẻ dùng chính địa chỉ này cho tới hết
+   0.26.33, và đó là bản ĐO ĐƯỢC trên máy của chủ máy (commit 0.26.32, 20/09/2026):
+   «Safari máy Mac → khung CHẠY; iPhone → khung CHẠY». Đổi khung sang nocookie cũng
+   là cách chữa mã 153 được ghi nhận độc lập ở nhiều dự án khác khi trang chủ quản
+   gửi tiêu đề cắt referrer — mà Home Assistant gửi đúng «Referrer-Policy:
+   no-referrer», đo bằng curl 22/09/2026.
+   VÌ SAO KHÔNG ĐỔI THẲNG CHO MỌI MÁY: 22/09/2026 iPhone của chủ máy đang phát được
+   khung bằng «www.youtube.com», chỉ Safari máy Mac báo 153. Đổi cả hai là đem một
+   máy đang chạy ra cược cho một máy đang hỏng. Chủ máy chốt: "sửa safari đừng làm
+   hỏng ios của tôi".
+   VÌ SAO KHÔNG DÒ THEO TÊN MÁY: danh sách trình duyệt thì luôn thiếu. Thẻ đổi khi
+   NGHE CHÍNH YOUTUBE TỪ CHỐI, nên máy nào không gặp lỗi thì không đổi gì cả.
+   VÀ CHỈ ĐỔI ĐÚNG MỘT LẦN cho mỗi lần mở trang — «daDoiGocNhung» không bao giờ
+   được xoá. Bản 0.26.65 từng cho dò qua lại giữa hai cách khai «origin» với một cờ
+   tự xoá, và nó chạy mấy lần mỗi giây: chủ máy thấy "lỗi, nhảy loạn xạ lên". */
 const EMBED_ORIGIN = "https://www.youtube.com";
+const EMBED_GOC_LUI = "https://www.youtube-nocookie.com";
+let embedGoc = EMBED_ORIGIN;
+let daDoiGocNhung = false;
 const STREAM_TOKEN = /\/api\/stream\/([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+/;
 
 /* Tên nguồn để GHI RA dòng đang phát. Hàng nút YouTube / Zing MP3 chỉ đổi nơi TÌM
@@ -5402,7 +5413,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        cho postMessage, mà chiều nhận thì thẻ đã tự lọc theo «EMBED_ORIGIN» rồi. */
     if (muted) params.set("mute", "1");   // ghi đè giá trị mặc định ở trên
     if (start) params.set("start", String(Math.max(0, Math.floor(start))));
-    return `${EMBED_ORIGIN}/embed/${id}?${params}`;
+    return `${embedGoc}/embed/${id}?${params}`;
   }
 
   /** THÚC TIẾNG SAU KHI KHUNG VỪA NẠP — bậc thang 0 / 300 / 800 / 2000 mili giây.
@@ -6206,7 +6217,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const params = new URLSearchParams({
       autoplay: "1", mute: "1", enablejsapi: "1", playsinline: "1", rel: "0",
     });
-    iframe.setAttribute("src", `${EMBED_ORIGIN}/embed/?` + params);
+    iframe.setAttribute("src", `${embedGoc}/embed/?` + params);
   }
 
   /** Tua hinh ve dung moc tieng. Gom tu hai cho von lam y het trong _syncVideo. */
@@ -6250,7 +6261,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _videoPost(message) {
     const iframe = this.shadowRoot?.querySelector(".video-frame iframe");
-    iframe?.contentWindow?.postMessage(JSON.stringify({ ...message, id: 1, channel: "widget" }), EMBED_ORIGIN);
+    iframe?.contentWindow?.postMessage(JSON.stringify({ ...message, id: 1, channel: "widget" }), embedGoc);
   }
 
   _videoCommand(func, args = []) {
@@ -6276,7 +6287,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _handleVideoMessage(event) {
     const iframe = this.shadowRoot?.querySelector(".video-frame iframe");
-    if (!iframe || event.source !== iframe.contentWindow || event.origin !== EMBED_ORIGIN) return;
+    if (!iframe || event.source !== iframe.contentWindow || event.origin !== embedGoc) return;
     let data;
     try {
       data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
@@ -6289,6 +6300,29 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       const maLoi = Number(data.info) || 0;
       deviceAudio.hass = this._hass;
       deviceAudio.ghiThang(`khung báo lỗi: ma=${maLoi}`);
+      /* YOUTUBE TỪ CHỐI ĐỊA CHỈ NÀY → THỬ ĐỊA CHỈ KIA, ĐÚNG MỘT LẦN.
+         Máy nào không gặp lỗi thì không bao giờ chạy vào đây, nên iPhone đang phát
+         được vẫn giữ nguyên «www.youtube.com» — xem chú thích ở «EMBED_GOC_LUI».
+         Đặt TRƯỚC nhánh lùi về phần tử âm thanh: còn một địa chỉ chưa thử thì chưa
+         vội bỏ khung, vì khung mượt hơn và giữ được hình.
+         «daDoiGocNhung» không bao giờ bị xoá, nên nhiều nhất một lần đổi cho mỗi
+         lần mở trang — đây đúng là chỗ bản 0.26.65 đã sinh ra vòng lặp vô tận. */
+      if ((maLoi === 150 || maLoi === 153 || maLoi === 101)
+        && !daDoiGocNhung && this._video.item && this._video.item.id) {
+        daDoiGocNhung = true;
+        embedGoc = EMBED_GOC_LUI;
+        const khung = this.shadowRoot.querySelector(".video-frame iframe");
+        if (khung) {
+          const giay = Math.floor(this._videoTimeNow() || 0);
+          deviceAudio.ghiThang(`đổi địa chỉ nhúng sang nocookie sau mã ${maLoi},`
+            + ` giữ bài ở giây ${giay}`);
+          this._video.ready = false;
+          this._video.muted = null;
+          khung.setAttribute("src", this._ytEmbedSrc(this._video.item.id,
+            { muted: !this._video.soundHere, start: giay }));
+          return;
+        }
+      }
       /* CHỈ 101 VÀ 150 MỚI LÀ "KHÔNG CHO NHÚNG".
          Mã 2 là tham số sai, 5 là lỗi trình phát HTML5, 100 là không tìm thấy video.
          Bản cũ đem CẢ BỐN đi mở hình bằng luồng thẳng rồi kết luận "ở ngoài mạng

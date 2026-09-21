@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.26.73 - 2026-09-22
+
+### Lỗi 153 trên Safari: thẻ tự đổi sang địa chỉ nhúng còn lại
+
+Chủ máy nhớ đúng: *"có một bản sửa, Safari chạy nhưng iOS không"*. Lịch sử xác nhận —
+tới hết **0.26.33** thẻ nhúng từ `youtube-nocookie.com`, và commit **0.26.32**
+(20/09/2026) ghi số đo trên chính máy của nhà: *"Safari máy Mac → khung CHẠY; iPhone →
+khung CHẠY"*. Bản **0.26.34** đổi sang `www.youtube.com` vì một giả thuyết về Media
+Engagement Index của Chrome — chú thích khi ấy đã tự ghi *"ĐÂY LÀ GIẢ THUYẾT CHƯA ĐO
+TRỰC TIẾP"* — và từ đó nhật ký bắt đầu đầy mã 150 rồi 153.
+
+Đổi khung sang nocookie cũng đúng là cách chữa mã 153 được ghi nhận độc lập ở nhiều
+dự án khác, khi trang chủ quản gửi tiêu đề cắt referrer. Home Assistant gửi đúng
+`Referrer-Policy: no-referrer` — đo bằng `curl` ngày 22/09/2026.
+
+**Nhưng không đổi thẳng cho mọi máy.** Hôm nay iPhone của chủ máy đang phát được khung
+bằng `www.youtube.com`; chỉ Safari trên máy Mac báo 153. Đổi cả hai là đem một máy đang
+chạy ra cược cho một máy đang hỏng — chủ máy chốt: *"sửa safari đừng làm hỏng ios của
+tôi"*.
+
+Và cũng không dò theo tên trình duyệt, vì danh sách thì luôn thiếu. Thẻ đổi địa chỉ khi
+**nghe chính YouTube từ chối**: gặp 150, 153 hoặc 101 thì dựng lại khung bằng
+`youtube-nocookie.com`, giữ nguyên bài và giây đang nghe, rồi ghi lý do vào hộp đen.
+Máy nào không gặp lỗi thì không đổi gì cả.
+
+Việc đổi chỉ xảy ra **đúng một lần cho mỗi lần mở trang**: cờ `daDoiGocNhung` không bao
+giờ bị xoá. Đây chính là chỗ bản 0.26.65 từng sinh ra vòng lặp vô tận — nó dò qua lại
+giữa hai cách khai `origin` bằng một cờ tự xoá, chạy mấy lần mỗi giây, và chủ máy thấy
+*"lỗi, nhảy loạn xạ lên"*.
+
+Nếu địa chỉ còn lại cũng bị từ chối thì đường lui cũ vẫn nguyên: bỏ khung, nghe bằng
+phần tử âm thanh.
+
 ## 0.26.72 - 2026-09-21
 
 ### Lùi về đúng mã của 0.26.70 — bản 0.26.71 hỏng trên máy thật

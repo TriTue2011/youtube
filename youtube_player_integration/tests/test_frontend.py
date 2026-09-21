@@ -146,7 +146,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertNotIn("watch-result", script)
         # The card drives the embed over postMessage, so its buttons work for the video.
         self.assertIn("enablejsapi", script)
-        self.assertIn("event.origin !== EMBED_ORIGIN", script)
+        self.assertIn("event.origin !== embedGoc", script)
         self.assertIn('this._videoCommand([1, 3].includes(this._video.state) ? "pauseVideo" : "playVideo")', script)
         self.assertIn("this._togglePlay()", script)
         # Speakers + video: the picture is muted and follows the speaker's position;
@@ -357,11 +357,27 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("this._supportsSource(entityId, nguon)", script)
         self.assertIn("source: nguon,", script)
         self.assertIn('"media_player", "media_seek"', script)
-        self.assertIn("${EMBED_ORIGIN}/embed/${id}", script)
+        self.assertIn("${embedGoc}/embed/${id}", script)
         # 0.26.34 — khung nhúng lấy từ www.youtube.com. Chrome xét quyền tự phát
         # KÈM TIẾNG theo mức gắn bó với chính tên miền ấy, mà nocookie thì không
         # máy nào có. Thẻ phicomm-r1-card dùng youtube.com và nghe được ngay.
         self.assertIn('const EMBED_ORIGIN = "https://www.youtube.com";', script)
+        # 0.26.73 — HAI ĐỊA CHỈ NHÚNG. «www.youtube.com» vẫn là mặc định để không
+        # đụng vào iPhone đang phát được; nocookie là ĐƯỜNG LUI, chỉ bật khi chính
+        # YouTube trả 150/153/101, và bật đúng MỘT LẦN mỗi lần mở trang.
+        # Không dò theo tên trình duyệt: máy nào không gặp lỗi thì không đổi gì.
+        self.assertIn('const EMBED_GOC_LUI = "https://www.youtube-nocookie.com";', script)
+        self.assertIn("let embedGoc = EMBED_ORIGIN;", script)
+        self.assertIn("let daDoiGocNhung = false;", script)
+        self.assertIn("&& !daDoiGocNhung && this._video.item && this._video.item.id) {", script)
+        self.assertIn("daDoiGocNhung = true;", script)
+        self.assertIn("embedGoc = EMBED_GOC_LUI;", script)
+        # Cờ latch KHÔNG BAO GIỜ được xoá — đó là chỗ 0.26.65 đẻ ra vòng lặp vô tận.
+        self.assertNotIn("daDoiGocNhung = false;\n", script.split("let daDoiGocNhung = false;", 1)[1])
+        # Đổi địa chỉ phải đứng TRƯỚC nhánh lùi về phần tử âm thanh.
+        self.assertLess(
+            script.index("embedGoc = EMBED_GOC_LUI;"),
+            script.index("deviceAudio.khungHong = true;"))
         # Chỉ cấm ĐỊA CHỈ nhúng cũ; phần chú thích vẫn kể lại vì sao đã đổi.
         self.assertNotIn("youtube-nocookie.com/embed", script)
         # HA pages send "Referrer-Policy: no-referrer" -> YouTube Error 153
