@@ -480,12 +480,31 @@ const deviceAudio = {
     this.notify();
   },
 
-  /** Listen along with the speakers; call inside the tap. */
-  startAlong() {
+  /** Nghe cùng loa; PHẢI gọi ngay trong cú bấm.
+   *
+   *  `item` + `batDau` để phát NGAY TRONG CHÍNH CÚ BẤM khi địa chỉ luồng đã xin sẵn.
+   *  Trình duyệt chỉ chắc chắn cho phát khi lệnh phát nằm trong cử chỉ người dùng; đi
+   *  qua một `await` là đã ra ngoài cử chỉ. Chủ máy đo 21/09/2026: "tiếng rất lâu mới
+   *  nghe thấy hoặc phải thao tác vào nghe khi tắt màn" — tức phải chạm thêm một lần
+   *  nữa mới có tiếng, đúng dấu hiệu của lệnh phát nằm ngoài cử chỉ.
+   *
+   *  Vào đúng giây bằng mảnh địa chỉ `#t=`, không chờ `loadedmetadata` rồi mới tua:
+   *  bớt một vòng chờ, và tránh luôn cảnh cú tua muộn đè lên vị trí mới hơn.
+   */
+  startAlong(item = null, batDau = 0) {
     if (this.item) this.stop();
-    this.unlock();
+    const audio = this.unlock();
     this.along = true;
     this.alongKey = "";
+    const san = item ? this.nhoLuong.get(this.khoaLuong(item)) : null;
+    if (san?.url && Date.now() - san.luc <= 240000) {
+      this.alongKey = this.khoaLuong(item);
+      const generation = ++this.generation;
+      this.mediaSession(item, false);
+      audio.src = batDau >= 1 ? `${san.url}#t=${Math.floor(batDau)}` : san.url;
+      audio.play().catch((error) => this.playRefused(error));
+      this.canhTieng(audio, generation);
+    }
     this.notify();
   },
 
@@ -511,15 +530,14 @@ const deviceAudio = {
       return;
     }
     const audio = this.audio();
-    audio.src = url;
-    /* VÀO ĐÚNG CHỖ TRƯỚC KHI PHÁT. Trước đây phát từ giây 0 rồi vòng canh bên dưới
-       mới kéo về chỗ loa: người nghe được một quãng SAI CHỖ rồi mới bị giật sang chỗ
-       đúng — và cú kéo ấy tốn thêm một lượt xin dữ liệu (đo 20/09/2026: YouTube mất
-       1,64 giây để trả byte đầu khi nhảy vào giữa bài). */
-    if (batDau >= 1) {
-      audio.addEventListener("loadedmetadata", () => { audio.currentTime = batDau; }, { once: true });
-    }
-    audio.play().catch(() => this.notify("Trình duyệt chặn tự phát có tiếng — bấm lại “Nghe trên máy này”.", true));
+    /* VÀO ĐÚNG CHỖ NGAY TRONG ĐỊA CHỈ («#t=»), đừng chờ «loadedmetadata» rồi mới tua.
+       Dựng lại cảnh này trong Chrome 21/09/2026: cú tua muộn ấy còn ĐÈ LÊN vị trí mới
+       hơn mà vòng canh vừa đặt — tiếng nhảy lùi hai giây ngay khi vừa bắt đầu. */
+    audio.src = batDau >= 1 ? `${url}#t=${Math.floor(batDau)}` : url;
+    /* PHÂN LOẠI LỖI, ĐỪNG KÊU OAN. Đổi bài là lệnh phát cũ bị huỷ («AbortError») —
+       chuyện bình thường, mà bản cũ đem hiện thành "trình duyệt chặn tự phát có
+       tiếng", đúng dòng chữ đỏ chủ máy gặp trong ảnh 21/09/2026. */
+    audio.play().catch((error) => this.playRefused(error));
     this.canhTieng(audio, generation);
   },
 
@@ -5106,8 +5124,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          Chrome từ chối, và chủ máy nhận đúng dòng "Trình duyệt chặn tự phát có tiếng
          — bấm lại «Nghe trên máy này»" trong ảnh chụp 21/09/2026: mất tiếng hoàn
          toàn, tệ hơn cả bản cũ vốn chỉ chậm. */
+      const phien = this._focusedSession();
+      const nhip = this._loaDanNhip(phien);
+      const giay = nhip ? this._speakerPosition(nhip, phien) : null;
       deviceAudio.entryId = this._entryId();
-      deviceAudio.startAlong();
+      deviceAudio.startAlong(phien && {
+        source: phien.source,
+        id: phien.id,
+        url: phien.url,
+        title: phien.title,
+        channel: phien.artist,
+        duration: phien.duration,
+        thumbnail: phien.thumbnail,
+      }, Math.max(0, Math.floor(Number(giay) || 0)));
       this._syncAlong();
     }
     this._syncSoundHint();

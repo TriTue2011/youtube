@@ -309,10 +309,18 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("_nhipDoDuoc(entityId) {", script)
         self.assertIn("Date.now() - luc <= 10000", script)
         self.assertEqual(script.count("this._nhipDoDuoc("), 1)
-        # Hai đường nghe — nghe một mình và nghe kèm loa — mỗi đường tự canh, nên
-        # có ĐÚNG hai nơi gọi. (Đợt 0.26.18 từng gộp về một qua «batDau»; bản ấy đã
-        # được trả về nguyên trạng 0.26.2 vì đo trên máy thật thấy nó không nghe được.)
-        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 2)
+        # BA đường nghe, mỗi đường tự canh: nghe một mình, nghe kèm loa, và (0.26.39)
+        # đường phát NGAY TRONG CÚ BẤM khi địa chỉ luồng đã xin sẵn. (Đợt 0.26.18 từng
+        # gộp về một qua «batDau»; bản ấy đã được trả về nguyên trạng 0.26.2 vì đo trên
+        # máy thật thấy nó không nghe được.)
+        self.assertEqual(script.count("this.canhTieng(audio, generation);"), 3)
+        # 0.26.39 — vào đúng giây bằng mảnh địa chỉ, không chờ «loadedmetadata» rồi tua:
+        # cú tua muộn ấy đè lên vị trí mới hơn mà vòng canh vừa đặt (dựng lại được trong
+        # Chrome 21/09/2026: tiếng nhảy lùi hai giây).
+        self.assertIn("audio.src = batDau >= 1 ? `${url}#t=${Math.floor(batDau)}` : url;", script)
+        self.assertNotIn(
+            'audio.addEventListener("loadedmetadata", () => { audio.currentTime = batDau; }',
+            script)
         # Hai số đo thêm để phân định phần còn lại: đã chọn được nguồn phát chưa, và
         # phần tử có nằm trong trang không.
         self.assertIn("nguon=${audio.currentSrc ? 1 : 0} dom=${audio.isConnected ? 1 : 0}", script)
@@ -434,9 +442,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Và Android phải mở khoá phần tử âm thanh NGAY TRONG CÚ BẤM: thử khung trước
         # rồi mới lùi sau vài giây là mở khoá ngoài cử chỉ người dùng, Chrome từ chối
         # thẳng ("Trình duyệt chặn tự phát có tiếng"), tức mất tiếng hoàn toàn.
-        self.assertIn("""      deviceAudio.entryId = this._entryId();
-      deviceAudio.startAlong();
-      this._syncAlong();""", script)
+        self.assertIn("      deviceAudio.entryId = this._entryId();", script)
+        self.assertIn("      deviceAudio.startAlong(phien && {", script)
+        # 0.26.39 — và lệnh phát phải nằm NGAY TRONG cú bấm ấy khi đã có sẵn địa chỉ
+        # luồng: đi qua một «await» là ra ngoài cử chỉ người dùng, Chrome đòi chạm lại.
+        self.assertIn("""    const san = item ? this.nhoLuong.get(this.khoaLuong(item)) : null;
+    if (san?.url && Date.now() - san.luc <= 240000) {""", script)
         self.assertIn("if (video.soundOnly) {", script)
         # Ràng buộc cũ đã bỏ: chủ máy báo "Phải bật nghe khi tắt màn hình kèm theo
         # thì mới bật được nghe trên máy này".
@@ -520,9 +531,10 @@ class LovelaceCardContractTests(unittest.TestCase):
         # đường chọn một kiểu, nên hình bám loa này còn thanh tiến trình chạy theo loa
         # kia; và loa đầu danh sách không báo giây là hai vòng kéo đứng im hẳn.
         self.assertIn("_loaDanNhip(session = this._focusedSession()) {", script)
-        # 0.26.34: thêm một nơi gọi — «_ngheBangKhung» lấy giây của loa để mở khung
-        # vào đúng chỗ ấy. Vẫn là CÙNG một hàm chọn loa dẫn nhịp, đúng ý luật này.
-        self.assertEqual(script.count("this._loaDanNhip("), 3)
+        # Thêm hai nơi gọi so với bản đầu, vẫn là CÙNG một hàm chọn loa dẫn nhịp nên
+        # đúng ý luật này: «_ngheBangKhung» (0.26.34) mở khung vào đúng giây của loa,
+        # và «_toggleSoundHere» (0.26.39) lấy giây ấy để phát ngay trong cú bấm.
+        self.assertEqual(script.count("this._loaDanNhip("), 4)
         # 0.26.11: ghim được bài Facebook, và bản ghi MANG THEO NGUỒN — thiếu nguồn thì
         # phát lại sẽ đi vào đường YouTube rồi chết ở cửa chặn mã 11 ký tự.
         self.assertIn('if (["youtube", "facebook"].includes(item.source || this._source)) {', script)

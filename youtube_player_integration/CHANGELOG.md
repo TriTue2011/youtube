@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.26.39 - 2026-09-21
+
+### "Tiếng rất lâu mới nghe thấy, hoặc phải bấm thêm Nghe khi tắt màn hình"
+
+Chủ máy đo hai cảnh, và chính chỗ khác nhau giữa chúng chỉ ra nguyên nhân:
+
+| Cảnh | Trước |
+|---|---|
+| Loa đang phát → bấm "Nghe trên máy này" | rất lâu, có khi phải bấm thêm một nút nữa mới ra tiếng |
+| Đang nghe trên máy → loa sang bài khác | nhanh |
+
+Tôi dựng lại đúng hai cảnh ấy trong Chrome bằng chính tệp thẻ (một `hass` giả, một tệp
+âm thật) và bắt được ba thứ:
+
+1. **Lệnh phát nằm NGOÀI cú bấm.** Đường "nghe cùng loa" mở khoá phần tử âm thanh trong
+   cú bấm, nhưng rồi `await` một vòng xin địa chỉ luồng mới phát. Trình duyệt chỉ chắc
+   chắn cho phát khi lệnh phát nằm **trong chính cử chỉ người dùng** — nên nó bị từ chối,
+   và chỉ chạy khi người dùng chạm thêm một lần nữa (bấm "Nghe khi tắt màn hình" cũng là
+   một cú chạm, đó là lý do thao tác ấy "chữa" được).
+   Nay: địa chỉ đã xin sẵn thì **phát ngay trong cú bấm**, không chờ gì cả.
+2. **Cú tua muộn đè lên vị trí mới hơn.** Bản trước đợi `loadedmetadata` rồi mới tua tới
+   giây của loa; trong lúc chờ, vòng canh đã đặt một vị trí mới hơn — cú tua muộn kéo
+   tiếng **lùi lại hai giây**. Nay vào đúng chỗ ngay trong địa chỉ (`#t=`), không tua.
+3. **Kêu oan "trình duyệt chặn".** Đổi bài làm lệnh phát cũ bị huỷ (`AbortError`) —
+   chuyện bình thường — nhưng thẻ hiện thành dòng đỏ *"Trình duyệt chặn tự phát có
+   tiếng"*, đúng dòng trong ảnh chụp sáng nay. Nay phân loại đúng: huỷ thì im lặng, bị
+   chặn thật mới báo, lỗi khác thì nói rõ tên lỗi.
+
+Đo lại sau khi sửa, vẫn trong cảnh dựng: cú bấm → mở khoá → **phát ngay tại chỗ với
+`#t=12`**, tất cả nằm gọn trong cú bấm; sau đó chỉnh đúng một nhịp theo loa, không còn
+nhảy lùi, không còn dòng đỏ.
+
+### Đường mạng không phải thủ phạm
+
+Đo lại trên máy chủ sáng nay, cùng bài, khi luồng đã ấm: lấy byte đầu **ở giữa bài mất
+0,04 giây**, qua cả lớp tiếp sức của Home Assistant cũng 0,05 giây. Con số 1,64 giây đo
+tối qua là giá của lần mở luồng đầu tiên, không phải giá mỗi lần tua.
+
 ## 0.26.38 - 2026-09-21
 
 ### Android: trả tiếng về phần tử âm thanh, và mở khoá NGAY TRONG CÚ BẤM
