@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.63";
+const PHIEN_BAN_THE = "0.26.64";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -466,6 +466,21 @@ const deviceAudio = {
       return;
     }
     audio.src = url;
+    /* MÁY NHÀ TÁO CẦN MỘT LỆNH NẠP TƯỜNG MINH.
+       Đặt «src» rồi gọi thẳng «play()» thì WebKit nằm ở «nap=0 mang=2» — đang tải mà
+       không một byte nào. Nhưng cú tự cứu (gọi «load()» rồi mới «play()») thì chạy
+       được: hộp đen iPhone chủ máy 22:00:11 ngày 21/09/2026 ghi «cứu lượt nạp» rồi
+       hai giây sau là «nap=4 … phat=ok», đồng hồ tiếng đi 0,3 → 3,3.
+       Nguồn không phải YouTube (Zing, Facebook) không có khung để mượn nên bắt buộc
+       đi đường này — đây là thứ duy nhất đo được là có tác dụng.
+       Android không đụng tới: nó vốn chạy tốt, không việc gì phải đổi. */
+    if (laTao()) {
+      try {
+        audio.load();
+      } catch (_error) {
+        // Máy nào không cho thì thôi, vẫn còn cú phát bên dưới.
+      }
+    }
     if (startAt >= 1) audio.addEventListener("loadedmetadata", () => { audio.currentTime = startAt; }, { once: true });
     this.phatVaGhi(audio);
     this.hopDenTheoDoi(coSan ? "nghe một mình, địa chỉ có sẵn" : "nghe một mình, phải hỏi máy chủ", audio);

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.26.64 - 2026-09-21
+
+### Facebook và Zing trên iPhone: cần một lệnh nạp tường minh
+
+Hộp đen lúc 22:00 cho một manh mối mà trước đó không ai thấy:
+
+```
+22:00:11  cứu lượt nạp: gọi lại load() rồi play()
+22:00:13  sau khi cứu (+2s) — nap=4 … phat=ok
+22:00:16  (+8s) — nap=4 giay=3.3 phat=ok
+```
+
+Tức trên iPhone, phần tử âm thanh **vẫn phát được** — nhưng chỉ sau khi được gọi
+`load()` tường minh. Đặt `src` rồi gọi thẳng `play()` thì nó nằm ở `nap=0 mang=2`,
+đúng cảnh đã theo đuổi cả ngày.
+
+Cùng lúc ấy, lượt Facebook lúc 21:58 (`kieu=video/mp4`) nằm `nap=0` suốt vì không có
+cú `load()` nào.
+
+YouTube trên máy nhà Táo đã chuyển sang khung nên không dính. Nhưng **Zing và
+Facebook không có khung để mượn**, buộc phải đi đường phần tử âm thanh — nên nay
+đường ấy gọi `load()` trước khi phát, đúng thứ duy nhất đo được là có tác dụng.
+
+Android không đổi một dòng nào: nó vốn chạy tốt.
+
 ## 0.26.63 - 2026-09-21
 
 ### Tắt màn là mất tiếng: bộ trộn tiếng chưa thức mà vẫn đem dòng của nó ra phát

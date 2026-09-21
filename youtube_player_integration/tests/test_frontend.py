@@ -828,6 +828,14 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("new Promise((xong) => setTimeout(xong, 2000)),", script)
         # Và phải ghi lại ĐÚNG LÚC màn hình tắt — lúc mọi thứ hỏng mà không ai thấy.
         self.assertIn("_theoDoiTatMan() {", script)
+        # 0.26.64 — máy nhà Táo cần một lệnh nạp TƯỜNG MINH trước khi phát.
+        # Đặt «src» rồi gọi thẳng «play()» thì WebKit nằm ở nap=0 mang=2; nhưng cú tự
+        # cứu (load() rồi play()) thì chạy: hộp đen iPhone 22:00:11 ngày 21/09/2026
+        # ghi "cứu lượt nạp" rồi hai giây sau "nap=4 … phat=ok", giây đi 0,3 → 3,3.
+        # Nguồn không phải YouTube (Zing, Facebook) không có khung để mượn nên bắt
+        # buộc đi đường này.
+        self.assertIn("MÁY NHÀ TÁO CẦN MỘT LỆNH NẠP TƯỜNG MINH", script)
+        self.assertIn("    if (laTao()) {\n      try {\n        audio.load();", script)
         self.assertIn("màn hình ${document.visibilityState === \"hidden\" ? \"TẮT\" : \"BẬT lại\"}", script)
         # Chỉ nghe phải TRÔNG NHƯ nghe nhạc: có tên bài, ảnh bìa, và còn nút Xem.
         self.assertIn("CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC", script)
