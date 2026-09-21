@@ -684,6 +684,30 @@ class LovelaceCardContractTests(unittest.TestCase):
         )
         self.assertIn("frontend", manifest["dependencies"])
 
+    def test_hop_den_khai_may_nao_va_ban_nao(self):
+        """Hộp đen phải nói rõ MÁY NÀO gửi và ĐANG CHẠY BẢN NÀO.
+
+        Thiếu hai thứ này là tôi đứng hình 21/09/2026: nhật ký 18:12:57 ghi đường phần
+        tử âm thanh, mà chủ máy có cả iPhone lẫn Android cùng mở thẻ — không biết dòng
+        ấy của máy nào nên không kết luận được bản sửa cho iPhone đã chạy chưa.
+        Số trong thẻ phải KHỚP manifest, nếu không hộp đen báo nhầm bản còn tai hại hơn
+        là không báo.
+        """
+        script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(
+            encoding="utf-8"
+        )
+        manifest = json.loads(
+            (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")
+        )
+
+        self.assertIn("dauMay() {", script)
+        self.assertIn('may=${may} ban=${PHIEN_BAN_THE}', script)
+        self.assertIn(f'const PHIEN_BAN_THE = "{manifest["version"]}";', script)
+        # Đường KHUNG của máy nhà Táo cũng phải có hộp đen, nếu không nhánh ấy chạy
+        # xong là im lặng tuyệt đối — không cách nào biết nó có phát được không.
+        self.assertIn("_hopDenKhungTheoDoi(nhan) {", script)
+        self.assertIn('this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");', script)
+
     def test_http_dependency_and_service_description_are_packaged(self):
         manifest = json.loads(
             (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")

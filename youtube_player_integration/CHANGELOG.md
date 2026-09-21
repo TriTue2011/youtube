@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.26.51 - 2026-09-21
+
+### Hộp đen khai luôn MÁY NÀO gửi và ĐANG CHẠY BẢN NÀO
+
+Thiếu hai thứ này là bế tắc. Nhật ký 18:12:57 ghi đường phần tử âm thanh, mà chủ máy
+có cả iPhone lẫn Android cùng mở thẻ — không cách nào biết dòng ấy của máy nào, nên
+không kết luận được bản sửa cho iPhone đã chạy tới nơi chưa.
+
+Nay mọi dòng hộp đen kèm `may=ios|android|safari|khac` và `ban=0.26.51`. Số trong thẻ
+bị test buộc phải khớp `manifest.json`, vì báo nhầm bản còn tai hại hơn không báo.
+
+### Đường khung của máy nhà Táo cũng có hộp đen
+
+Nhánh "chỉ nghe bằng khung" của 0.26.50 chạy xong là im lặng tuyệt đối — không cách
+nào biết khung có phát được không. Nay nó ghi bốn mốc như đường phần tử âm thanh:
+
+```
+nghe một mình bằng khung (nhà Táo) (ngay lúc bấm) — mo=1 chitieng=1 san=0 trangthai=-1
+```
+
+`trangthai` là mã của trình phát YouTube: −1 chưa bắt đầu, 1 đang chạy, 2 tạm dừng,
+3 đang nạp, 5 đã nạp sẵn chờ lệnh. Chủ máy báo *"không tự động phát video nhỉ, phải
+kích vào"* — nếu đúng thì ở đây sẽ thấy `trangthai` đứng ở −1 hoặc 5 mà không bao giờ
+sang 1, và đó là bằng chứng để quyết định bước tiếp theo.
+
 ## 0.26.50 - 2026-09-21
 
 ### iPhone: "chỉ nghe" đi bằng khung YouTube, không bằng phần tử âm thanh

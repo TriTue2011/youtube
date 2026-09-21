@@ -82,6 +82,9 @@ const laSafari = () => {
 /** Máy nhà Táo chạy WebKit: iPhone, iPad, và Safari trên macOS. */
 const laTao = () => laIOS() || laSafari();
 
+/** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
+const PHIEN_BAN_THE = "0.26.51";
+
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
    người dùng với CHÍNH tên miền ấy (Media Engagement Index). Máy nào cũng xem
@@ -485,6 +488,27 @@ const deviceAudio = {
    *  «giay» = đồng hồ của tiếng, «tamdung», «nguon» = đã chọn được nguồn phát chưa,
    *  «dom» = phần tử có nằm trong trang không.
    */
+  /** Máy nào đang gửi, và đang chạy bản thẻ nào.
+   *
+   *  Thiếu hai thứ này mà tôi đứng hình 21/09/2026: log 18:12:57 ghi đường phần tử
+   *  âm thanh, mà chủ máy có cả iPhone lẫn Android cùng mở thẻ — không cách nào biết
+   *  dòng ấy của máy nào, nên không kết luận được bản sửa cho iPhone đã chạy chưa. */
+  dauMay() {
+    const ua = typeof navigator === "undefined" ? "" : navigator.userAgent || "";
+    const may = laIOS() ? "ios" : /Android/.test(ua) ? "android" : laSafari() ? "safari" : "khac";
+    return `may=${may} ban=${PHIEN_BAN_THE}`;
+  },
+
+  /** Ghi thẳng một dòng vào nhật ký Home Assistant (không kèm phần tử âm thanh). */
+  ghiThang(dong) {
+    if (!this.hass?.callService) return;
+    this.hass.callService("system_log", "write", {
+      message: `[the youtube] ${dong} ${this.dauMay()}`,
+      level: "warning",
+      logger: "tritue_youtube_player.the",
+    }).catch(() => {});
+  },
+
   hopDen(nhan, audio) {
     if (!this.hass?.callService) return;
     const a = audio || this.element;
@@ -499,7 +523,7 @@ const deviceAudio = {
           const dem = (chon) => document.querySelectorAll(chon).length
             + (goc ? goc.querySelectorAll(chon).length : 0);
           return `${dem("audio,video")}m/${dem("iframe")}k`;
-        })()}`
+        })()} ${this.dauMay()}`
       : "(chưa có phần tử)";
     this.hass.callService("system_log", "write", {
       message: `[the youtube] ${nhan} — ${so}`,
@@ -5320,6 +5344,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._thucTiengKhung();
   }
 
+  /** HỘP ĐEN CHO ĐƯỜNG KHUNG — cùng bốn mốc như đường phần tử âm thanh.
+   *
+   *  «trangthai» là mã của trình phát YouTube: -1 chưa bắt đầu, 0 hết bài, 1 đang
+   *  chạy, 2 tạm dừng, 3 đang nạp, 5 đã nạp sẵn chờ lệnh. Chủ máy 21/09/2026: "không
+   *  tự động phát video nhỉ, phải kích vào" — nếu đúng thì ở đây sẽ thấy «trangthai»
+   *  đứng ở -1 hoặc 5 mà không bao giờ sang 1.
+   */
+  _hopDenKhungTheoDoi(nhan) {
+    (this._hopDenKhungTimers || []).forEach((id) => clearTimeout(id));
+    const ghi = (moc) => {
+      const v = this._video;
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang(`${nhan} ${moc} — mo=${v.open ? 1 : 0} chitieng=${v.soundOnly ? 1 : 0}`
+        + ` san=${v.ready ? 1 : 0} trangthai=${v.state} giay=${Number(v.time || 0).toFixed(1)}`);
+    };
+    ghi("(ngay lúc bấm)");
+    this._hopDenKhungTimers = [1000, 3000, 8000].map((cho) =>
+      setTimeout(() => ghi(`(+${cho / 1000}s)`), cho));
+  }
+
   _toggleSoundHere() {
     const video = this._video;
     const pictureSound = video.open && video.withSpeakers && video.soundHere;
@@ -6589,6 +6633,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         if (deviceAudio.item || deviceAudio.along) deviceAudio.stop();
         this._openVideo(item, { withSpeakers: false, soundHere: true, soundOnly: true });
         if (listenScreenOff()) this._giuTiengNen();
+        this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
         this._setStatus(`Đang nghe “${name}” trên máy này.`);
         return;
       }
