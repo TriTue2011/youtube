@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.26.68 - 2026-09-21
+
+### Tắt màn là WebKit tạm dừng khung — phải bảo nó chạy tiếp
+
+Hộp đen ghi đúng khoảnh khắc tắt màn, hai lần liền:
+
+```
+22:42:37  màn hình TẮT — trangthai=2  giay=4.3  nen=1  congtac=1
+22:42:47  màn hình TẮT — trangthai=2  giay=7.0  nen=1  congtac=1
+```
+
+`trangthai=2` là **đang tạm dừng**, trong khi ba giây trước đó còn là 1. Và điều này
+xảy ra **dù dòng giữ nền đang chạy** (`nen=1`) và công tắc đang bật (`congtac=1`).
+
+Nghĩa là: dòng im lặng giữ được **trang** sống, nhưng không ngăn WebKit tạm dừng
+**khung**. Đó là chỗ tôi hiểu sai suốt mấy bản vừa rồi.
+
+Thẻ `phicomm-r1-card` — thứ chạy được trên chính máy ấy — làm **ba việc** ở đúng lúc
+này, còn thẻ ta mới làm một:
+
+| | phicomm | thẻ ta (trước) |
+|---|---|---|
+| Phát tiếp dòng nền | có | có |
+| Khai với hệ điều hành "đang phát" | có | **không** |
+| **Gửi lệnh phát vào khung** | có | **không** |
+
+Việc thứ ba là mấu chốt. Nay thẻ làm cả ba, và **nhắc lại mỗi giây** trong tối đa nửa
+phút — vì WebKit dừng khung nhiều lần chứ không chỉ một.
+
+### Đừng kết tội cú thu khung khi thủ phạm là màn hình tắt
+
+Phép kiểm "thu khung xong có tắt tiếng không" thấy `trangthai=2` lúc màn tắt liền kết
+luận thu khung làm hỏng, rồi **bung video ra**. Mở máy lên thấy video hiện giữa lúc
+đang nghe nhạc. Nay bỏ qua phép kiểm ấy khi màn hình đang tắt.
+
 ## 0.26.66 - 2026-09-21
 
 ### Bỏ vòng dò "gửi origin / bỏ origin" — nó chạy loạn và không bao giờ thắng

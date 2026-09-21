@@ -840,6 +840,17 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("CHÉP Y NGUYÊN BỘ THAM SỐ CỦA «phicomm-r1-card»", script)
         self.assertNotIn('cc_load_policy: "0"', script)
         self.assertIn("accelerometer; autoplay; clipboard-write;", script)
+        # 0.26.68 — TẮT MÀN LÀ WEBKIT TẠM DỪNG KHUNG, phải bảo nó chạy tiếp.
+        # Hộp đen iPhone chủ máy 22:42:37 và 22:42:47 ngày 21/09/2026 ghi đúng khoảnh
+        # khắc tắt màn: trangthai=2 (đang tạm dừng), trong khi dòng giữ nền vẫn chạy
+        # (nen=1) và công tắc vẫn bật (congtac=1). Dòng im lặng giữ được TRANG sống
+        # nhưng không ngăn WebKit dừng KHUNG.
+        # Thẻ phicomm-r1-card làm ba việc ở đúng lúc này; thẻ ta mới làm một.
+        self.assertIn("_giuKhungChayKhiAn() {", script)
+        self.assertIn('navigator.mediaSession.playbackState = "playing";', script)
+        self.assertIn('if (this._video.state !== 1) this._videoCommand("playVideo");', script)
+        # Và đừng kết tội cú thu khung khi thủ phạm là màn hình tắt.
+        self.assertIn("MÀN HÌNH ĐANG TẮT THÌ ĐỪNG KẾT TỘI CÚ THU KHUNG", script)
         # 0.26.63 — đường giữ tiếng nền phải TỰ NÓI ĐƯỢC nó chạy hay hỏng, và phải
         # có đường lui khi bộ trộn tiếng chưa thức.
         self.assertIn("giữ tiếng nền: bắt đầu", script)

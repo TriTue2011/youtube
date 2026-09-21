@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.67";
+const PHIEN_BAN_THE = "0.26.68";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5572,6 +5572,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       deviceAudio.ghiThang("thu khung lại sau khi đã chạy");
       setTimeout(() => {
         if (!this._video.open) return;
+        /* MÀN HÌNH ĐANG TẮT THÌ ĐỪNG KẾT TỘI CÚ THU KHUNG.
+           Lúc ấy WebKit tự tạm dừng khung (đo được: «trangthai=2» ngay khoảnh khắc
+           tắt màn), mà phép kiểm này lại hiểu là "thu khung xong thì tắt tiếng" rồi
+           bung video ra — người dùng mở máy lên thấy video hiện giữa lúc đang nghe
+           nhạc. */
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         if (this._video.state === 1) {
           this._setStatus("Đang nghe trên máy này.");
           deviceAudio.ghiThang(`thu khung xong, vẫn chạy — trangthai=${this._video.state}`);
@@ -5822,6 +5828,52 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
   }
 
+  /** BẢO KHUNG CHẠY TIẾP KHI MÀN HÌNH TẮT — chép cơ chế của «phicomm-r1-card».
+   *
+   *  Hộp đen iPhone chủ máy 22:42:37 và 22:42:47 ngày 21/09/2026 ghi đúng khoảnh khắc
+   *  tắt màn: «trangthai=2» — ĐANG TẠM DỪNG — trong khi ba giây trước đó còn là 1, và
+   *  dòng giữ nền vẫn chạy («nen=1»), công tắc vẫn bật («congtac=1»).
+   *  Tức dòng im lặng giữ được TRANG sống, nhưng không ngăn WebKit tạm dừng KHUNG.
+   *
+   *  Thẻ «phicomm-r1-card» — thứ chạy được trên chính máy ấy — làm ba việc ở đúng lúc
+   *  này, còn thẻ ta mới làm một:
+   *    1. phát tiếp dòng nền nếu nó bị dừng          (ta đã có)
+   *    2. khai với hệ điều hành «đang phát»           (thiếu)
+   *    3. GỬI LỆNH PHÁT VÀO KHUNG                     (thiếu — đây là mấu chốt)
+   *
+   *  Gửi một lần là chưa đủ: WebKit dừng khung nhiều lần trong lúc màn tắt. Nên nhắc
+   *  lại mỗi giây, tối đa nửa phút, và chỉ khi khung thật sự không chạy.
+   */
+  _giuKhungChayKhiAn() {
+    clearInterval(this._henGiuKhung);
+    if (!listenScreenOff() || !this._video.open || !this._video.soundHere) return;
+    const batDau = Date.now();
+    const nhac = () => {
+      if (document.visibilityState !== "hidden" || !this._video.open) {
+        clearInterval(this._henGiuKhung);
+        this._henGiuKhung = null;
+        return;
+      }
+      if (this._nenAudio && this._nenAudio.paused) this._nenAudio.play().catch(() => {});
+      if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+        try {
+          navigator.mediaSession.playbackState = "playing";
+        } catch (_error) {
+          // Máy không cho khai thì thôi.
+        }
+      }
+      if (this._video.state !== 1) this._videoCommand("playVideo");
+      if (Date.now() - batDau > 30000) {
+        clearInterval(this._henGiuKhung);
+        this._henGiuKhung = null;
+        deviceAudio.hass = this._hass;
+        deviceAudio.ghiThang(`giữ khung chạy khi ẩn: hết 30s — trangthai=${this._video.state}`);
+      }
+    };
+    nhac();
+    this._henGiuKhung = setInterval(nhac, 1000);
+  }
+
   /** GHI LẠI ĐÚNG LÚC MÀN HÌNH TẮT / BẬT LẠI.
    *
    *  Tắt màn là lúc mọi thứ hỏng, mà không ai thấy gì: người dùng đang cầm máy úp
@@ -5840,7 +5892,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         + ` giay=${Number(v.time || 0).toFixed(1)} chitieng=${v.soundOnly ? 1 : 0}`
         + ` nen=${this._nenAudio && !this._nenAudio.paused ? 1 : 0}`
         + ` congtac=${listenScreenOff() ? 1 : 0}`);
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "hidden") {
+        this._giuKhungChayKhiAn();
+      } else {
+        clearInterval(this._henGiuKhung);
+        this._henGiuKhung = null;
         setTimeout(() => {
           deviceAudio.ghiThang(`sau khi bật lại màn (+2s) — trangthai=${this._video.state}`
             + ` giay=${Number(this._video.time || 0).toFixed(1)}`);
