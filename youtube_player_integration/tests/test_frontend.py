@@ -283,7 +283,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         # 0.26.34: điều kiện là NỀN TẢNG, không phải "có loa hay không". Có loa hay
         # không thì WebKit vẫn không tải nổi phần tử âm thanh, nên vừa ra loa vừa nghe
         # trên máy nhà Táo cũng phải giữ tiếng trong khung.
-        self.assertIn("if (on && laTao() && video.open && video.soundHere && video.item) {", script)
+        # 0.26.57 thêm «&& video.state === 1»: dòng im lặng giữ nền chỉ được bật khi
+        # khung ĐANG chạy, nếu không nó giành mất chỗ phát của khung trên iOS.
+        self.assertIn(
+            "if (on && laTao() && video.open && video.soundHere && video.item"
+            " && video.state === 1) {",
+            script,
+        )
         # Và đường nhanh phải NHƯỜNG khi máy không phải nhà Táo mà đang bật nghe-khi-
         # tắt-màn: khung nhúng bị treo lúc trang ẩn, chỉ phần tử âm thanh còn chạy.
         self.assertIn("if (listenScreenOff() && !laTao()) return false;", script)
@@ -751,6 +757,19 @@ class LovelaceCardContractTests(unittest.TestCase):
         # đầu — mở thẳng ở dạng một điểm ảnh là đánh cược iOS không đòi chạm.
         self.assertIn("const dangChiNghe = this._video.soundOnly;", script)
         self.assertIn("if (dangChiNghe) this._thuKhungKhiDaChay();", script)
+        # 0.26.57 — DÒNG IM LẶNG GIỮ NỀN chỉ được chạy SAU KHI khung đã phát.
+        # iOS chỉ cho một luồng chạy một lúc; bật trước là nó giành mất chỗ của khung.
+        # Hộp đen iPhone chủ máy 21/09/2026 bắt đúng tương quan:
+        #   21:04:09 (chưa bật giữ nền)   → trangthai 1 sau một giây, nhạc chạy
+        #   21:04:15 bật nghe-khi-tắt-màn
+        #   21:05:02 và 21:05:22 (đã bật) → trangthai=-1 suốt 8 giây, không chạy
+        self.assertIn("DÒNG IM LẶNG GIỮ NỀN CHỈ ĐƯỢC CHẠY SAU KHI KHUNG ĐÃ PHÁT", script)
+        self.assertIn(
+            "      if (listenScreenOff()) this._giuTiengNen();\n      deviceAudio.hass = this._hass;",
+            script,
+        )
+        # Công tắc ấy cũng chỉ được bật dòng nền khi khung ĐANG chạy.
+        self.assertIn("&& video.item && video.state === 1) {", script)
 
     def test_duong_cua_the_phai_gui_dia_chi_va_khong_nuot_ma_loi(self):
         """Đường lấy luồng của THẺ phải gửi gợi ý địa chỉ, y như đường ra loa.

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.26.57 - 2026-09-21
+
+### iPhone: dòng im lặng giữ nền giành mất chỗ phát của khung
+
+Hộp đen trên iPhone chủ máy lúc 21:04–21:05 cho một tương quan không thể rõ hơn:
+
+| Lúc | Việc | Kết quả |
+|---|---|---|
+| 21:04:09 | bấm nghe (**chưa** bật giữ nền) | `trangthai=1` sau một giây, nhạc chạy, `giay` lên 7,5 |
+| 21:04:15 | **bật "nghe khi tắt màn hình"** | bài đang chạy vẫn chạy bình thường |
+| 21:05:02 | bấm nghe (đã bật) | `trangthai=-1` suốt 8 giây |
+| 21:05:22 | bấm nghe (đã bật) | `trangthai=-1` suốt 8 giây |
+
+Công tắc ấy làm thẻ phát một dòng im lặng lặp vô hạn để giữ trang "đang có tiếng".
+Nhưng iOS chỉ cho **một** luồng chạy một lúc, nên bật dòng ấy **trước** là nó giành
+mất chỗ, và khung không bao giờ khởi động.
+
+Nay thứ tự đảo lại: khung chạy trước, dòng giữ nền vào sau — đúng nhịp trình phát báo
+đang chạy. Công tắc cũng chỉ bật dòng nền khi khung **đang** chạy.
+
+Đây cũng là lời giải cho báo cáo *"kích vào nghe khi tắt màn hình không được"*: công
+tắc không hỏng, nhưng bật nó xong thì lần bấm nghe kế tiếp không lên tiếng nữa.
+
 ## 0.26.56 - 2026-09-21
 
 ### Soát nốt các nút còn lại trên iOS

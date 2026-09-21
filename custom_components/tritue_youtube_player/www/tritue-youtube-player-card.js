@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.56";
+const PHIEN_BAN_THE = "0.26.57";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5388,7 +5388,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       soundOnly: false,
       startSeconds: Math.max(0, Math.floor(Number(batDau) || 0)),
     });
-    if (listenScreenOff()) this._giuTiengNen();
+    /* DÒNG IM LẶNG GIỮ NỀN CHỈ ĐƯỢC CHẠY SAU KHI KHUNG ĐÃ PHÁT.
+       iOS chỉ cho MỘT luồng chạy một lúc. Bật trước là nó giành mất chỗ của khung,
+       và khung không bao giờ khởi động. Hộp đen trên iPhone chủ máy 21/09/2026 bắt
+       đúng tương quan ấy:
+         21:04:09 (chưa bật giữ nền)      → trangthai 1 sau một giây, nhạc chạy
+         21:04:15 bật nghe-khi-tắt-màn
+         21:05:02 và 21:05:22 (đã bật)    → trangthai=-1 suốt 8 giây, không chạy
+       Nên việc giữ nền chuyển sang «_thuKhungKhiDaChay», đúng nhịp trình phát báo
+       đang chạy. */
     this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
     this._thuKhungKhiDaChay();
     return true;
@@ -5417,6 +5425,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       clearInterval(this._henThuKhung);
       v.soundOnly = true;
       this._syncNowPlaying();
+      // Giờ khung đã phát thì mới được thêm dòng im lặng giữ nền (xem lý do ở
+      // «_ngheBangKhungMotMinh»).
+      if (listenScreenOff()) this._giuTiengNen();
       deviceAudio.hass = this._hass;
       deviceAudio.ghiThang("thu khung lại sau khi đã chạy");
       setTimeout(() => {
@@ -5647,7 +5658,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        bật nghe-khi-tắt-màn là rơi xuống nhánh giao tiếng cho phần tử âm thanh — đúng
        thứ không bao giờ tải trên WebKit, tức mất tiếng. Có loa hay không thì WebKit vẫn
        thế. */
-    if (on && laTao() && video.open && video.soundHere && video.item) {
+    if (on && laTao() && video.open && video.soundHere && video.item && video.state === 1) {
       /* iOS: GIỮ TIẾNG TRONG KHUNG, đừng chuyển sang phần tử âm thanh.
          Đó là chỗ mọi bản trước hỏng — đo được phần tử ấy không bao giờ tải trên
          iOS. Thẻ «phicomm-r1-card» của chủ máy chạy được chính vì nó không bao giờ
