@@ -770,6 +770,28 @@ class LovelaceCardContractTests(unittest.TestCase):
         )
         # Công tắc ấy cũng chỉ được bật dòng nền khi khung ĐANG chạy.
         self.assertIn("&& video.item && video.state === 1) {", script)
+        # 0.26.58 — ĐANG MỞ ĐÚNG BÀI ẤY RỒI THÌ ĐỪNG MỞ LẠI. Dựng lại khung là xoá
+        # luôn quyền phát mà cú chạm vừa cấp, nên trình phát tụt về "chưa bắt đầu".
+        # Hộp đen iPhone chủ máy 21/09/2026 bắt nhiều cặp mở hai lần cách nhau chưa
+        # tới một giây (21:06:30 hai lần, 21:08:15 rồi 21:08:16) và gần như lần nào
+        # cũng kết thúc ở trangthai=-1 vĩnh viễn — đó là lý do lúc chạy lúc không.
+        self.assertIn("ĐANG MỞ ĐÚNG BÀI ẤY RỒI THÌ ĐỪNG MỞ LẠI", script)
+        self.assertIn(
+            'String(dangMo.item?.id || "") === String(item.id || "")', script
+        )
+        # 0.26.59 — KÍCH LÀ CHẠY, KHÔNG BÁO GÌ, KHÔNG HỎI GÌ (chủ máy 21/09/2026).
+        # Khung mở ẨN SẴN; chỉ hiện ra nếu quá 2,5 giây vẫn không chịu chạy.
+        self.assertIn("MỞ ẨN SẴN", script)
+        self.assertIn("      soundOnly: true,\n      startSeconds:", script)
+        self.assertIn("QUÁ 2,5 GIÂY VẪN KHÔNG CHẠY", script)
+        # Chỉ nghe phải TRÔNG NHƯ nghe nhạc: có tên bài, ảnh bìa, và còn nút Xem.
+        self.assertIn("CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC", script)
+        self.assertIn("if (video.open && video.soundOnly && video.item && !video.withSpeakers) {", script)
+        # Bấm Xem chỉ BUNG khung ra, không dựng lại (dựng lại là mất quyền phát).
+        self.assertIn("ĐANG CHỈ NGHE BẰNG KHUNG: bấm Xem chỉ là bung khung ấy ra", script)
+        # Không còn hộp thoại chen ngang lúc đang phát.
+        self.assertIn("BẤM CÁI NÀO LÀ CÁI ĐÓ CHẠY, KHÔNG HỎI LẠI", script)
+        self.assertNotIn("Xem hình khi ở ngoài mạng nhà", script)
 
     def test_duong_cua_the_phai_gui_dia_chi_va_khong_nuot_ma_loi(self):
         """Đường lấy luồng của THẺ phải gửi gợi ý địa chỉ, y như đường ra loa.

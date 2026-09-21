@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.26.59 - 2026-09-21
+
+### Kích là chạy: không hiện video, không báo gì, không hỏi gì
+
+Chủ máy chốt 21/09/2026: *"kích tai nghe lại ra video… tôi cần không báo gì, chỉ cần
+chạy thôi, kích là chạy"*, và *"kích xem video là xem video, nghe nhạc là nghe nhạc"*.
+
+**Khung mở ẩn sẵn.** Địa chỉ khung được gán ngay trong cú bấm kèm `autoplay=1`, nên
+phần lớn trường hợp nó tự chạy — hộp đen 21:04:10 và 21:08:27 đều lên `trangthai=1`
+sau đúng một giây. Chỉ khi quá **2,5 giây** vẫn nằm im thì khung mới hiện ra để còn
+chạm được. Chạy được thì người dùng không thấy gì cả.
+
+**Chỉ nghe trông như nghe nhạc.** Trước đó ô đang-phát báo "Chưa phát bài nào" ngay
+giữa lúc nhạc đang chạy, vì thẻ tưởng đang xem video. Nay hiện tên bài, kênh, thời
+lượng, ảnh bìa và dòng "Nghe trên máy này" — và **giữ nút Xem** để chuyển sang xem
+được. Bấm Xem chỉ **bung** khung ấy ra, không dựng lại (dựng lại là mất quyền phát,
+nhạc đứng im).
+
+**Bỏ câu hỏi chen ngang.** Nhánh "YouTube từ chối nhúng" vốn hiện hộp thoại "Xem
+hình?" dựa trên suy đoán *"ở ngoài mạng nhà"* — suy ra từ việc một địa chỉ không mở
+được, chứ không phải biết thật, nên chủ máy ngồi ở nhà vẫn bị báo thế. Nay mở thẳng,
+không hỏi. Trên máy nhà Táo nhánh ấy còn từng **câm khung** để giao tiếng cho phần tử
+âm thanh — tức mất tiếng hẳn; nay nó chỉ hiện khung ra.
+
+Đo trên Chrome giả iPhone: khung ẩn, tên bài "Bài nhạc", dòng phụ
+"YouTube · Kênh nhạc · 5:00 · Nghe trên máy này", nút Xem **hiện**, bấm Xem thì khung
+bung ra mà trình phát vẫn `trangthai=1`, và **không một hộp thoại nào**.
+
+## 0.26.58 - 2026-09-21
+
+### iPhone: một cú bấm dựng khung HAI lần, và lần thứ hai giết lần thứ nhất
+
+Đọc kỹ 60 dòng hộp đen lúc 21:04–21:10 thì lộ ra một dấu hiệu lặp đi lặp lại:
+
+```
+21:06:30 (ngay lúc bấm) … 21:06:30 (ngay lúc bấm)
+21:08:15 (ngay lúc bấm) … 21:08:16 (ngay lúc bấm)
+21:06:39 (ngay lúc bấm) … 21:06:40 (ngay lúc bấm)
+```
+
+Một cú bấm mà **hai lần dựng khung**, cách nhau chưa tới một giây. Và gần như lần nào
+cũng kết thúc ở `trangthai=-1` vĩnh viễn.
+
+Lý do: **dựng lại khung là xoá luôn quyền phát mà cú chạm vừa cấp**. Lần mở thứ hai
+giết mất lần thứ nhất, nên trình phát tụt về "chưa bắt đầu" và nằm đó. Đây chính là
+thứ làm mọi thứ trông ngẫu nhiên — lúc chạy, lúc không, cùng một thao tác.
+
+Hàm mở khung có **hai lối gọi** (nhánh "bấm chỉ nghe" và cửa chặn trong
+`deviceAudio.listen`), nên nay nó tự bảo vệ thay vì đi sửa từng lối: đang mở đúng bài
+ấy rồi thì trả về ngay, không dựng lại.
+
+Đo trên Chrome giả iPhone: gọi hai lần cùng một bài → khung dựng **1** lần, trạng thái
+trình phát **giữ nguyên `1`**; gọi sang bài khác → dựng lại, đúng như cần.
+
 ## 0.26.57 - 2026-09-21
 
 ### iPhone: dòng im lặng giữ nền giành mất chỗ phát của khung

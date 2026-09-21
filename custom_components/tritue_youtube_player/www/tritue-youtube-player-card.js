@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.57";
+const PHIEN_BAN_THE = "0.26.59";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -4208,6 +4208,27 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this.shadowRoot.querySelector(".watch").hidden = true;
       return;
     }
+    /* CHỈ NGHE BẰNG KHUNG THÌ TRÔNG NHƯ NGHE NHẠC, không phải như xem video.
+       Chủ máy chốt 21/09/2026: "kích xem video là xem video, nghe nhạc là nghe nhạc".
+       Trên máy nhà Táo, khung chỉ là cái máy phát vô hình — thẻ vẫn phải hiện tên
+       bài, ảnh bìa và giữ nút Xem để còn chuyển sang xem được. Thiếu nhánh này thì
+       ô đang-phát báo "Chưa phát bài nào" ngay giữa lúc nhạc đang chạy (đúng ảnh
+       chụp chủ máy gửi lúc 18:30). */
+    if (video.open && video.soundOnly && video.item && !video.withSpeakers) {
+      const item = { source: "youtube", ...video.item };
+      titleNode.textContent = item.title || item.id;
+      metaNode.textContent = [
+        TEN_NGUON[item.source] || "",
+        item.channel || item.artist,
+        this._formatDuration(item.duration),
+        this._queue.length > 1 ? `${this._queueIndex + 1}/${this._queue.length}` : "",
+        listenScreenOff() ? "Nghe trên máy này, cả khi tắt màn hình" : "Nghe trên máy này",
+      ].filter(Boolean).join(" · ");
+      this._nowWatchItem = this._isVideoItem(item) ? item : null;
+      this.shadowRoot.querySelector(".watch").hidden = !this._nowWatchItem;
+      this._showCover(item.thumbnail);
+      return;
+    }
     if (deviceAudio.item) {
       const item = deviceAudio.item;
       titleNode.textContent = item.title || item.id;
@@ -5126,6 +5147,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _watchCurrent() {
     if (!this._nowWatchItem) return;
+    /* ĐANG CHỈ NGHE BẰNG KHUNG: bấm Xem chỉ là bung khung ấy ra, KHÔNG dựng lại.
+       Dựng lại là xoá quyền phát và nhạc đứng im — xem «_ngheBangKhungMotMinh». */
+    if (this._video.open && this._video.soundOnly && !this._video.withSpeakers) {
+      this._daHienKhungDeCham = true;
+      this._video.soundOnly = false;
+      clearInterval(this._henThuKhung);
+      this._syncNowPlaying();
+      return;
+    }
     if (deviceAudio.item) {
       // Listening here: the sound keeps playing and the muted picture opens at the
       // second being heard, then follows it.
@@ -5382,10 +5412,30 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._queue = queue;
       this._queueIndex = Math.max(0, Number(index) || 0);
     }
+    /* ĐANG MỞ ĐÚNG BÀI ẤY RỒI THÌ ĐỪNG MỞ LẠI.
+       Dựng lại khung là XOÁ LUÔN quyền phát mà cú chạm vừa cấp, nên trình phát tụt
+       về «chưa bắt đầu» và không bao giờ chạy. Hộp đen iPhone chủ máy 21/09/2026 bắt
+       được nhiều cặp mở hai lần cách nhau chưa tới một giây — 21:06:30 hai lần,
+       21:08:15 rồi 21:08:16, 21:06:39 rồi 21:06:40 — và gần như lần nào cũng kết thúc
+       ở «trangthai=-1» vĩnh viễn. Đó là lý do lúc chạy lúc không, rất ngẫu nhiên.
+       Hàm này có HAI lối gọi (nhánh «bấm chỉ nghe» và cửa chặn trong
+       «deviceAudio.listen»), nên phải tự bảo vệ chứ không đi sửa từng lối. */
+    const dangMo = this._video;
+    if (dangMo.open && dangMo.soundHere && !dangMo.withSpeakers
+      && String(dangMo.item?.id || "") === String(item.id || "")) {
+      return true;
+    }
+    /* MỞ ẨN SẴN. Chủ máy chốt 21/09/2026: "kích tai nghe lại ra video… tôi cần
+       không báo gì, chỉ cần chạy thôi, kích là chạy". Địa chỉ khung được gán NGAY
+       TRONG cú bấm kèm «autoplay=1», nên phần lớn trường hợp nó tự chạy mà không cần
+       ai chạm — hộp đen 21:04:10 và 21:08:27 đều lên «trangthai=1» sau đúng một giây.
+       Chỉ khi quá 2,5 giây vẫn nằm im thì mới hiện khung ra để còn chạm được; xem
+       «_thuKhungKhiDaChay». */
+    this._daHienKhungDeCham = false;
     this._openVideo(item, {
       withSpeakers: false,
       soundHere: true,
-      soundOnly: false,
+      soundOnly: true,
       startSeconds: Math.max(0, Math.floor(Number(batDau) || 0)),
     });
     /* DÒNG IM LẶNG GIỮ NỀN CHỈ ĐƯỢC CHẠY SAU KHI KHUNG ĐÃ PHÁT.
@@ -5421,8 +5471,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         clearInterval(this._henThuKhung);
         return;
       }
-      if (v.state !== 1) return;
+      if (v.state !== 1) {
+        /* QUÁ 2,5 GIÂY VẪN KHÔNG CHẠY thì hiện khung ra — đó là lúc iOS đòi một cú
+           chạm vào chính video, mà khung ẩn thì không ai chạm được. Chạy được thì
+           người dùng không thấy gì cả, đúng ý "kích là chạy, không báo gì". */
+        if (v.soundOnly && Date.now() - batDau > 2500 && !this._daHienKhungDeCham) {
+          this._daHienKhungDeCham = true;
+          v.soundOnly = false;
+          this._syncNowPlaying();
+          this._setStatus("Chạm một lần vào video để bắt đầu.");
+          deviceAudio.hass = this._hass;
+          deviceAudio.ghiThang(`khung không tự chạy sau 2,5s, hiện ra để chạm — trangthai=${v.state}`);
+        }
+        return;
+      }
       clearInterval(this._henThuKhung);
+      this._daHienKhungDeCham = false;
       v.soundOnly = true;
       this._syncNowPlaying();
       // Giờ khung đã phát thì mới được thêm dòng im lặng giữ nền (xem lý do ở
@@ -6174,6 +6238,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   async _embedRefused() {
     const video = this._video;
     if (!video.open || !video.item || video.picture) return;
+    /* MÁY NHÀ TÁO ĐANG NGHE BẰNG KHUNG: đừng câm khung, đừng đi mở hình.
+       Nhánh này vốn giao tiếng cho phần tử âm thanh rồi mở hình bằng luồng thẳng, và
+       khi luồng ấy không mở được thì KẾT LUẬN "ở ngoài mạng nhà" — chủ máy đang ngồi
+       ở nhà vẫn bị báo thế (21/09/2026). Trên iOS phần tử âm thanh không bao giờ tải,
+       nên câm khung là mất tiếng hẳn, còn dòng thông báo kia thì vừa sai vừa thừa.
+       Ở đây chỉ hiện khung ra để người dùng chạm, không báo gì thêm. */
+    if (laTao() && video.soundHere && !video.withSpeakers) {
+      if (video.soundOnly) {
+        video.soundOnly = false;
+        this._daHienKhungDeCham = true;
+        this._syncNowPlaying();
+      }
+      deviceAudio.hass = this._hass;
+      deviceAudio.ghiThang("YouTube từ chối nhúng, hiện khung ra để chạm");
+      return;
+    }
     const item = { source: "youtube", ...video.item };
     const host = location.hostname;
     const why = /^[\d.]+$/.test(host) || host.includes(":")
@@ -6224,22 +6304,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._pictureNote("Đang nghe tiếng · không mở được hình");
       }
     };
-    if (this._awayPictureOk) {
-      await openAway();
-      return;
-    }
-    this._pictureNote(`Đang nghe tiếng · ở ngoài mạng nhà, hình ~${perMinute} MB/phút`, "Xem hình", () => {
-      const agreed = window.confirm(
-        `Xem hình khi ở ngoài mạng nhà: hình ${info.height || ""}p đi từ mạng nhà qua Internet tới máy này, `
-        + `khoảng ${perMinute} MB mỗi phút — tốn dữ liệu di động của máy và băng thông tải lên của nhà. Xem hình?`,
-      );
-      if (!agreed || this._video.picture !== pending) return;
-      // Agreed once: the next refused videos of this viewing open their picture too.
-      this._awayPictureOk = true;
-      this._pictureNote("Đang nghe tiếng · đang mở hình…");
-      openAway();
-    });
-    this._setStatus(`${why} Đang nghe tiếng; ở ngoài mạng nhà nên chưa mở hình.`);
+    /* BẤM CÁI NÀO LÀ CÁI ĐÓ CHẠY, KHÔNG HỎI LẠI.
+       Chỗ này vốn hiện một hộp thoại "Xem hình?" kèm ước lượng dung lượng, và nó dựa
+       trên suy đoán "ở ngoài mạng nhà" — suy ra từ việc địa chỉ thẳng không mở được,
+       chứ không phải biết thật. Chủ máy ngồi ở nhà vẫn bị báo thế, rồi còn bị chặn
+       lại bằng một câu hỏi giữa lúc đang nghe (21/09/2026: "tôi cần không báo gì,
+       chỉ cần chạy thôi… kích vào cái nào là cái đó chạy luôn, không hỏi bất cứ gì").
+       Nay mở thẳng. Dung lượng vẫn ghi ở dòng phụ để ai quan tâm thì biết. */
+    this._awayPictureOk = true;
+    this._pictureNote(`Đang nghe tiếng · đang mở hình (~${perMinute} MB/phút)`);
+    await openAway();
   }
 
   _pictureHeight() {
@@ -6764,8 +6838,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            chạm vào được — kể cả chủ máy: "không tự động phát video nhỉ, phải kích
            vào". Nên mở ra cho chạm, rồi tự thu khi đã chạy. */
         this._ngheBangKhungMotMinh(item, queue, position);
-        this._setStatus(`Chạm một lần vào video để nghe “${name}” — iPhone bắt buộc vậy;`
-          + " chạy rồi thẻ tự thu video lại.");
+        this._setStatus(`Đang nghe “${name}” trên máy này.`);
         return;
       }
       if (this._video.open) this._closeVideo();
