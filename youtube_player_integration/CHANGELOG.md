@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.26.45 - 2026-09-21
+
+### iPhone: hộp đen hỏi thêm một câu — mạng của máy có lấy được dữ liệu không?
+
+Ba lượt bấm trên iPhone đều cho đúng một kết quả: `nap=0 mang=2 loi=0 giay=0.0 tamdung=0
+nguon=1 dom=1` suốt tám giây. Phần tử có nguồn, nằm trong trang, tin rằng mình đang phát,
+**không nhận nổi một byte**, và không báo lỗi. Hai lượt trong đó đi đường "địa chỉ có
+sẵn", tức lệnh phát nằm gọn trong cú chạm — nên **giả thuyết "lệnh phát ngoài cú chạm"
+không giải thích được iPhone**.
+
+Máy chủ cũng đã được loại: đo cùng lúc, cả đường trong nhà lẫn đường ngoài đều trả `HEAD
+200`, `Range 206`, `audio/mp4`, có `Accept-Ranges` và `Content-Length`.
+
+Nên bản này chỉ thêm **một phép đo**, không sửa gì: quá ba giây mà chưa có byte nào, thẻ
+tự gọi `fetch` một byte từ **chính địa chỉ phần tử âm thanh đang trỏ tới** rồi ghi kết quả
+vào nhật ký. Nó tách được hai chuyện lâu nay vẫn bị lẫn:
+
+| Kết quả `fetch` | Nghĩa là |
+|---|---|
+| `ma=206 byte=2` | mạng của máy **với tới được** luồng → trình phát của Apple từ chối tải, lỗi nằm ở cách giao địa chỉ cho phần tử |
+| `HỎNG …` hoặc mã 4xx/5xx | chính máy ấy **không với tới được** → lỗi ở đường mạng / xác thực của máy đó |
+
 ## 0.26.44 - 2026-09-21
 
 ### Hộp đen chỉ đúng thủ phạm: nhảy vào giữa bài ngay từ địa chỉ

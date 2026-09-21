@@ -469,7 +469,30 @@ const deviceAudio = {
     (this.hopDenTimers || []).forEach((id) => clearTimeout(id));
     this.hopDen(`${nhan} (ngay lúc bấm)`, audio);
     this.hopDenTimers = [1000, 3000, 8000].map((cho) =>
-      setTimeout(() => this.hopDen(`${nhan} (+${cho / 1000}s)`, audio), cho));
+      setTimeout(() => {
+        this.hopDen(`${nhan} (+${cho / 1000}s)`, audio);
+        // Ba giây mà chưa có một byte nào: hỏi thẳng xem MẠNG của máy này có lấy được
+        // dữ liệu từ đúng địa chỉ ấy không. Tách được hai chuyện hay bị lẫn — "máy không
+        // với tới được luồng" với "với tới được mà trình phát không thèm tải".
+        if (cho === 3000 && audio && audio.readyState === 0) this.doThuLuong(audio);
+      }, cho));
+  },
+
+  /** Thử tải một byte từ chính địa chỉ mà phần tử âm thanh đang trỏ tới. */
+  async doThuLuong(audio) {
+    const src = audio?.currentSrc || audio?.getAttribute("src") || "";
+    if (!src || this.dangThuLuong) return;
+    this.dangThuLuong = true;
+    const luc = Date.now();
+    try {
+      const tra = await fetch(src, { headers: { Range: "bytes=0-1" }, cache: "no-store" });
+      const bo = await tra.arrayBuffer();
+      this.hopDen(`thử tải bằng fetch: ma=${tra.status} byte=${bo.byteLength}`
+        + ` kieu=${tra.headers.get("content-type") || "?"} ms=${Date.now() - luc}`, audio);
+    } catch (loi) {
+      this.hopDen(`thử tải bằng fetch: HỎNG ${loi?.name || loi} ms=${Date.now() - luc}`, audio);
+    }
+    this.dangThuLuong = false;
   },
 
   /** Canh xem tiếng có THẬT SỰ chạy không, sau 12 giây kể từ lúc bảo nó phát.
