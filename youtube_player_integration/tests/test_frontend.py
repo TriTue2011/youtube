@@ -713,6 +713,15 @@ class LovelaceCardContractTests(unittest.TestCase):
         # Safari trả 153 thì khác biệt nằm ở MÁY, và nghi can rõ nhất là địa chỉ mỗi
         # máy dùng để mở Home Assistant (tên miền hay địa chỉ IP).
         self.assertIn("GHI LUÔN ĐỊA CHỈ TRANG", script)
+        # 0.26.70 — KHAI PHIÊN TRUYỀN THÔNG khi tiếng nằm trong khung.
+        # Chủ máy gửi ảnh Trung tâm điều khiển iPhone 21/09/2026: "Không phát" — ngay
+        # giữa lúc khung đang hát. iOS không biết thẻ đang phát nhạc thì tắt màn là nó
+        # treo trang lại như một trang web im lặng. Đó là lý do THẬT của "tắt màn hình
+        # vẫn chưa được", không phải dòng im lặng giữ nền.
+        self.assertIn("_khaiPhienTruyenThong() {", script)
+        self.assertIn('phien.playbackState = v.state === 1 ? "playing"', script)
+        self.assertIn('dat("play", () => this._videoCommand("playVideo"));', script)
+        self.assertIn("this._khaiPhienTruyenThong();", script)
         self.assertIn(f'const PHIEN_BAN_THE = "{manifest["version"]}";', script)
         # Đường KHUNG của máy nhà Táo cũng phải có hộp đen, nếu không nhánh ấy chạy
         # xong là im lặng tuyệt đối — không cách nào biết nó có phát được không.

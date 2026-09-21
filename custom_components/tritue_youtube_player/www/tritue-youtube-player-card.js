@@ -83,7 +83,7 @@ const laSafari = () => {
 const laTao = () => laIOS() || laSafari();
 
 /** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.69";
+const PHIEN_BAN_THE = "0.26.70";
 
 /* KHUNG NHÚNG LẤY TỪ «www.youtube.com», KHÔNG PHẢI «youtube-nocookie.com».
    Chrome cho một khung tự phát KÈM TIẾNG hay không là xét theo mức gắn bó của
@@ -5525,6 +5525,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        Nên việc giữ nền chuyển sang «_thuKhungKhiDaChay», đúng nhịp trình phát báo
        đang chạy. */
     this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
+    this._khaiPhienTruyenThong();
     this._thuKhungKhiDaChay();
     return true;
   }
@@ -6688,11 +6689,58 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     video.ready = false;
   }
 
+  /** KHAI BÁO PHIÊN TRUYỀN THÔNG KHI TIẾNG NẰM TRONG KHUNG.
+   *
+   *  Chủ máy gửi ảnh Trung tâm điều khiển iPhone 21/09/2026: **"Không phát"** — ngay
+   *  giữa lúc khung đang hát. Tức iOS KHÔNG HỀ BIẾT thẻ đang phát nhạc, nên tắt màn
+   *  là nó treo trang lại như một trang web im lặng bình thường. Đó là lý do thật của
+   *  "tắt màn hình vẫn chưa được", chứ không phải dòng im lặng giữ nền.
+   *
+   *  Đường phần tử âm thanh vốn đã khai (xem «deviceAudio.mediaSession»); đường khung
+   *  thì chưa bao giờ. Thẻ «phicomm-r1-card» khai đủ cả hai đường — đó là khác biệt.
+   */
+  _khaiPhienTruyenThong() {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const v = this._video;
+    const phien = navigator.mediaSession;
+    try {
+      if (!v.open || !v.item || !v.soundHere) {
+        phien.playbackState = "none";
+        return;
+      }
+      if (typeof MediaMetadata !== "undefined") {
+        phien.metadata = new MediaMetadata({
+          title: v.item.title || v.item.id || "",
+          artist: v.item.channel || "",
+          artwork: /^https?:\/\//.test(v.item.thumbnail || "") ? [{ src: v.item.thumbnail }] : [],
+        });
+      }
+      phien.playbackState = v.state === 1 ? "playing" : v.state === 2 ? "paused" : "none";
+      const dat = (ten, ham) => {
+        try {
+          phien.setActionHandler(ten, ham);
+        } catch (_error) {
+          // Máy này không có nút ấy.
+        }
+      };
+      dat("play", () => this._videoCommand("playVideo"));
+      dat("pause", () => this._videoCommand("pauseVideo"));
+      dat("nexttrack", () => this._skip(1));
+      dat("previoustrack", () => this._skip(-1));
+      dat("stop", () => this._stop());
+    } catch (_error) {
+      // Không khai được thì thôi, vẫn nghe được khi màn còn sáng.
+    }
+  }
+
   _setVideoState(state) {
     if (!Number.isFinite(state) || state === this._video.state) return;
     const previous = this._video.state;
     this._video.state = state;
     this._updateTransportState();
+    if (laTao() && this._video.soundHere && !this._video.withSpeakers) {
+      this._khaiPhienTruyenThong();
+    }
     // 0 = ended. With speakers the speakers drive auto-advance; alone, the video does.
     if (state !== 0 || previous === 0 || this._video.withSpeakers || this._video.followsDevice) return;
     if (this._queueIndex >= 0 && this._queueIndex < this._queue.length - 1) this._skip(1);

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.26.70 - 2026-09-21
+
+### Tắt màn hình: iOS không biết thẻ đang phát nhạc
+
+Chủ máy gửi ảnh Trung tâm điều khiển iPhone ngay giữa lúc khung đang hát:
+**"Không phát"**.
+
+Đó là lý do thật của "tắt màn hình vẫn chưa được" — không phải dòng im lặng giữ nền.
+iOS chỉ giữ một trang chạy tiếp khi trang ấy **khai báo phiên truyền thông**; không
+khai thì tắt màn là treo lại như một trang web im lặng bình thường.
+
+Đường phần tử âm thanh vốn đã khai. Đường **khung** thì chưa bao giờ — mà từ 0.26.50,
+trên máy nhà Táo tiếng nằm hẳn trong khung. Thẻ `phicomm-r1-card` khai đủ cả hai
+đường; đó là khác biệt tôi bỏ sót.
+
+Nay khi khung mang tiếng, thẻ khai đủ: tên bài, kênh, ảnh bìa, trạng thái bám theo
+khung (`playing` / `paused`), và các nút điều khiển trên màn khoá — phát, tạm dừng,
+qua bài, lùi bài, dừng.
+
+Đo trên Chrome giả iPhone: khung chạy → `playing`; khung dừng → `paused`; tên bài và
+kênh hiện đúng.
+
 ## 0.26.69 - 2026-09-21
 
 ### Hộp đen ghi luôn địa chỉ trang
