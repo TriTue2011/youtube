@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.81 - 2026-09-22
+
+### iPhone / Safari: khung video ghim không còn cao bằng danh sách
+
+Khi bài video nằm ghim cạnh kết quả tìm kiếm, Safari tính chiều cao khung
+theo cột danh sách chứ không theo bề rộng 16:9. Khung vì thế cao bằng list
+và đè lên phần chọn loa. Nay chiều cao khung là 56,25% bề rộng của chính nó,
+và hàng video không nhận phần cao dư của danh sách.
+
 ## 0.26.80 - 2026-09-22
 
 ### Video dài: vào tiếng và hình sau đoạn đầu

@@ -232,6 +232,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('canPlayType("application/vnd.apple.mpegurl")', script)
         self.assertIn("function noiDanhSach(", script)
         self.assertIn("coThePhatDanhSach(audio)", script)
+        # 0.26.81: khung ghim không lấy chiều cao danh sách tìm kiếm. Safari
+        # kéo hàng video bằng cột kết quả nên khung đè loa. Đệm 16:9 nằm trên
+        # chính khung, hàng lưới chỉ cao bằng nội dung.
+        self.assertIn("KHUNG GHIM KHÔNG LẤY CHIỀU CAO CỦA DANH SÁCH", script)
+        self.assertIn("height: 0;", script)
+        self.assertIn("padding-top: 56.25%;", script)
+        self.assertIn("grid-template-rows: max-content max-content;", script)
         self.assertIn("if (ban && Date.now() - ban.luc <= 240000) return ban.url;", script)
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
         self.assertIn("if (ke) this.chuanBi(ke);", script)

@@ -1781,21 +1781,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           width: 100%;
           max-width: 100%;
           min-width: 0;
-          /* Đệm 16:9 nằm TRONG dòng chảy, không dùng aspect-ratio. Safari không cộng
-             aspect-ratio vào chiều cao hàng lưới, nên khung vẽ ra ngoài ô và đè lên
-             khối chọn loa ngay bên dưới. Đệm thì Safari phải chừa chỗ. */
-          height: auto;
+          /* KHUNG GHIM KHÔNG LẤY CHIỀU CAO CỦA DANH SÁCH. Đệm 16:9 nằm trên chính
+             khung, chiều cao nội dung bằng 0. Pseudo «::before» không cộng được vào
+             hàng lưới của Safari, nên khung bị kéo cao bằng cột kết quả tìm kiếm
+             rồi đè lên khối loa. Phần trăm đệm tính theo bề rộng của khung. */
+          height: 0;
+          padding-top: 56.25%;
           aspect-ratio: auto;
           margin-bottom: 8px;
           overflow: hidden;
           border-radius: 10px;
           background: #000;
         }
-        .video-frame::before {
-          content: "";
-          display: block;
-          padding-top: 56.25%;
-        }
+        .video-frame::before { content: none; display: none; }
         .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
         /* YouTube refused the embed: our own picture (or the thumbnail) replaces it. */
         .video-frame.no-embed { background: #000 var(--poster, none) center / contain no-repeat; }
@@ -1809,8 +1807,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           /* Thu bằng «max-width/max-height», KHÔNG bằng «width/height»: bề rộng của
              khung do một luật sáu lớp của bố cục hai cột đặt, luật một lớp ở đây thua
              — đo trong Chrome 20/09/2026: đặt «width: 1px» mà khung vẫn rộng 497px.
-             Chặn trên là thuộc tính KHÁC nên không phải tranh độ ưu tiên với nó. */
+             Chặn trên là thuộc tính KHÁC nên không phải tranh độ ưu tiên với nó.
+             «padding-top» của tỉ lệ 16:9 phải về 0, nếu không khung vẫn cao theo bề rộng. */
           position: absolute;
+          height: 1px;
+          padding-top: 0;
           max-width: 1px;
           max-height: 1px;
           margin: 0;
@@ -1819,7 +1820,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           overflow: hidden;
           clip-path: inset(50%);
         }
-        .video-frame.chi-tieng::before { display: none; }
         .picture-note {
           position: absolute;
           left: 8px;
@@ -2463,8 +2463,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              tỉ lệ 16:9, nên chỉ «inset: 0» thì chiều cao vẫn tính từ bề rộng — đo
              được 485×273 trên khung phát 485×757, tức vẫn hụt hai phần ba. Gỡ ràng
              buộc tỉ lệ rồi cho cao hết khung; phần thừa do video không đúng tỉ lệ
-             màn đã có «object-fit: contain» lo, không méo hình. */
+             màn đã có «object-fit: contain» lo, không méo hình.
+             «padding-top: 0» gỡ đệm 16:9, nếu không toàn màn cộng thêm một khoảng
+             bằng 56% bề rộng. */
           height: 100%;
+          padding-top: 0;
           aspect-ratio: auto;
           margin: 0;
         }
@@ -2546,7 +2549,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
              sẵn thì lộ hẳn — đo bằng ảnh chụp 19/09/2026. Khối loa đã có
              «align-self: start» nên nó bám đúng mép trên hàng dưới, tức nằm ngay dưới
              khối phát. */
-          grid-template-rows: auto 1fr;
+          /* Hai hàng chỉ cao bằng nội dung của chính nó. «auto 1fr» để cột kết quả
+             (trải hai hàng) dồn phần dư xuống hàng loa — Safari lại dồn ngược lên
+             hàng video, khung cao bằng danh sách và đè loa. */
+          grid-template-rows: max-content max-content;
           column-gap: 12px;
           row-gap: 8px;
           align-items: start;
@@ -2568,7 +2574,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           grid-area: video;
           margin-top: 0;
           /* Ô lưới mặc định không co dưới bề rộng nội dung. Khung video (iframe)
-             khai bề rộng tối thiểu lớn hơn cột, rồi vẽ tràn xuống khối loa. */
+             khai bề rộng tối thiểu lớn hơn cột, rồi vẽ tràn xuống khối loa.
+             «start» và «max-content»: ô video không được kéo cao bằng cột danh sách. */
+          align-self: start;
+          height: max-content;
           min-width: 0;
           max-width: 100%;
           overflow: hidden;
