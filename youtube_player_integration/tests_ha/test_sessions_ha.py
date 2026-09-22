@@ -423,8 +423,10 @@ async def test_iphone_youtube_nhan_danh_sach_khuc(hass, addon_server, hass_clien
             assert "#EXT-X-BYTERANGE:100@" in text
             # Lời xin mục lục phải có đầu có cuối, không phải «bytes=0-» cả tệp.
             assert da_hoi and da_hoi[0].startswith("bytes=0-") and da_hoi[0].split("-", 1)[1] != ""
-            tuong_doi = next(dong for dong in text.splitlines() if "khoi=1" in dong and not dong.startswith("#"))
+            tuong_doi = next(dong for dong in text.splitlines() if dong and not dong.startswith("#"))
             khuc_url = urljoin("http://ha" + body["danh_sach_url"], tuong_doi).removeprefix("http://ha")
+            # Cùng vé với đường tệp liền — vé ký lại bị 401.
+            assert khuc_url.split("?", 1)[1] == body["stream_url"].split("?", 1)[1]
             # Mảnh đầu: 100 byte chữ A, không phải cả tệp.
             mo = text.split('BYTERANGE="', 1)[1]
             khoi = int(mo.split("@", 1)[0])

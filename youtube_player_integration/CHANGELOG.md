@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.80 - 2026-09-22
+
+### Video dài: vào tiếng và hình sau đoạn đầu
+
+Bản 0.26.79 ký nhầm vé cho từng khúc nên máy từ chối (401) và không phát
+được. Vé của khúc nay là đúng vé của file.
+
+Safari và iPhone phát danh sách khúc sẵn. Chrome và Android nối từng khúc,
+chỉ giữ khoảng 30 giây phía trước, không tải cả bài 175 MB. Bài 5 phút và
+bài 3 giờ đều vào khúc đầu 10 giây sau khoảng 2 giây. Zing, Facebook và loa
+vẫn nhận tệp liền.
+
 ## 0.26.79 - 2026-09-22
 
 ### Video dài: tiếng và hình vào sau đoạn đầu, trên cả bốn máy

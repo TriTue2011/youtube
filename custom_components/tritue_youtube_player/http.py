@@ -75,10 +75,12 @@ def _through_home_assistant(hass, upstream, *, kem=False):
     while len(links) >= PROXY_MAX_LINKS:
         del links[next(iter(links))]
     token = secrets.token_urlsafe(18)
-    links[token] = (upstream, now + PROXY_SECONDS)
     path = PROXY_URL.format(token=token)
     het = timedelta(seconds=PROXY_SECONDS)
     tep = async_sign_path(hass, path, het)
+    # Vé của tệp liền được giữ lại để ghi vào danh sách khúc. Ký vé mới lúc
+    # máy xin danh sách thì Home Assistant trả 401.
+    links[token] = (upstream, now + PROXY_SECONDS, tep)
     danh = async_sign_path(hass, path + ".m3u8", het) if kem else ""
     return tep, danh
 
@@ -344,13 +346,12 @@ class TriTueProxyView(HomeAssistantView):
         """Danh sách khúc HLS đọc từ 256 KB đầu của tệp tiếng.
 
         Không có ``sidx`` thì 502, không trả tệp liền. Trả tệp liền là đúng cách
-        làm iPhone chờ lâu theo độ dài bài. Địa chỉ từng khúc là đường tệp đã ký
-        kèm ``khoi=1``, tương đối so với đường ``.m3u8``, nên máy ở ngoài nhà
-        vẫn xin đúng máy chủ nó đang mở.
+        làm iPhone chờ lâu theo độ dài bài. Địa chỉ từng khúc là đúng đường tệp
+        đã ký lúc tạo luồng, viết tương đối so với đường ``.m3u8``.
         """
         hass = request.app["hass"]
         link = hass.data.get(PROXY_DATA, {}).get(token)
-        if link is None or link[1] < time.monotonic():
+        if link is None or link[1] < time.monotonic() or len(link) < 3:
             return web.Response(status=HTTPStatus.NOT_FOUND)
         session = async_get_clientsession(hass)
         try:
@@ -375,11 +376,8 @@ class TriTueProxyView(HomeAssistantView):
             )
             return web.Response(status=HTTPStatus.BAD_GATEWAY)
         khoi, khuc = muc
-        signed = async_sign_path(
-            hass, PROXY_URL.format(token=token), timedelta(seconds=PROXY_SECONDS)
-        )
         try:
-            body = danh_sach_hls(khoi, khuc, url_khuc_tuong_doi(token, signed))
+            body = danh_sach_hls(khoi, khuc, url_khuc_tuong_doi(token, link[2]))
         except ValueError:
             return web.Response(status=HTTPStatus.BAD_GATEWAY)
         return web.Response(

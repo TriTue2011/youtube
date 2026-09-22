@@ -64,7 +64,7 @@ class MucLucTest(unittest.TestCase):
         goc = "https://ha.example/api/tritue_youtube_player/proxy/tok.m3u8?authSig=cu"
         tuyet = urljoin(goc, tuong_doi)
         self.assertEqual(
-            "https://ha.example/api/tritue_youtube_player/proxy/tok?authSig=abc%3A1&khoi=1",
+            "https://ha.example/api/tritue_youtube_player/proxy/tok?authSig=abc%3A1",
             tuyet,
         )
         # Byte khúc đầu đúng là tiếng, không phải mục lục.

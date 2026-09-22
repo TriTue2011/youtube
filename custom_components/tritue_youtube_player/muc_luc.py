@@ -28,11 +28,11 @@ def kem_danh_sach(source: str) -> bool:
 def url_khuc_tuong_doi(token: str, signed_path: str) -> str:
     """Địa chỉ mảnh, tương đối so với đường ``…/{token}.m3u8``.
 
-    Giữ nguyên chữ ký của đường tệp liền (không có ``.m3u8``) và thêm ``khoi=1``
-    để lời xin mảnh không bị hiểu thành một danh sách mới.
+    Dùng đúng chữ ký đã cấp cho đường tệp liền. Ký lại một vé mới trong lời
+    xin danh sách bị Home Assistant từ chối (401, đo trên CI 22/09/2026).
     """
     query = signed_path.split("?", 1)[1]
-    return f"{token}?{query}&khoi=1"
+    return f"{token}?{query}"
 
 
 def doc_muc_luc_mp4(buf: bytes) -> tuple[int, list[tuple[int, int, float]]] | None:
