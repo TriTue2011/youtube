@@ -16,7 +16,7 @@ và máy phát, **không phải khoá kích hoạt** — đừng đăng công kh
 4. [Mỗi thiết bị nghe thế nào](#4-mỗi-thiết-bị-nghe-thế-nào)
 5. [Tuỳ biến thẻ](#5-tuỳ-biến-thẻ)
 6. [Giới hạn đã biết](#6-giới-hạn-đã-biết)
-7. [Chẩn đoán bằng hộp đen](#7-chẩn-đoán-bằng-hộp-đen)
+7. [Nhật ký](#7-nhật-ký)
 8. [Phát triển và kiểm thử](#8-phát-triển-và-kiểm-thử)
 
 ---
@@ -460,28 +460,11 @@ chép; đừng chia sẻ ra ngoài.
 
 ---
 
-## 7. Chẩn đoán bằng hộp đen
+## 7. Nhật ký
 
-Thẻ tự ghi những gì nó làm vào **nhật ký của Home Assistant** — không cần mở công cụ của
-trình duyệt, kể cả trên điện thoại. Xem ở **Settings → System → Logs**, lọc theo
-`tritue_youtube_player.the`. Mỗi dòng bắt đầu bằng `[the youtube]` và kết thúc bằng ba
-trường cho biết **máy nào, mở HA bằng địa chỉ nào, chạy bản thẻ nào**:
-
-```text
-[the youtube] khung báo lỗi: ma=153 may=safari goc=172.16.10.200 ban=0.26.74
-```
-
-| Trường | Ý nghĩa |
-|---|---|
-| `may=` | `ios`, `android`, `safari` (máy Mac), hoặc `khac` |
-| `goc=` | Tên máy chủ dùng để mở Home Assistant (không ghi đường dẫn) |
-| `ban=` | Phiên bản thẻ đang chạy. Khác phiên bản vừa cập nhật nghĩa là trình duyệt còn giữ bản cũ |
-| `nap=` | Mức dữ liệu của phần tử âm thanh: `0` là chưa có gì, `4` là đủ để phát |
-| `phat=` | Kết quả lệnh phát: `ok`, `cho` (đang chờ), hoặc tên lỗi như `NotAllowedError` |
-| `trangthai=` | Trạng thái khung YouTube: `-1` chưa bắt đầu, `1` đang phát, `2` tạm dừng, `3` đang nạp |
-| `giay=` | Vị trí đang phát, tính bằng giây |
-
-Khi báo lỗi, gửi kèm vài dòng quanh thời điểm hỏng — chúng thường nói thẳng nguyên nhân.
+Thẻ **không** ghi nhật ký chẩn đoán vào Home Assistant. Bản cũ viết một dòng mỗi
+vài giây mỗi lần bấm phát (`tritue_youtube_player.the`), nên file log và cơ sở dữ
+liệu của người cài thẻ tăng liên tục.
 
 ---
 

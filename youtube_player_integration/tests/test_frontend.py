@@ -442,7 +442,7 @@ class LovelaceCardContractTests(unittest.TestCase):
         # đó «phat=AbortError», giây 8 vẫn «nap=0» — trong khi máy chủ giao byte đầu
         # sau 0,04–0,3 giây. Phép đo bằng fetch không đụng phần tử nên giữ ở giây 3.
         self.assertIn("this.hopDenTimers = [1000, 3000, 8000, 12000].map((cho) =>", script)
-        self.assertIn("if (cho === 3000 && chuaCoGi) this.doThuLuong(audio);", script)
+        self.assertNotIn("this.doThuLuong(audio);", script)
         self.assertIn("if (cho === 12000 && chuaCoGi) this.cuuLuotNap(audio);", script)
         self.assertNotIn("this.doThuLuong(audio);\n          this.cuuLuotNap(audio);", script)
         # 0.26.75 — MÁY NHÀ TÁO XEM KHI BẬT CÔNG TẮC: TIẾNG TRƯỚC, HÌNH SAU. Nhánh cũ
@@ -743,28 +743,19 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("frontend", manifest["dependencies"])
 
     def test_hop_den_khai_may_nao_va_ban_nao(self):
-        """Hộp đen phải nói rõ MÁY NÀO gửi và ĐANG CHẠY BẢN NÀO.
+        """Thẻ không ghi hộp đen vào nhật ký Home Assistant.
 
-        Thiếu hai thứ này là tôi đứng hình 21/09/2026: nhật ký 18:12:57 ghi đường phần
-        tử âm thanh, mà chủ máy có cả iPhone lẫn Android cùng mở thẻ — không biết dòng
-        ấy của máy nào nên không kết luận được bản sửa cho iPhone đã chạy chưa.
-        Số trong thẻ phải KHỚP manifest, nếu không hộp đen báo nhầm bản còn tai hại hơn
-        là không báo.
+        Bản cũ gọi system_log.write mỗi lần bấm phát, vài dòng mỗi vài giây, nên
+        nhật ký và cơ sở dữ liệu của người cài thẻ tăng liên tục.
         """
         script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(
             encoding="utf-8"
         )
-        manifest = json.loads(
-            (COMPONENT_DIR / "manifest.json").read_text(encoding="utf-8")
-        )
 
-        self.assertIn("dauMay() {", script)
-        self.assertIn('may=${may} goc=${goc} ban=${PHIEN_BAN_THE}', script)
-        # 0.26.69 — ghi luôn ĐỊA CHỈ TRANG. Chủ máy 21/09/2026: "đang nói cùng bài hát
-        # nhưng cái chạy được video, cái không". Cùng một video mà iPhone phát được còn
-        # Safari trả 153 thì khác biệt nằm ở MÁY, và nghi can rõ nhất là địa chỉ mỗi
-        # máy dùng để mở Home Assistant (tên miền hay địa chỉ IP).
-        self.assertIn("GHI LUÔN ĐỊA CHỈ TRANG", script)
+        self.assertNotIn("system_log", script)
+        self.assertNotIn("tritue_youtube_player.the", script)
+        self.assertNotIn("dauMay() {", script)
+        self.assertNotIn("_hopDenKhungTheoDoi(nhan) {", script)
         # 0.26.70 — KHAI PHIÊN TRUYỀN THÔNG khi tiếng nằm trong khung.
         # Chủ máy gửi ảnh Trung tâm điều khiển iPhone 21/09/2026: "Không phát" — ngay
         # giữa lúc khung đang hát. iOS không biết thẻ đang phát nhạc thì tắt màn là nó
@@ -774,11 +765,6 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('phien.playbackState = v.state === 1 ? "playing"', script)
         self.assertIn('dat("play", () => this._videoCommand("playVideo"));', script)
         self.assertIn("this._khaiPhienTruyenThong();", script)
-        self.assertIn(f'const PHIEN_BAN_THE = "{manifest["version"]}";', script)
-        # Đường KHUNG của máy nhà Táo cũng phải có hộp đen, nếu không nhánh ấy chạy
-        # xong là im lặng tuyệt đối — không cách nào biết nó có phát được không.
-        self.assertIn("_hopDenKhungTheoDoi(nhan) {", script)
-        self.assertIn('this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");', script)
         # 0.26.52 — KHUNG PHẢI HIỆN RA ĐÃ, thu lại sau khi đã chạy. Hộp đen trên iPhone
         # chủ máy 18:24 ngày 21/09/2026:
         #     chitieng=1 (thu bé)  → trangthai=-1 suốt 8 giây, chưa hề bắt đầu

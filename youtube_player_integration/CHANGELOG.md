@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.26.76 - 2026-09-22
+
+### Bỏ hộp đen
+
+Thẻ không còn ghi nhật ký chẩn đoán vào Home Assistant. Bản trước viết vài dòng
+mỗi lần bấm phát, nên file log và cơ sở dữ liệu của người cài thẻ tăng liên tục.
+
 ## 0.26.75 - 2026-09-22
 
 ### iPhone: nạp tiếng nhanh hơn, và xem video mà tắt màn vẫn nghe

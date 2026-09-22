@@ -82,8 +82,7 @@ const laSafari = () => {
 /** Máy nhà Táo chạy WebKit: iPhone, iPad, và Safari trên macOS. */
 const laTao = () => laIOS() || laSafari();
 
-/** Bản thẻ, để hộp đen nói rõ máy đang chạy bản nào — nâng cùng lúc với manifest. */
-const PHIEN_BAN_THE = "0.26.75";
+
 
 /* HAI ĐỊA CHỈ NHÚNG, VÀ THẺ CHỈ ĐỔI KHI CHÍNH YOUTUBE TỪ CHỐI.
    «www.youtube.com» là đường mặc định, giữ nguyên từ 0.26.34. Chrome xét quyền tự
@@ -546,56 +545,12 @@ const deviceAudio = {
    *  «giay» = đồng hồ của tiếng, «tamdung», «nguon» = đã chọn được nguồn phát chưa,
    *  «dom» = phần tử có nằm trong trang không.
    */
-  /** Máy nào đang gửi, và đang chạy bản thẻ nào.
-   *
-   *  Thiếu hai thứ này mà tôi đứng hình 21/09/2026: log 18:12:57 ghi đường phần tử
-   *  âm thanh, mà chủ máy có cả iPhone lẫn Android cùng mở thẻ — không cách nào biết
-   *  dòng ấy của máy nào, nên không kết luận được bản sửa cho iPhone đã chạy chưa. */
-  dauMay() {
-    const ua = typeof navigator === "undefined" ? "" : navigator.userAgent || "";
-    const may = laIOS() ? "ios" : /Android/.test(ua) ? "android" : laSafari() ? "safari" : "khac";
-    /* GHI LUÔN ĐỊA CHỈ TRANG. Chủ máy 21/09/2026: "đang nói cùng bài hát nhưng cái
-       chạy được video, cái không" — cùng một video, iPhone phát được còn Safari trả
-       lỗi 153. Khác biệt nằm ở MÁY, và nghi can rõ nhất là địa chỉ mỗi máy dùng để mở
-       Home Assistant: đi qua tên miền thì YouTube cho nhúng, đi qua địa chỉ IP thì
-       không. Ghi ra đây là hết đoán: một cú bấm từ mỗi máy đủ kết luận.
-       Chỉ ghi TÊN MÁY CHỦ, không ghi đường dẫn — trong đó không có gì riêng tư. */
-    const goc = typeof location === "undefined" ? "?" : location.hostname;
-    return `may=${may} goc=${goc} ban=${PHIEN_BAN_THE}`;
-  },
+  /** Không ghi nhật ký. Bản cũ ghi hộp đen mỗi lần bấm phát, vài dòng mỗi vài
+   *  giây, nên nhật ký của người cài thẻ cứ tăng. Hai hàm giữ tên để các chỗ
+   *  gọi cũ không thành lỗi. */
+  ghiThang() {},
 
-  /** Ghi thẳng một dòng vào nhật ký Home Assistant (không kèm phần tử âm thanh). */
-  ghiThang(dong) {
-    if (!this.hass?.callService) return;
-    this.hass.callService("system_log", "write", {
-      message: `[the youtube] ${dong} ${this.dauMay()}`,
-      level: "warning",
-      logger: "tritue_youtube_player.the",
-    }).catch(() => {});
-  },
-
-  hopDen(nhan, audio) {
-    if (!this.hass?.callService) return;
-    const a = audio || this.element;
-    const so = a
-      ? `nap=${a.readyState} mang=${a.networkState} loi=${a.error ? a.error.code : 0}`
-        + ` giay=${Number(a.currentTime || 0).toFixed(1)} tamdung=${a.paused ? 1 : 0}`
-        + ` nguon=${a.currentSrc ? 1 : 0} dom=${a.isConnected ? 1 : 0}`
-        + ` ochoy=${(() => { const h = a.getBoundingClientRect(); return `${Math.round(h.left)},${Math.round(h.top)}`; })()}`
-        + ` phat=${this.ketQuaPhat || "?"} cuchi=${this.cuChi ?? "?"}`
-        + ` dem=${(() => {
-          const goc = document.querySelector("tritue-youtube-player-card")?.shadowRoot;
-          const dem = (chon) => document.querySelectorAll(chon).length
-            + (goc ? goc.querySelectorAll(chon).length : 0);
-          return `${dem("audio,video")}m/${dem("iframe")}k`;
-        })()} ${this.dauMay()}`
-      : "(chưa có phần tử)";
-    this.hass.callService("system_log", "write", {
-      message: `[the youtube] ${nhan} — ${so}`,
-      level: "warning",
-      logger: "tritue_youtube_player.the",
-    }).catch(() => {});
-  },
+  hopDen() {},
 
   /** Ghi hộp đen ngay lúc bấm rồi thêm ba mốc sau đó — đủ để thấy tiếng có chảy không. */
   hopDenTheoDoi(nhan, audio) {
@@ -622,7 +577,6 @@ const deviceAudio = {
            trên đúng đường thẻ đi. Nghĩa là iPhone đang nạp, chỉ chậm, và cú cứu ở
            giây 3 cắt ngang nó. Android có dữ liệu trong 1 giây nên chưa bao giờ tới
            lượt cứu, dời sang giây 12 không đổi gì với nó. */
-        if (cho === 3000 && chuaCoGi) this.doThuLuong(audio);
         if (cho === 12000 && chuaCoGi) this.cuuLuotNap(audio);
       }, cho));
   },
@@ -647,28 +601,9 @@ const deviceAudio = {
       // Máy nào không cho gọi lại thì thôi, vẫn còn cú phát bên dưới.
     }
     this.phatVaGhi(audio);
-    this.hopDen("cứu lượt nạp: gọi lại load() rồi play()", audio);
     setTimeout(() => {
-      this.hopDen("sau khi cứu (+2s)", audio);
       this.dangCuu = false;
     }, 2000);
-  },
-
-  /** Thử tải một byte từ chính địa chỉ mà phần tử âm thanh đang trỏ tới. */
-  async doThuLuong(audio) {
-    const src = audio?.currentSrc || audio?.getAttribute("src") || "";
-    if (!src || this.dangThuLuong) return;
-    this.dangThuLuong = true;
-    const luc = Date.now();
-    try {
-      const tra = await fetch(src, { headers: { Range: "bytes=0-1" }, cache: "no-store" });
-      const bo = await tra.arrayBuffer();
-      this.hopDen(`thử tải bằng fetch: ma=${tra.status} byte=${bo.byteLength}`
-        + ` kieu=${tra.headers.get("content-type") || "?"} ms=${Date.now() - luc}`, audio);
-    } catch (loi) {
-      this.hopDen(`thử tải bằng fetch: HỎNG ${loi?.name || loi} ms=${Date.now() - luc}`, audio);
-    }
-    this.dangThuLuong = false;
   },
 
   /** Canh xem tiếng có THẬT SỰ chạy không, sau 12 giây kể từ lúc bảo nó phát.
@@ -5591,7 +5526,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
          21:05:02 và 21:05:22 (đã bật)    → trangthai=-1 suốt 8 giây, không chạy
        Nên việc giữ nền chuyển sang «_thuKhungKhiDaChay», đúng nhịp trình phát báo
        đang chạy. */
-    this._hopDenKhungTheoDoi("nghe một mình bằng khung (nhà Táo)");
     this._khaiPhienTruyenThong();
     this._thuKhungKhiDaChay();
     return true;
@@ -5664,26 +5598,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._setStatus("Máy này cần thấy video mới giữ được tiếng — để nguyên khung nhé.");
       }, 2500);
     }, 500);
-  }
-
-  /** HỘP ĐEN CHO ĐƯỜNG KHUNG — cùng bốn mốc như đường phần tử âm thanh.
-   *
-   *  «trangthai» là mã của trình phát YouTube: -1 chưa bắt đầu, 0 hết bài, 1 đang
-   *  chạy, 2 tạm dừng, 3 đang nạp, 5 đã nạp sẵn chờ lệnh. Chủ máy 21/09/2026: "không
-   *  tự động phát video nhỉ, phải kích vào" — nếu đúng thì ở đây sẽ thấy «trangthai»
-   *  đứng ở -1 hoặc 5 mà không bao giờ sang 1.
-   */
-  _hopDenKhungTheoDoi(nhan) {
-    (this._hopDenKhungTimers || []).forEach((id) => clearTimeout(id));
-    const ghi = (moc) => {
-      const v = this._video;
-      deviceAudio.hass = this._hass;
-      deviceAudio.ghiThang(`${nhan} ${moc} — mo=${v.open ? 1 : 0} chitieng=${v.soundOnly ? 1 : 0}`
-        + ` san=${v.ready ? 1 : 0} trangthai=${v.state} giay=${Number(v.time || 0).toFixed(1)}`);
-    };
-    ghi("(ngay lúc bấm)");
-    this._hopDenKhungTimers = [1000, 3000, 8000].map((cho) =>
-      setTimeout(() => ghi(`(+${cho / 1000}s)`), cho));
   }
 
   _toggleSoundHere() {
