@@ -1582,11 +1582,22 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .video-frame {
           position: relative;
           width: 100%;
-          aspect-ratio: 16 / 9;
+          max-width: 100%;
+          min-width: 0;
+          /* Đệm 16:9 nằm TRONG dòng chảy, không dùng aspect-ratio. Safari không cộng
+             aspect-ratio vào chiều cao hàng lưới, nên khung vẽ ra ngoài ô và đè lên
+             khối chọn loa ngay bên dưới. Đệm thì Safari phải chừa chỗ. */
+          height: auto;
+          aspect-ratio: auto;
           margin-bottom: 8px;
           overflow: hidden;
           border-radius: 10px;
           background: #000;
+        }
+        .video-frame::before {
+          content: "";
+          display: block;
+          padding-top: 56.25%;
         }
         .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
         /* YouTube refused the embed: our own picture (or the thumbnail) replaces it. */
@@ -1611,6 +1622,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           overflow: hidden;
           clip-path: inset(50%);
         }
+        .video-frame.chi-tieng::before { display: none; }
         .picture-note {
           position: absolute;
           left: 8px;
@@ -2355,7 +2367,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             padding: 10px;
           }
         }
-        .yt-layout > .player { grid-area: video; margin-top: 0; }
+        .yt-layout > .player {
+          grid-area: video;
+          margin-top: 0;
+          /* Ô lưới mặc định không co dưới bề rộng nội dung. Khung video (iframe)
+             khai bề rộng tối thiểu lớn hơn cột, rồi vẽ tràn xuống khối loa. */
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+        }
+        .speaker-section { position: relative; z-index: 1; min-width: 0; max-width: 100%; }
         /* Video lấp đầy toàn bộ chiều rộng của khung .player (trước đây bị bó hẹp
            theo --yt-video-max-h nên 2 bên thừa viền đen/rỗng) — chiều cao tự theo
            đúng tỉ lệ 16:9 của chiều rộng thật, không còn letterbox. */
@@ -2578,6 +2599,19 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           grid-template-areas:
             "video    playlist"
             "speakers playlist";
+        }
+        /* Chọn «ngang» không được ép hai cột trên điện thoại. Cột phải đòi ít nhất
+           200px, phần còn lại không đủ cho khung 16:9, khung tràn và đè lên loa.
+           Luật này đứng SAU luật ngang và cùng độ ưu tiên khi có thêm lớp, nên
+           thắng đúng lúc thẻ hẹp. */
+        @container ytcard (max-width: 639px) {
+          .yt-layout.yt-layout--ngang {
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-areas:
+              "video"
+              "speakers"
+              "playlist";
+          }
         }
         /* «layout: vertical» — xếp dọc một cột, cho dashboard cột hẹp. */
         .yt-layout.yt-layout--doc {

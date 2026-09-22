@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.77 - 2026-09-22
+
+### iPhone / Safari: khung video không còn đè lên phần chọn loa
+
+Trên màn hẹp, chọn bố cục ngang vẫn ép hai cột. Cột phải giữ tối thiểu 200px nên
+khung video không nằm vừa ô của nó và vẽ đè xuống khối loa. Safari còn không cộng
+tỉ lệ 16:9 vào chiều cao hàng lưới. Nay màn hẹp luôn một cột, và khung tự chừa
+đúng chỗ 16:9 trong dòng chảy.
+
 ## 0.26.76 - 2026-09-22
 
 ### Bỏ hộp đen
