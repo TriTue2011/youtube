@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.26.78 - 2026-09-22
+
+### Safari máy Mac: hết lỗi 153
+
+Safari bỏ thuộc tính referrer trên khung nhúng và theo chính sách
+`no-referrer` của Home Assistant, nên YouTube không biết trang nào đang nhúng
+và trả lỗi 153. Chrome và iPhone vẫn tôn trọng thuộc tính đó nên không đổi.
+Safari máy Mac xem qua một trang trung gian cùng nguồn, trang này tự gửi
+referrer cho YouTube.
+
 ## 0.26.77 - 2026-09-22
 
 ### iPhone / Safari: khung video không còn đè lên phần chọn loa

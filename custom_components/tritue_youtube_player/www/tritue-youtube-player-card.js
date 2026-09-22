@@ -82,6 +82,10 @@ const laSafari = () => {
 /** Máy nhà Táo chạy WebKit: iPhone, iPad, và Safari trên macOS. */
 const laTao = () => laIOS() || laSafari();
 
+/** Safari máy Mac, không phải iPhone/iPad. Chỉ máy này bỏ thuộc tính referrer
+ *  của khung và dính lỗi 153. iPhone đang phát được thì không đi đường này. */
+const laSafariMayTinh = () => laSafari() && !laIOS();
+
 
 
 /* HAI ĐỊA CHỈ NHÚNG, VÀ THẺ CHỈ ĐỔI KHI CHÍNH YOUTUBE TỪ CHỐI.
@@ -5438,7 +5442,18 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        cho postMessage, mà chiều nhận thì thẻ đã tự lọc theo «EMBED_ORIGIN» rồi. */
     if (muted) params.set("mute", "1");   // ghi đè giá trị mặc định ở trên
     if (start) params.set("start", String(Math.max(0, Math.floor(start))));
-    return `${embedGoc}/embed/${id}?${params}`;
+    const trucTiep = `${embedGoc}/embed/${id}?${params}`;
+    if (!laSafariMayTinh()) return trucTiep;
+    /* Safari máy Mac theo Referrer-Policy no-referrer của Home Assistant, nên
+       YouTube trả 153. Trang trung gian cùng nguồn tự gửi referrer. */
+    const q = new URLSearchParams({
+      v: id,
+      goc: embedGoc === EMBED_GOC_LUI ? "nocookie" : "www",
+      mute: muted ? "1" : "0",
+    });
+    if (start) q.set("start", String(Math.max(0, Math.floor(start))));
+    if (this._boOrigin) q.set("bo_origin", "1");
+    return `/api/tritue_youtube_player/nhung?${q}`;
   }
 
   /** THÚC TIẾNG SAU KHI KHUNG VỪA NẠP — bậc thang 0 / 300 / 800 / 2000 mili giây.
@@ -6240,7 +6255,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const params = new URLSearchParams({
       autoplay: "1", mute: "1", enablejsapi: "1", playsinline: "1", rel: "0",
     });
-    iframe.setAttribute("src", `${embedGoc}/embed/?` + params);
+    iframe.setAttribute("src", laSafariMayTinh() ? "about:blank" : `${embedGoc}/embed/?` + params);
   }
 
   /** Tua hinh ve dung moc tieng. Gom tu hai cho von lam y het trong _syncVideo. */
@@ -6284,7 +6299,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _videoPost(message) {
     const iframe = this.shadowRoot?.querySelector(".video-frame iframe");
-    iframe?.contentWindow?.postMessage(JSON.stringify({ ...message, id: 1, channel: "widget" }), embedGoc);
+    const dich = laSafariMayTinh() ? location.origin : embedGoc;
+    iframe?.contentWindow?.postMessage(JSON.stringify({ ...message, id: 1, channel: "widget" }), dich);
   }
 
   _videoCommand(func, args = []) {
@@ -6310,7 +6326,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   _handleVideoMessage(event) {
     const iframe = this.shadowRoot?.querySelector(".video-frame iframe");
-    if (!iframe || event.source !== iframe.contentWindow || event.origin !== embedGoc) return;
+    const cho = laSafariMayTinh() ? location.origin : embedGoc;
+    if (!iframe || event.source !== iframe.contentWindow || event.origin !== cho) return;
     let data;
     try {
       data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;

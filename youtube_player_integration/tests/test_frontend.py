@@ -146,7 +146,8 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertNotIn("watch-result", script)
         # The card drives the embed over postMessage, so its buttons work for the video.
         self.assertIn("enablejsapi", script)
-        self.assertIn("event.origin !== embedGoc", script)
+        self.assertIn("event.origin !== cho", script)
+        self.assertIn("const cho = laSafariMayTinh() ? location.origin : embedGoc;", script)
         self.assertIn('this._videoCommand([1, 3].includes(this._video.state) ? "pauseVideo" : "playVideo")', script)
         self.assertIn("this._togglePlay()", script)
         # Speakers + video: the picture is muted and follows the speaker's position;
@@ -665,6 +666,10 @@ class LovelaceCardContractTests(unittest.TestCase):
         # The device's sound comes from the player server through HA.
         self.assertIn('callApi("POST", "tritue_youtube_player/stream"', script)
         self.assertIn("hass.http.register_view(TriTueStreamView)", frontend)
+        self.assertIn("hass.http.register_view(TriTueEmbedView)", frontend)
+        self.assertIn('url = "/api/tritue_youtube_player/nhung"', http)
+        self.assertIn("Referrer-Policy", http)
+        self.assertIn("laSafariMayTinh()", script)
         self.assertIn('url = "/api/tritue_youtube_player/stream"', http)
         # A video YouTube refuses to embed plays as sound instead of a dead frame.
         self.assertIn('this._videoCommand("addEventListener", ["onError"]);', script)

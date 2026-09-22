@@ -14,6 +14,7 @@ from homeassistant.loader import async_get_integration
 from .const import CARD_URL, DOMAIN, LOGGER
 from .http import (
     TriTueCapabilitiesView,
+    TriTueEmbedView,
     TriTueHiddenPlayersView,
     TriTuePlaylistsView,
     TriTueProxyView,
@@ -33,6 +34,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     except RuntimeError:
         pass  # Static path already registered on a previous setup.
     hass.http.register_view(TriTueSearchView)
+    hass.http.register_view(TriTueEmbedView)
     hass.http.register_view(TriTueCapabilitiesView)
     hass.http.register_view(TriTueStreamView)
     hass.http.register_view(TriTueProxyView)

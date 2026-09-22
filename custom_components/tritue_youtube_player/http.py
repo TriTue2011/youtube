@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import secrets
@@ -77,6 +78,80 @@ def _loaded_entry(hass, entry_id):
     ):
         return None
     return entry
+
+
+_MA_VIDEO = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def _trang_nhung(host: str, video: str, mute: str, start: int, gui_origin: bool) -> str:
+    """Trang trung gian cùng nguồn với Home Assistant.
+
+    Safari trên máy Mac bỏ thuộc tính ``referrerpolicy`` của khung và theo
+    ``Referrer-Policy: no-referrer`` của trang HA, nên YouTube không biết ai đang
+    nhúng và trả lỗi 153. Trang này tự khai chính sách referrer của nó, rồi mới
+    nhúng YouTube. Lệnh điều khiển đi qua postMessage được chuyển tiếp hai chiều.
+    """
+    cau_hinh = json.dumps(
+        {"host": host, "video": video, "mute": mute, "start": start, "origin": gui_origin},
+        ensure_ascii=True,
+    )
+    return f"""<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>html,body{{margin:0;height:100%;background:#000}}iframe{{position:absolute;inset:0;width:100%;height:100%;border:0}}</style>
+</head><body>
+<iframe id="yt" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+<script>
+const c = {cau_hinh};
+const src = new URL("https://" + c.host + "/embed/" + c.video);
+src.searchParams.set("autoplay", "1");
+src.searchParams.set("mute", c.mute);
+src.searchParams.set("enablejsapi", "1");
+src.searchParams.set("playsinline", "1");
+src.searchParams.set("rel", "0");
+if (c.start) src.searchParams.set("start", String(c.start));
+if (c.origin) src.searchParams.set("origin", location.origin);
+const yt = document.getElementById("yt");
+yt.src = src.toString();
+window.addEventListener("message", (event) => {{
+  if (!yt.contentWindow) return;
+  if (event.source === yt.contentWindow) parent.postMessage(event.data, location.origin);
+  else if (event.source === parent) yt.contentWindow.postMessage(event.data, "https://" + c.host);
+}});
+</script>
+</body></html>"""
+
+
+class TriTueEmbedView(HomeAssistantView):
+    """Trang nhúng YouTube cho Safari máy Mac — xem chú thích của ``_trang_nhung``."""
+
+    url = "/api/tritue_youtube_player/nhung"
+    name = "api:tritue_youtube_player:nhung"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        video = str(request.query.get("v") or "")
+        if not _MA_VIDEO.fullmatch(video):
+            return web.Response(status=HTTPStatus.BAD_REQUEST, text="bad video")
+        host = "www.youtube-nocookie.com" if request.query.get("goc") == "nocookie" else "www.youtube.com"
+        mute = "1" if request.query.get("mute") == "1" else "0"
+        start_raw = str(request.query.get("start") or "0")
+        start = int(start_raw) if start_raw.isdigit() else 0
+        html = _trang_nhung(host, video, mute, start, request.query.get("bo_origin") != "1")
+        return web.Response(
+            text=html,
+            content_type="text/html",
+            headers={
+                "Referrer-Policy": "strict-origin-when-cross-origin",
+                "Content-Security-Policy": (
+                    "default-src 'none'; "
+                    "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
+                    "script-src 'unsafe-inline'; style-src 'unsafe-inline'"
+                ),
+                "Cache-Control": "no-store",
+            },
+        )
 
 
 class TriTueSearchView(HomeAssistantView):
