@@ -225,6 +225,13 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("if (!watch && isVideo && deviceAudio.laTrucTiep(item)) {", script)
         self.assertIn("đã mở hình để nghe", script)
         self.assertIn("async layLuong(item) {", script)
+        # 0.26.79: mọi máy phát YouTube theo khúc. Máy nào tự phát được danh
+        # sách thì giao thẳng; máy không (Chrome, Android) thì nối từng khúc.
+        # Không liệt kê tên trình duyệt để chọn đường.
+        self.assertIn("danh_sach_url", script)
+        self.assertIn('canPlayType("application/vnd.apple.mpegurl")', script)
+        self.assertIn("function noiDanhSach(", script)
+        self.assertIn("coThePhatDanhSach(audio)", script)
         self.assertIn("if (ban && Date.now() - ban.luc <= 240000) return ban.url;", script)
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
         self.assertIn("if (ke) this.chuanBi(ke);", script)

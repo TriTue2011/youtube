@@ -23,6 +23,13 @@ from homeassistant.helpers.storage import Store
 from .actions import speaker_base_url
 from .api import YouTubePlayerApiError
 from .const import DOMAIN
+from .muc_luc import (
+    DAU_MUC_LUC,
+    danh_sach_hls,
+    doc_muc_luc_mp4,
+    kem_danh_sach,
+    url_khuc_tuong_doi,
+)
 from .hidden_players import (
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -50,14 +57,17 @@ PROXY_MAX_LINKS = 200
 RELAY_HEADERS = ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges")
 
 
-def _through_home_assistant(hass, upstream):
-    """A signed path on this Home Assistant that relays a player-server stream.
+def _through_home_assistant(hass, upstream, *, kem=False):
+    """Đường đã ký trên Home Assistant để chuyển tiếp một luồng của máy phát.
 
-    The browser showing the card reaches Home Assistant at whatever address it opened
-    (home network, a public HTTPS name, Nabu Casa), but not necessarily the player
-    server: owner 15/09/2026 on 5G got "NotSupportedError" because the card handed the
-    phone http://172.16.10.38:3030/… — a home address, and plain HTTP inside an HTTPS
-    page. Only links this integration received from its own server are relayed."""
+    Trình duyệt mở Home Assistant ở địa chỉ nào (mạng nhà, tên HTTPS, Nabu Casa)
+    cũng tải được. Máy không tới được máy phát: chủ máy 15/09/2026 dùng 5G bị
+    NotSupportedError vì thẻ đưa địa chỉ ``http://172.16.10.38:3030/…``.
+
+    ``kem`` thêm một đường ``.m3u8`` cùng mã, để máy phát từng khúc thay vì cả
+    tệp. Đường tệp liền vẫn trả về — máy nào không phát được danh sách thì dùng
+    đường đó.
+    """
     links = hass.data.setdefault(PROXY_DATA, {})
     now = time.monotonic()
     for token in [token for token, (_, until) in links.items() if until < now]:
@@ -66,7 +76,11 @@ def _through_home_assistant(hass, upstream):
         del links[next(iter(links))]
     token = secrets.token_urlsafe(18)
     links[token] = (upstream, now + PROXY_SECONDS)
-    return async_sign_path(hass, PROXY_URL.format(token=token), timedelta(seconds=PROXY_SECONDS))
+    path = PROXY_URL.format(token=token)
+    het = timedelta(seconds=PROXY_SECONDS)
+    tep = async_sign_path(hass, path, het)
+    danh = async_sign_path(hass, path + ".m3u8", het) if kem else ""
+    return tep, danh
 
 
 def _loaded_entry(hass, entry_id):
@@ -275,7 +289,14 @@ class TriTueStreamView(HomeAssistantView):
         upstream = str(body.get("stream_url") or "")
         if urlsplit(upstream).scheme not in {"http", "https"}:
             return self.json({"error": "stream_unavailable"}, HTTPStatus.BAD_GATEWAY)
-        body["stream_url"] = _through_home_assistant(hass, upstream)
+        # YouTube: kèm danh sách khúc. Tệp liền vẫn có, cho máy không phát
+        # được danh sách và cho bản thẻ cũ. Xem ``kem_danh_sach``.
+        tep, danh = _through_home_assistant(
+            hass, upstream, kem=kem_danh_sach(str(source)),
+        )
+        body["stream_url"] = tep
+        if danh:
+            body["danh_sach_url"] = danh
         return self.json(body)
 
 
@@ -287,6 +308,8 @@ class TriTueProxyView(HomeAssistantView):
     requires_auth = True
 
     async def get(self, request: web.Request, token: str) -> web.StreamResponse:
+        if token.endswith(".m3u8"):
+            return await self._danh_sach(request, token[: -len(".m3u8")])
         hass = request.app["hass"]
         link = hass.data.get(PROXY_DATA, {}).get(token)
         if link is None or link[1] < time.monotonic():
@@ -317,6 +340,57 @@ class TriTueProxyView(HomeAssistantView):
                 pass
             return response
 
+    async def _danh_sach(self, request: web.Request, token: str) -> web.Response:
+        """Danh sách khúc HLS đọc từ 256 KB đầu của tệp tiếng.
+
+        Không có ``sidx`` thì 502, không trả tệp liền. Trả tệp liền là đúng cách
+        làm iPhone chờ lâu theo độ dài bài. Địa chỉ từng khúc là đường tệp đã ký
+        kèm ``khoi=1``, tương đối so với đường ``.m3u8``, nên máy ở ngoài nhà
+        vẫn xin đúng máy chủ nó đang mở.
+        """
+        hass = request.app["hass"]
+        link = hass.data.get(PROXY_DATA, {}).get(token)
+        if link is None or link[1] < time.monotonic():
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        session = async_get_clientsession(hass)
+        try:
+            upstream = await session.get(
+                link[0],
+                headers={
+                    "Accept-Encoding": "identity",
+                    "Range": f"bytes=0-{DAU_MUC_LUC - 1}",
+                },
+                timeout=ClientTimeout(total=None, sock_connect=15, sock_read=30),
+            )
+        except (ClientError, TimeoutError):
+            return web.Response(status=HTTPStatus.BAD_GATEWAY)
+        async with upstream:
+            if upstream.status >= HTTPStatus.BAD_REQUEST:
+                return web.Response(status=HTTPStatus.BAD_GATEWAY)
+            buf = await upstream.content.read(DAU_MUC_LUC)
+        muc = doc_muc_luc_mp4(buf)
+        if muc is None:
+            _LOGGER.warning(
+                "Tiếng YouTube không có mục lục sidx trong %s byte đầu", len(buf)
+            )
+            return web.Response(status=HTTPStatus.BAD_GATEWAY)
+        khoi, khuc = muc
+        signed = async_sign_path(
+            hass, PROXY_URL.format(token=token), timedelta(seconds=PROXY_SECONDS)
+        )
+        try:
+            body = danh_sach_hls(khoi, khuc, url_khuc_tuong_doi(token, signed))
+        except ValueError:
+            return web.Response(status=HTTPStatus.BAD_GATEWAY)
+        return web.Response(
+            text=body,
+            content_type="application/vnd.apple.mpegurl",
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
     async def head(self, request: web.Request, token: str) -> web.StreamResponse:
         """Tiêu đề của luồng (kiểu, cỡ, có tua được không) mà không tải tiếng.
 
@@ -330,6 +404,8 @@ class TriTueProxyView(HomeAssistantView):
         phát lẫn bản add-on đời cũ chưa có «head_stream», và lấy luôn được cỡ tệp thật
         từ «Content-Range» — chính cách «head_stream» của add-on đang làm.
         """
+        if token.endswith(".m3u8"):
+            return await self._danh_sach(request, token[: -len(".m3u8")])
         hass = request.app["hass"]
         link = hass.data.get(PROXY_DATA, {}).get(token)
         if link is None or link[1] < time.monotonic():

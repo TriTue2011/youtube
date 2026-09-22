@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.26.79 - 2026-09-22
+
+### Video dài: tiếng và hình vào sau đoạn đầu, trên cả bốn máy
+
+Bản 0.26.78 làm Safari xem được và nhanh, vì khung YouTube tự lấy từng đoạn.
+Chỗ còn chậm là khi thẻ tự tải file: tiếng YouTube là MP4 cắt mảnh, bài 3 giờ
+nặng khoảng 175 MB. WebKit chờ theo độ dài cả tệp. Chrome và Android phát
+sớm hơn nhưng vẫn tải hết trong nền, nên hình bị chậm theo.
+
+Đo 22/09/2026 trên hai bài thật (5 phút và 3 giờ), cùng một định dạng: khúc
+đầu 9,985 giây, khoảng 162 KB, bắt đầu bằng `moof`. Giải địa chỉ khoảng 1,6
+giây, lấy mục lục và khúc đầu dưới 0,3 giây — không tăng theo độ dài bài.
+
+Nay tiếng và hình YouTube có thêm danh sách khúc. Safari và iPhone phát danh
+sách sẵn. Chrome và Android nối từng khúc, chỉ giữ khoảng 30 giây phía trước.
+Zing, Facebook và loa vẫn nhận tệp liền. Không nối được thì quay về tệp, không
+đứng im. Hình không còn thử địa chỉ googlevideo mở không giới hạn — bài dài
+bị bóp xuống khoảng 0,033 MB/giây.
+
 ## 0.26.78 - 2026-09-22
 
 ### Safari máy Mac: hết lỗi 153

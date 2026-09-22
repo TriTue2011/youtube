@@ -308,6 +308,157 @@ async def test_the_lay_luong_de_nghe_tren_may(hass, addon_server, hass_client, h
     assert (await (await hass_client_no_auth()).post(url, json={"entry_id": entry.entry_id})).status == 401
 
 
+def _hop_mp4(typ: bytes, payload: bytes) -> bytes:
+    return (8 + len(payload)).to_bytes(4, "big") + typ + payload
+
+
+def _sidx_mp4(timescale: int, refs: list[tuple[int, int]]) -> bytes:
+    body = bytearray()
+    body += bytes((0, 0, 0, 0))
+    body += (1).to_bytes(4, "big")
+    body += timescale.to_bytes(4, "big")
+    body += (0).to_bytes(4, "big")
+    body += (0).to_bytes(4, "big")
+    body += (0).to_bytes(2, "big")
+    body += len(refs).to_bytes(2, "big")
+    for dai, giay_don in refs:
+        body += dai.to_bytes(4, "big")
+        body += giay_don.to_bytes(4, "big")
+        body += (0).to_bytes(4, "big")
+    return _hop_mp4(b"sidx", bytes(body))
+
+
+def _tep_cat_manh() -> bytes:
+    """ftyp + moov + sidx + hai khúc tiếng. Khúc đầu dài 10 giây, 100 byte.
+
+    Phần đuôi đệm cho đủ 256 KB: lời xin mục lục hỏi đúng khoảng đó, tệp ngắn
+    hơn thì máy phát cứ mở khúc kế và vòng lặp không dừng.
+    """
+    ftyp = _hop_mp4(b"ftyp", b"dash" + b"\x00" * 12)
+    moov = _hop_mp4(b"moov", b"\x00" * 20)
+    sx = _sidx_mp4(1000, [(100, 10000), (40, 5000)])
+    tep = ftyp + moov + sx + (b"A" * 100) + (b"B" * 40)
+    return tep + bytes(262144 - len(tep))
+
+
+UA_IPHONE = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
+)
+
+
+async def test_iphone_youtube_nhan_danh_sach_khuc(hass, addon_server, hass_client, hass_client_no_auth):
+    """iPhone xin tiếng YouTube thì nhận danh sách khúc, không nhận cả tệp.
+
+    Khúc đầu là 100 byte / 10 giây. Hình (youtube_video) và Android vẫn nhận tệp liền.
+    """
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import urljoin
+
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.tritue_youtube_player.http import TriTueProxyView, TriTueStreamView
+
+    tep = _tep_cat_manh()
+    da_hoi = []
+
+    class Goc(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            da_hoi.append(self.headers.get("Range"))
+            rg = self.headers.get("Range")
+            if rg:
+                dau, _, cuoi = rg[6:].partition("-")
+                dau = int(dau or 0)
+                cuoi = int(cuoi) if cuoi else len(tep) - 1
+                cuoi = min(cuoi, len(tep) - 1)
+                khuc = tep[dau:cuoi + 1]
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {dau}-{dau + len(khuc) - 1}/{len(tep)}")
+            else:
+                khuc = tep
+                self.send_response(200)
+            self.send_header("Content-Type", "audio/mp4")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(len(khuc)))
+            self.end_headers()
+            self.wfile.write(khuc)
+
+    goc = ThreadingHTTPServer(("127.0.0.1", 0), Goc)
+    threading.Thread(target=goc.serve_forever, daemon=True).start()
+    cong = goc.server_address[1]
+    entry, _ = await _setup(hass, addon_server)
+    assert await async_setup_component(hass, "http", {})
+    hass.http.register_view(TriTueStreamView)
+    hass.http.register_view(TriTueProxyView)
+    client = await hass_client()
+    tho = await hass_client_no_auth()
+    url = "/api/tritue_youtube_player/stream"
+    try:
+        with patch.object(
+            addon, "resolve_youtube_audio",
+            side_effect=lambda vid: {
+                "url": f"http://127.0.0.1:{cong}/am/{vid}",
+                "headers": {},
+                "content_type": "audio/mp4",
+            },
+        ):
+            r = await client.post(
+                url,
+                json={"entry_id": entry.entry_id, "source": "youtube", "target": KET_QUA[1]["url"]},
+                headers={"User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/128.0.0.0"},
+            )
+            body = await r.json()
+            assert r.status == 200, body
+            # Tệp liền vẫn có. Danh sách là đường riêng, mọi máy đều nhận.
+            assert not body["stream_url"].split("?", 1)[0].endswith(".m3u8")
+            assert body["danh_sach_url"].split("?", 1)[0].endswith(".m3u8")
+            ds = await tho.get(body["danh_sach_url"])
+            text = await ds.text()
+            assert ds.status == 200, text
+            assert ds.headers["Content-Type"].startswith("application/vnd.apple.mpegurl")
+            assert "#EXTINF:10.000," in text
+            assert "#EXT-X-BYTERANGE:100@" in text
+            # Lời xin mục lục phải có đầu có cuối, không phải «bytes=0-» cả tệp.
+            assert da_hoi and da_hoi[0].startswith("bytes=0-") and da_hoi[0].split("-", 1)[1] != ""
+            tuong_doi = next(dong for dong in text.splitlines() if "khoi=1" in dong and not dong.startswith("#"))
+            khuc_url = urljoin("http://ha" + body["danh_sach_url"], tuong_doi).removeprefix("http://ha")
+            # Mảnh đầu: 100 byte chữ A, không phải cả tệp.
+            mo = text.split('BYTERANGE="', 1)[1]
+            khoi = int(mo.split("@", 1)[0])
+            vi = text.split("#EXT-X-BYTERANGE:100@", 1)[1]
+            bat_dau = int(vi.splitlines()[0])
+            r = await tho.get(khuc_url, headers={"Range": f"bytes={bat_dau}-{bat_dau + 99}"})
+            assert r.status == 206
+            assert await r.read() == b"A" * 100
+            # Đoạn mở đầu không kéo theo phần tiếng.
+            r = await tho.get(khuc_url, headers={"Range": f"bytes=0-{khoi - 1}"})
+            assert r.status == 206 and len(await r.read()) == khoi
+            # Đường tệp liền vẫn trả cả tệp, cho máy không nối được khúc.
+            nguyen = await tho.get(body["stream_url"])
+            assert nguyen.status == 200 and await nguyen.read() == tep
+
+            # Hình YouTube cũng có danh sách, đường tệp không bị đổi thành danh sách.
+            with patch.object(addon, "resolve_youtube_video", return_value={
+                "url": f"http://127.0.0.1:{cong}/hinh", "headers": {},
+                "content_type": "video/mp4", "height": 720, "bitrate_kbps": 1000,
+            }):
+                r = await client.post(
+                    url,
+                    json={"entry_id": entry.entry_id, "source": "youtube_video",
+                          "target": KET_QUA[1]["url"], "max_height": 720},
+                    headers={"User-Agent": UA_IPHONE},
+                )
+                hinh = await r.json()
+            assert r.status == 200, hinh
+            assert not hinh["stream_url"].split("?", 1)[0].endswith(".m3u8")
+            assert hinh["danh_sach_url"].split("?", 1)[0].endswith(".m3u8")
+    finally:
+        goc.shutdown()
+
+
 async def test_playlist_luu_qua_the_va_phat_ca_playlist_ra_loa(hass, addon_server, hass_client):
     """Thẻ HA: lệnh playlist qua view của tích hợp tới add-on thật; phát playlist → hàng đợi là cả playlist."""
     from homeassistant.setup import async_setup_component
