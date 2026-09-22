@@ -75,10 +75,12 @@ cổng `8099` của add-on.
 - Add-on **cài mới** từ 0.8.2 trở lên: cổng được công bố sẵn, không phải làm gì.
 - Add-on **đã cài từ trước**: vào tab **Network** của add-on và bật cổng `8099`. Khai
   cổng trong cấu hình không tự mở cổng cho bản đã cài — Supervisor để nó ở trạng thái
-  tắt.
+  tắt. nếu trùng cổng sử dụng đổi cổng khác thì public_base_url cũng đổi theo
 - Chỉ phải điền `public_base_url: http://IP_HOME_ASSISTANT:8099` khi bạn **đổi cổng**
   ở tab Network, hoặc loa vẫn không ra tiếng.
 
+- Trong config addon có mục token, để trống xem log. Khuyên nên đặt token bất kỳ (không phải long token). Token dùng để add vào tích hợp.
+  
 Cổng này chỉ mở trong mạng nhà. **Không NAT/forward ra Internet.** Địa chỉ phát có
 chữ ký và tự hết hạn.
 
