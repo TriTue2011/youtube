@@ -6836,15 +6836,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._setStatus(`${why} Không lấy được hình, đang nghe tiếng.`);
       return;
     }
-    /* Không đưa phần tử hình vào địa chỉ googlevideo mở không giới hạn.
-       Bài dài bị Google bóp xuống khoảng 0,033 MB/giây, đo 22/09/2026, nên
-       hình chờ theo độ dài cả tệp và tranh băng thông với tiếng. Danh sách
-       khúc (máy phát được) hoặc đường đã cắt khúc của máy nhà thì vào hình
-       sau đoạn đầu. */
+    /* Danh sách khúc dựng cho TIẾNG (m4a đã đo). File HÌNH là chuyện khác:
+       có bài chỉ có vp9/av1, mục lục không đọc được, hoặc iPhone không phát
+       danh sách hình. Đưa <video> vào danh sách đó thì iPhone, Chrome và
+       Android cùng báo «không mở được hình» dù tiếng vẫn chạy.
+       Thử lần lượt: link thẳng (ở nhà, cùng địa chỉ mạng với máy chủ, vào
+       hình ngay) rồi đường máy nhà. Hết cả hai mới báo không mở được. */
     if (this._video.picture !== pending) return;
     const perMinute = Math.max(1, Math.round((Number(info.bitrate_kbps) || 1000) * 60 / 8 / 1000));
     const openAway = async () => {
-      if (!(await this._tryPicture(info.stream_url, pending, 20000, info.danh_sach_url || "")) && this._video.picture === pending) {
+      const thu = [info.direct_url, info.stream_url].filter(Boolean);
+      if (!(await this._tryPicture(thu, pending, 12000)) && this._video.picture === pending) {
         this._pictureNote("Đang nghe tiếng · không mở được hình");
       }
     };
@@ -6885,9 +6887,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     frame.append(note);
   }
 
-  /** Load a picture stream; resolves true once its first frame is there.
-   *  `danhSach` nếu có: máy phát được thì giao thẳng, không thì nối từng khúc. */
-  _tryPicture(url, pending, timeout, danhSach = "") {
+  /** Thử lần lượt từng địa chỉ hình. Có khung hình đầu thì dừng.
+   *  Một địa chỉ hỏng hoặc quá hạn không được kết luận là cả video không có hình. */
+  _tryPicture(urls, pending, timeout) {
+    const danh = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
     return new Promise((resolve) => {
       const frame = this.shadowRoot.querySelector(".video-frame");
       const element = document.createElement("video");
@@ -6898,10 +6901,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       element.preload = "auto";
       element.style.visibility = "hidden";
       let settled = false;
+      let thuTu = 0;
+      let hen = 0;
       const finish = (ok) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clearTimeout(hen);
         if (!ok) {
           huyKhucCua(element);
           element.removeAttribute("src");
@@ -6910,32 +6915,32 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         resolve(ok);
       };
-      const timer = setTimeout(() => finish(false), timeout);
-      const khiLoi = () => finish(false);
+      const thuTiep = () => {
+        if (settled) return;
+        const src = danh[thuTu++];
+        if (!src) {
+          finish(false);
+          return;
+        }
+        clearTimeout(hen);
+        hen = setTimeout(thuTiep, timeout);
+        element.removeEventListener("error", khiLoi);
+        element.addEventListener("error", khiLoi);
+        element.src = src;
+      };
+      const khiLoi = () => thuTiep();
       element.addEventListener("loadeddata", () => {
         if (this._video.picture !== pending) {
           finish(false);
           return;
         }
+        clearTimeout(hen);
+        element.removeEventListener("error", khiLoi);
         this._attachPicture(element, pending);
         finish(true);
-      }, { once: true });
+      });
       frame.append(element);
-      if (danhSach && coThePhatDanhSach(element)) {
-        element.addEventListener("error", khiLoi, { once: true });
-        element.src = danhSach;
-      } else if (danhSach && typeof MediaSource !== "undefined") {
-        noiDanhSach(element, danhSach, { am: false }).then((ok) => {
-          if (settled) return;
-          if (!ok) {
-            element.addEventListener("error", khiLoi, { once: true });
-            element.src = url;
-          }
-        });
-      } else {
-        element.addEventListener("error", khiLoi, { once: true });
-        element.src = url;
-      }
+      thuTiep();
     });
   }
 

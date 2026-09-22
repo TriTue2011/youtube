@@ -232,6 +232,11 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('canPlayType("application/vnd.apple.mpegurl")', script)
         self.assertIn("function noiDanhSach(", script)
         self.assertIn("coThePhatDanhSach(audio)", script)
+        # Hình của video bị từ chối nhúng không đi danh sách khúc (danh sách
+        # đó làm iPhone, Chrome và Android cùng báo không mở được hình).
+        # Thử link thẳng rồi đường máy nhà.
+        self.assertIn("const thu = [info.direct_url, info.stream_url].filter(Boolean);", script)
+        self.assertNotIn("_tryPicture(info.stream_url, pending, 20000, info.danh_sach_url", script)
         # 0.26.81: khung ghim không lấy chiều cao danh sách tìm kiếm. Safari
         # kéo hàng video bằng cột kết quả nên khung đè loa. Đệm 16:9 nằm trên
         # chính khung, hàng lưới chỉ cao bằng nội dung.

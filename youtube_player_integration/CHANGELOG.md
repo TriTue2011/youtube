@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.26.83 - 2026-09-22
+
+### Một số video hết «Đang nghe tiếng · không mở được hình»
+
+Video YouTube không cho nhúng thì thẻ mở hình bằng file riêng. Bản trước
+đưa file đó vào danh sách khúc — danh sách làm cho tiếng, không phải cho
+hình — nên iPhone, Chrome và Android cùng không có khung hình dù tiếng
+vẫn chạy. Nay thử link thẳng, hỏng thì thử đường máy nhà. Hết cả hai mới
+báo không mở được.
+
 ## 0.26.82 - 2026-09-22
 
 ### Chỉ nghe và xem video hết lỗi «Không lấy được tiếng bài này»
