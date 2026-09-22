@@ -70,7 +70,11 @@ def _through_home_assistant(hass, upstream, *, kem=False):
     """
     links = hass.data.setdefault(PROXY_DATA, {})
     now = time.monotonic()
-    for token in [token for token, (_, until) in links.items() if until < now]:
+    # Vé là (địa chỉ, hạn, chữ ký tệp) — ba phần từ 0.26.80. Chỗ này từng
+    # đọc hai phần, nên lần xin tiếng THỨ HAI trở đi nổ ValueError và thẻ
+    # chỉ hiện «Không lấy được tiếng bài này». Chỉ nghe và xem video cùng
+    # một cửa, nên cả hai cùng hỏng. Hạn luôn nằm ở phần thứ hai.
+    for token in [token for token, link in links.items() if link[1] < now]:
         del links[token]
     while len(links) >= PROXY_MAX_LINKS:
         del links[next(iter(links))]

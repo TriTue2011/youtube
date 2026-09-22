@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.26.82 - 2026-09-22
+
+### Chỉ nghe và xem video hết lỗi «Không lấy được tiếng bài này»
+
+Lần đầu xin tiếng còn được. Từ lần thứ hai, thẻ dọn vé cũ bằng khuôn hai
+phần trong khi vé đã có ba phần, nên nổ lỗi và không trả địa chỉ. Chỉ nghe
+và phần tiếng của xem video cùng đi cửa này — iPhone, Safari, Chrome,
+Android đều dính. Video YouTube vẫn chạy vì nó không xin tiếng qua cửa đó.
+
 ## 0.26.81 - 2026-09-22
 
 ### iPhone / Safari: khung video ghim không còn cao bằng danh sách
