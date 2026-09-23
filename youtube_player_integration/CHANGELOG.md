@@ -1,6 +1,28 @@
 # Changelog
 
-## 0.26.84 - 2026-09-23
+## 0.27.0 - 2026-09-23
+
+### Queue — danh sách bài phát kế tiếp
+
+Tab mới «Queue» nằm cạnh YouTube, Zing MP3, Facebook và Playlist. Tìm bài rồi
+bấm nút thêm vào Queue trên từng kết quả; hết bài đang phát thì tự sang bài
+kế trong Queue.
+
+- Mỗi máy một Queue (điện thoại, máy tính); tích loa thì hiện và phát theo
+  Queue của loa tích đầu tiên.
+- Lưu trên Home Assistant như bài ghim: tải lại trang, khởi động lại HA hay
+  cập nhật đều không mất.
+- Chọn «Xem video» hoặc «Nghe audio», «Lần lượt» hoặc «Trộn bài».
+- Xoá từng bài, hoặc «Xoá tất cả» (bấm hai lần để chắc).
+- Bài đang phát nổi hẳn trong danh sách: viền sáng, nhãn «Đang phát».
+- Trên loa, Home Assistant tự sang bài kế kể cả khi mọi trình duyệt đã đóng.
+  Queue đi trước; hết Queue thì loa chạy tiếp như trước (kết quả tìm kiếm
+  hoặc playlist đã chọn).
+
+### Sửa kèm
+
+Kết quả tìm kiếm không còn hiện lẫn vào tab Playlist/Queue sau khi bấm phát.
+
 
 ### Android phát lại được nhạc YouTube
 

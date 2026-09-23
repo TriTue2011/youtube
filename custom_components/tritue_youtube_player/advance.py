@@ -18,6 +18,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import LOGGER
+from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
 from .sessions import active_sessions, is_controlled_by, observe_track, queue_item
 
@@ -116,17 +117,32 @@ class SessionAutoAdvance:
         if not observe_track(tracker, state, attributes, dt_util.utcnow(), session.get("item")):
             return
         session_id = str(session.get("session_id") or "")
-        if session_id in self._advancing or queue_item(session, 1) is None:
+        if session_id in self._advancing or self._next_from(session) is None:
             return
         self._advancing.add(session_id)
         self.hass.async_create_task(self._async_advance(session), eager_start=False)
 
+    def _next_from(self, session: dict[str, Any]) -> str | None:
+        """Where the next song comes from: the Queue of the session's first speaker
+        (the one ticked first) while it has songs left, then the session's own queue
+        (the search results or saved playlist it was started from)."""
+        outputs = session.get("output_entity_ids") or []
+        if outputs and get_queue_store(self.hass).has_next(outputs[0]):
+            return "queue"
+        if queue_item(session, 1) is not None:
+            return "session"
+        return None
+
     async def _async_advance(self, session: dict[str, Any]) -> None:
-        from .services import async_skip  # noqa: PLC0415 - services imports HA actions lazily
+        # services imports HA actions lazily
+        from .services import async_play_queue_next, async_skip  # noqa: PLC0415
 
         session_id = str(session.get("session_id") or "")
         try:
-            await async_skip(self.hass, self.entry, session.get("session_id"), 1)
+            if self._next_from(session) == "queue":
+                await async_play_queue_next(self.hass, self.entry, session)
+            else:
+                await async_skip(self.hass, self.entry, session.get("session_id"), 1)
         except HomeAssistantError as error:
             LOGGER.warning("Auto-advance of session %s failed: %s", session_id, error)
         finally:

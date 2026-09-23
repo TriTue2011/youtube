@@ -489,3 +489,75 @@ async def test_playlist_luu_qua_the_va_phat_ca_playlist_ra_loa(hass, addon_serve
     phien = _phien(hass)[0]
     assert (phien["title"], phien["queue_index"], phien["queue_size"]) == ("Bai 3", 0, 2)
     assert [d["entity_id"] for s, d in calls if s == "play_media"] == [[LOA_A]]
+
+
+async def _het_bai(hass, entry, loa, ten):
+    """Loa phát tới gần cuối rồi về idle — đúng cách một bài kết thúc thật."""
+    _loa_phat(hass, loa, 20)
+    await hass.async_block_till_done()
+    _loa_phat(hass, loa, 195)
+    await hass.async_block_till_done()
+    hass.states.async_set(loa, "idle", {"friendly_name": ten, "device_class": "speaker", "supported_features": LOA_FEATURES})
+    await hass.async_block_till_done()
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+
+async def test_queue_cua_loa_di_truoc_hang_doi_cua_phien(hass, addon_server):
+    """Chủ máy 23/09/2026: tìm thêm bài, gán vào Queue; hết bài đang phát thì sang
+    bài kế trong Queue — kể cả khi mọi trình duyệt đã đóng. Phiên phát từ kết quả
+    tìm kiếm tự có hàng đợi (Bai 1 → Bai 2), nên Queue phải thắng hàng đợi ấy."""
+    from custom_components.tritue_youtube_player.queue_store import get_queue_store
+
+    entry, calls = await _setup(hass, addon_server)
+    await entry.runtime_data.client.async_search("trót tin", limit=3)
+    await _choi(hass, entry, KET_QUA[0]["url"], [LOA_A])
+    store = get_queue_store(hass)
+    await store.async_change({"key": LOA_A, "action": "add", "items": [KET_QUA[2]]})
+    # Queue của loa khác không được chen vào loa A.
+    await store.async_change({"key": LOA_B, "action": "add", "items": [KET_QUA[1]]})
+
+    calls.clear()
+    await _het_bai(hass, entry, LOA_A, "Phòng khách")
+    assert [d["entity_id"] for s, d in calls if s == "play_media"] == [[LOA_A]]
+    assert {tuple(p["output_entity_ids"]): p["title"] for p in _phien(hass)}[(LOA_A,)] == "Bai 3"
+    queue = await store.async_get(LOA_A)
+    assert queue["current"] == queue["items"][0]["uid"]
+
+    # Queue đã hết, và Bai 3 là bài cuối của hàng đợi phiên: không phát gì thêm.
+    calls.clear()
+    await _het_bai(hass, entry, LOA_A, "Phòng khách")
+    assert [s for s, _ in calls if s == "play_media"] == []
+    assert len((await store.async_get(LOA_B))["items"]) == 1
+
+
+async def test_queue_qua_the_moi_nguoi_dang_nhap_deu_dung_duoc(hass, hass_client, hass_admin_user):
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.tritue_youtube_player.http import TriTueQueueView
+
+    assert await async_setup_component(hass, "http", {})
+    hass.http.register_view(TriTueQueueView)
+    hass_admin_user.groups = []  # người dùng thường, không phải quản trị
+    client = await hass_client()
+    url = "/api/tritue_youtube_player/queue"
+    key = "device:3f2a9c1e77b0"
+
+    tra = await client.post(url, json={"key": key, "action": "add", "items": [KET_QUA[0], KET_QUA[1]]})
+    assert tra.status == 200
+    items = (await tra.json())["queue"]["items"]
+    assert [i["title"] for i in items] == ["Bai 1", "Bai 2"]
+
+    tra = await client.post(url, json={"key": key, "action": "select", "uid": items[1]["uid"]})
+    assert (await tra.json())["item"]["id"] == IDS[1]
+
+    tra = await client.get(url, params={"key": key})
+    assert (await tra.json())["queue"]["current"] == items[1]["uid"]
+
+    tra = await client.post(url, json={"key": key, "action": "clear"})
+    assert (await tra.json())["queue"]["items"] == []
+
+    for sai in ({"key": "light.den", "action": "clear"}, {"key": key, "action": "xoa_he_thong"}):
+        tra = await client.post(url, json=sai)
+        assert tra.status == 400
+    assert (await client.get(url, params={"key": "../../etc"})).status == 400

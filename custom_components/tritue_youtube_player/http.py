@@ -23,6 +23,7 @@ from homeassistant.helpers.storage import Store
 from .actions import speaker_base_url
 from .api import YouTubePlayerApiError
 from .const import DOMAIN
+from .queue_store import get_queue_store
 from .muc_luc import (
     DAU_MUC_LUC,
     danh_sach_hls,
@@ -611,3 +612,32 @@ class TriTueSuggestionsView(HomeAssistantView):
             await self._store.async_save(document)
             self._doc = document
         return self.json(document)
+
+
+class TriTueQueueView(HomeAssistantView):
+    """Queue: songs a device or speaker plays next, persisted in storage.
+
+    Any signed-in user: choosing what plays next is using the player, not
+    configuring it (unlike hiding players or editing suggestions)."""
+
+    url = "/api/tritue_youtube_player/queue"
+    name = "api:tritue_youtube_player:queue"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        try:
+            queue = await get_queue_store(request.app["hass"]).async_get(request.query.get("key"))
+        except ValueError as error:
+            return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+        return self.json({"queue": queue})
+
+    async def post(self, request: web.Request) -> web.Response:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
+        try:
+            queue, item = await get_queue_store(request.app["hass"]).async_change(payload)
+        except ValueError as error:
+            return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+        return self.json({"queue": queue, "item": item})

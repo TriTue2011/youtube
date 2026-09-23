@@ -86,6 +86,47 @@ const laTao = () => laIOS() || laSafari();
  *  của khung và dính lỗi 153. iPhone đang phát được thì không đi đường này. */
 const laSafariMayTinh = () => laSafari() && !laIOS();
 
+/* QUEUE THEO TỪNG MÁY. Mã máy nằm ở trình duyệt, còn danh sách nằm trên Home
+   Assistant (tritue_youtube_player/queue), nên tải lại trang hay khởi động lại HA
+   không mất; chỉ mất khi xoá dữ liệu trình duyệt/app trên đúng máy ấy. Chủ máy chọn
+   23/09/2026: mỗi máy một Queue, tích loa thì Queue của loa tích đầu tiên.
+   Dùng getRandomValues chứ không randomUUID: HA mở qua http://IP không phải ngữ
+   cảnh an toàn nên randomUUID không có. */
+const QUEUE_DEVICE_KEY = "tritue_youtube_player_queue_device";
+let queueDeviceMemo = "";
+function queueDeviceId() {
+  if (queueDeviceMemo) return queueDeviceMemo;
+  let id = "";
+  try { id = localStorage.getItem(QUEUE_DEVICE_KEY) || ""; } catch (_error) { /* không có kho */ }
+  if (!/^[a-z0-9-]{8,64}$/.test(id)) {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem(QUEUE_DEVICE_KEY, id); } catch (_error) { /* chỉ sống tới khi tải lại */ }
+  }
+  queueDeviceMemo = id;
+  return id;
+}
+
+/** Queue còn bài kế không — CÙNG LUẬT với «pick_next» trong queue.py. Chỉ để hỏi
+ *  (đồng bộ, ngay trong sự kiện hết bài); chọn bài thật do máy chủ làm. */
+function queueHasNext(list) {
+  const items = list?.items || [];
+  if (!items.length) return false;
+  if (list.order === "shuffle") {
+    const played = new Set([...(list.played || []), list.current]);
+    return items.some((item) => !played.has(item.uid));
+  }
+  return items.findIndex((item) => item.uid === list.current) + 1 < items.length;
+}
+
+const QUEUE_ERRORS = {
+  queue_full: "Queue đã đủ 200 bài — xoá bớt rồi thêm.",
+  invalid_items: "Bài này không thêm vào Queue được.",
+  item_not_found: "Bài đó không còn trong Queue.",
+  invalid_queue_key: "Không xác định được máy hoặc loa của Queue.",
+};
+
 /** Phần tử tự nói nó phát được danh sách khúc. Chỉ tin lời này trên máy nhà
  *  Táo: Chrome Android cũng trả «maybe» mà không phát nổi danh sách khúc của
  *  thẻ — nhạc YouTube im trên Android từ 0.26.79, 0.26.75 (tệp liền) thì chạy. */
@@ -306,7 +347,10 @@ const deviceAudio = {
     audio.addEventListener("play", () => this.notify());
     audio.addEventListener("pause", () => this.notify());
     audio.addEventListener("ended", () => {
-      if (this.real() && this.item && !this.next(1)) this.notify("Đã nghe hết hàng đợi.");
+      if (!this.real() || !this.item) return;
+      // Queue của máy này đi trước hàng đợi kết quả tìm kiếm — xem «_queueTiepTheo».
+      if (typeof this.khiHetBai === "function" && this.khiHetBai()) return;
+      if (!this.next(1)) this.notify("Đã nghe hết hàng đợi.");
     });
     audio.addEventListener("error", () => {
       if (this.real()) this.notify("Không phát được tiếng bài này trên máy này.", true);
@@ -1052,6 +1096,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._needsRestore = false;
     // Household playlists on the player server (null until loaded).
     this._view = "search";
+    // Queue theo khoá («media_player.x» hoặc «device:<mã>») — xem «_queueKey».
+    this._queueLists = {};
+    this._queueChuKy = "";
+    this._queueTheoDoi = "";
+    this._queueXoaHet = false;
     this._playlists = null;
     this._openPlaylist = "";
     this._playlistsRequested = false;
@@ -1152,6 +1201,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._loadCapabilities();
     this._loadHiddenPlayers();
     this._loadSuggestions();
+    this._queueTheoHass();
     if (this._playlists === null && !this._playlistsRequested && this._entryId()) {
       this._playlistsRequested = true;
       this._loadPlaylists();
@@ -1197,6 +1247,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        trong «deviceAudio.listen». */
     deviceAudio.nhuongChoKhung = (item, queue, index, batDau) =>
       this._ngheBangKhungMotMinh(item, queue, index, batDau);
+    deviceAudio.khiHetBai = () => this._queueTiepTheo();
     // Đang XEM video có tiếng ngay trên máy này (không phải khung chỉ-tiếng, không
     // phải hình câm đi kèm loa) — chỉ lúc ấy cửa của «listen» mới nhường cho khung.
     deviceAudio.dangXemCoTieng = () => {
@@ -1365,6 +1416,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            rơi xuống một mình, nhìn như lỗi. Ba nhãn còn lại đều ngắn nên vẫn đủ
            chỗ; bốn mục thì vẫn giữ 2×2 khi hẹp vì nhãn "YouTube" từng bị cắt cụt. */
         .source-switch.so-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        /* NĂM MỤC (thêm Queue): chỗ hẹp ba cột (3+2) chứ không để nút cuối rơi xuống
+           một mình như hai cột; đủ rộng thì năm cột một hàng. Khối đo phải đứng SAU
+           luật ba cột ngay trên — cùng độ ưu tiên (0,2,0) thì luật viết sau thắng. */
+        .source-switch.so-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        @container ytcot (min-width: 460px) {
+          .source-switch.so-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
         button, input { font: inherit; }
         button { cursor: pointer; }
         .source-button {
@@ -2033,6 +2091,75 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .track { min-width: 0; }
         .track-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .92rem; }
         .track-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary-text-color); font-size: .78rem; margin-top: 3px; }
+        /* QUEUE — cùng dáng thẻ kết quả, thêm cột số thứ tự bên trái. */
+        .queue-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+        .queue-panel[hidden] { display: none; }
+        .queue-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+        .queue-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .queue-count { flex: 0 0 auto; color: var(--secondary-text-color); font-size: .8rem; }
+        .queue-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .queue-seg {
+          display: inline-flex;
+          border: 1px solid rgba(var(--ad-c1,0,204,204),0.35);
+          border-radius: 999px;
+          overflow: hidden;
+        }
+        .queue-seg button, .queue-clear {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 5px 10px;
+          border: 0;
+          background: transparent;
+          color: inherit;
+          font-size: .78rem;
+          --mdc-icon-size: 16px;
+        }
+        .queue-seg button[aria-pressed="true"] {
+          background: rgba(var(--ad-c1,0,204,204),0.3);
+          color: var(--ad-accent,#00ffcc);
+          font-weight: 700;
+        }
+        .queue-clear {
+          margin-left: auto;
+          border: 1px solid rgba(255,138,128,0.45);
+          border-radius: 999px;
+          color: var(--ad-danger,#ff8a80);
+        }
+        .queue-list { display: grid; gap: 6px; max-height: 420px; overflow: auto; padding: 2px; }
+        .queue-item { grid-template-columns: 24px 48px minmax(0, 1fr) auto; cursor: pointer; }
+        .queue-so { text-align: center; color: var(--secondary-text-color); font-size: .8rem; --mdc-icon-size: 20px; }
+        /* BÀI ĐANG PHÁT NỔI HẲN LÊN — chủ máy 23/09/2026. Viền màu nhấn dày, nền sáng
+           hơn hẳn các dòng khác, tên bài đổi màu, thêm nhãn «Đang phát» và biểu tượng
+           sóng nhạc thay số thứ tự. Hai lớp (0,2,0) thắng «.result» một lớp. */
+        .queue-item.is-current {
+          background: linear-gradient(90deg, rgba(var(--ad-c1,0,204,204),0.42), rgba(var(--ad-c1,0,204,204),0.14));
+          border: 2px solid var(--ad-accent,#00ffcc);
+          box-shadow: 0 0 14px rgba(var(--ad-c1,0,204,204),0.55);
+        }
+        .queue-item.is-current .track-title { color: var(--ad-accent,#00ffcc); font-weight: 800; }
+        .queue-item.is-current .queue-so { color: var(--ad-accent,#00ffcc); }
+        .queue-item.is-current .cover { box-shadow: 0 0 0 2px var(--ad-accent,#00ffcc); }
+        .queue-badge {
+          display: inline-block;
+          margin-right: 6px;
+          padding: 0 7px;
+          border-radius: 999px;
+          background: var(--ad-accent,#00ffcc);
+          color: #00221c;
+          font-size: .7rem;
+          font-weight: 800;
+          line-height: 1.5;
+        }
+        .queue-empty {
+          padding: 14px;
+          border: 1px dashed rgba(var(--ad-c1,0,204,204),0.35);
+          border-radius: 10px;
+          color: var(--secondary-text-color);
+          font-size: .85rem;
+          text-align: center;
+          --mdc-icon-size: 18px;
+        }
         .play-result {
           display: grid;
           place-items: center;
@@ -3072,6 +3199,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                 <button class="source-button" type="button" data-source="zing">Zing MP3</button>
                 <button class="source-button" type="button" data-source="facebook"><ha-icon icon="mdi:facebook"></ha-icon><span>Facebook</span></button>
                 <button class="source-button" type="button" data-view="playlists"><ha-icon icon="mdi:playlist-music"></ha-icon><span class="playlists-tab-label">Playlist</span></button>
+                <button class="source-button" type="button" data-view="queue"><ha-icon icon="mdi:playlist-play"></ha-icon><span>Queue</span></button>
               </div>
 
               <form>
@@ -3079,6 +3207,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                 <button class="primary search-button" type="submit" aria-label="Tìm kiếm" title="Tìm kiếm"><ha-icon icon="mdi:magnify"></ha-icon><span class="search-label">Tìm kiếm</span></button>
               </form>
               <button class="save-playlist" type="button" hidden><ha-icon icon="mdi:playlist-plus"></ha-icon><span>Lưu cả playlist này vào Playlist</span></button>
+              <div class="queue-panel" hidden></div>
               <div class="playlist-panel" hidden>
                 <form class="playlist-form">
                   <input type="text" class="playlist-input" maxlength="300000" autocomplete="off" aria-label="Link playlist, mã chia sẻ hoặc tên playlist mới" placeholder="Dán link playlist YouTube, album Zing, mã chia sẻ — hoặc gõ tên để tạo mới" />
@@ -3151,7 +3280,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         // Nút Playlist nằm chung hàng với nguồn nhạc nhưng KHÔNG phải một nguồn —
         // nó chỉ đổi khung đang xem. Phân biệt bằng data-view.
         if (button.dataset.view) {
-          this._showView("playlists");
+          this._showView(button.dataset.view);
           return;
         }
         this._source = button.dataset.source;
@@ -3443,6 +3572,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         this._syncNowPlaying();
         // Playlist buttons read "play on the speakers" or "listen here".
         if (this._view === "playlists") this._renderPlaylists();
+        // Tích/bỏ loa là đổi Queue đang xem (loa tích đầu tiên, hoặc máy này).
+        this._queueTheoHass();
       });
       const name = document.createElement("button");
       name.type = "button";
@@ -4465,12 +4596,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     let dem = 0;
     hang.querySelectorAll(".source-button").forEach((nut) => {
       // Nút Playlist nằm chung hàng nhưng không phải một nguồn — phân biệt bằng data-view.
-      const an = nut.dataset.view ? !hienPlaylist : !conLai.includes(nut.dataset.source);
+      const an = nut.dataset.view === "queue" ? false
+        : nut.dataset.view ? !hienPlaylist : !conLai.includes(nut.dataset.source);
       nut.hidden = an;
       if (!an) dem += 1;
     });
-    hang.classList.remove("so-1", "so-2", "so-3", "so-4");
-    if (dem >= 1 && dem <= 4) hang.classList.add(`so-${dem}`);
+    hang.classList.remove("so-1", "so-2", "so-3", "so-4", "so-5");
+    if (dem >= 1 && dem <= 5) hang.classList.add(`so-${dem}`);
     // Ẩn hết thì giấu luôn cả khung, để khỏi còn một dải rỗng có viền.
     hang.hidden = dem === 0;
     /* Ẩn đúng nguồn đang mở thì phải dời sang nguồn còn hiện: để nguyên thì ô tìm
@@ -4491,8 +4623,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const playlists = this._view === "playlists";
     this.shadowRoot.querySelectorAll(".source-button").forEach((button) => {
       const dangChon = button.dataset.view
-        ? playlists
-        : !playlists && button.dataset.source === this._source;
+        ? this._view === button.dataset.view
+        : this._view === "search" && button.dataset.source === this._source;
       button.setAttribute("aria-pressed", String(dangChon));
     });
     const input = this.shadowRoot.querySelector('input[type="search"]');
@@ -5025,8 +5157,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     if (!results || !toggle) return;
     const dem = this._results.length;
     const thuGon = Boolean(this._ketQuaThuGon) && dem > 0;
-    results.hidden = thuGon;
-    toggle.hidden = !dem;
+    /* Danh sách kết quả và thanh thu gọn CHỈ thuộc màn tìm kiếm. Không xét màn thì
+       phát một bài từ Queue/Playlist làm chúng hiện lẫn vào màn đó. */
+    const ngoaiTimKiem = this._view !== "search";
+    results.hidden = ngoaiTimKiem || thuGon;
+    toggle.hidden = ngoaiTimKiem || !dem;
     toggle.setAttribute("aria-expanded", String(!thuGon));
     toggle.querySelector(".results-toggle-text").textContent = thuGon
       ? (this._tenDaChon
@@ -5099,6 +5234,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         add.append(addIcon);
         add.addEventListener("click", () => this._toggleAddMenu(row, { ...item, source: item.source || this._source }));
         actions.append(add);
+        const hangCho = document.createElement("button");
+        hangCho.type = "button";
+        hangCho.className = "icon-button add-queue";
+        hangCho.title = `Thêm “${title.textContent}” vào Queue`;
+        hangCho.setAttribute("aria-label", hangCho.title);
+        const hangChoIcon = document.createElement("ha-icon");
+        hangChoIcon.setAttribute("icon", "mdi:tray-plus");
+        hangCho.append(hangChoIcon);
+        hangCho.addEventListener("click", () => this._addToQueue(item, hangCho));
+        actions.append(hangCho);
         /* Bấm ghim thì MỞ BẢNG CHỌN MỤC ngay tại dòng bài hát, chứ không ghim thẳng.
            Trước đây nút này dùng mục đã chọn sẵn bên khu gợi ý, mà khu đó biến mất
            ngay khi có kết quả tìm — nên đúng lúc bấm thì không nhìn thấy đích đến,
@@ -6881,6 +7026,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     }
     // 0 = ended. With speakers the speakers drive auto-advance; alone, the video does.
     if (state !== 0 || previous === 0 || this._video.withSpeakers || this._video.followsDevice) return;
+    if (this._queueTiepTheo()) return;
     if (this._queueIndex >= 0 && this._queueIndex < this._queue.length - 1) this._skip(1);
     else this._setStatus("Đã phát hết hàng đợi.");
   }
@@ -7712,24 +7858,269 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
   }
 
+  /* ===== QUEUE ===== */
+
+  /** Khoá Queue: loa tích ĐẦU TIÊN (Set giữ thứ tự tích), không tích loa thì máy này. */
+  _queueKey() {
+    const loa = [...this._selectedPlayers][0];
+    return loa || `device:${queueDeviceId()}`;
+  }
+
+  _queueName(key) {
+    if (key.startsWith("device:")) return "Máy này";
+    return this._hass?.states?.[key]?.attributes?.friendly_name || key;
+  }
+
+  async _loadQueueList(key = this._queueKey()) {
+    if (!this._hass) return null;
+    try {
+      const payload = await this._hass.callApi("GET", `tritue_youtube_player/queue?key=${encodeURIComponent(key)}`);
+      if (payload?.queue) this._queueLists[key] = payload.queue;
+    } catch (_error) {
+      // Tích hợp bản cũ chưa có Queue: tab hiện trống, không báo lỗi mỗi lần đổi loa.
+    }
+    this._renderQueue();
+    return this._queueLists[key] || null;
+  }
+
+  /** Gửi một lệnh Queue; trả về câu trả lời của máy chủ, hỏng thì null (đã báo lỗi). */
+  async _queueCall(key, body) {
+    try {
+      const payload = await this._hass.callApi("POST", "tritue_youtube_player/queue", { key, ...body });
+      if (payload?.queue) this._queueLists[key] = payload.queue;
+      this._renderQueue();
+      return payload || {};
+    } catch (error) {
+      const code = String(error?.body?.error || error?.error || "");
+      this._setStatus(QUEUE_ERRORS[code] || "Không cập nhật được Queue.", true);
+      return null;
+    }
+  }
+
+  /** Chạy mỗi lần «set hass»: CHỈ tải lại khi đổi loa tích hoặc loa sang bài khác
+   *  (máy chủ tự chuyển bài trên loa, card phải thấy bài nào đang được tô sáng). */
+  _queueTheoHass() {
+    if (!this._rendered) return;
+    const key = this._queueKey();
+    const phien = this._focusedSession();
+    const dau = `${key}|${phien?.id || ""}|${phien?.queue_index ?? ""}`;
+    if (dau === this._queueTheoDoi) return;
+    this._queueTheoDoi = dau;
+    this._loadQueueList(key);
+    // Queue của máy này cần sẵn trong bộ nhớ để sự kiện hết bài hỏi được ngay.
+    const may = `device:${queueDeviceId()}`;
+    if (key !== may && !(may in this._queueLists)) this._loadQueueList(may);
+  }
+
+  async _addToQueue(item, button) {
+    const key = this._queueKey();
+    const source = item.source || this._source;
+    button.disabled = true;
+    const payload = await this._queueCall(key, {
+      action: "add",
+      items: [{
+        source,
+        id: item.id,
+        url: item.url || "",
+        title: item.title || item.id,
+        artist: item.channel || item.artist || "",
+        duration: Number(item.duration) || 0,
+        thumbnail: item.thumbnail || "",
+        media_content_type: item.media_content_type || "",
+      }],
+    });
+    button.disabled = false;
+    if (!payload) return;
+    const icon = button.querySelector("ha-icon");
+    icon?.setAttribute("icon", "mdi:check");
+    setTimeout(() => icon?.setAttribute("icon", "mdi:tray-plus"), 1500);
+    const n = payload.queue?.items?.length || 0;
+    this._setStatus(`Đã thêm “${item.title || item.id}” vào Queue · ${this._queueName(key)} (${n} bài).`);
+  }
+
+  /** Hết bài trên MÁY NÀY: còn bài kế trong Queue của máy này thì phát, trả true.
+   *  Đang tích loa thì không đụng — phát tiếp sẽ ra loa, không phải máy này. */
+  _queueTiepTheo() {
+    if (this._selectedPlayers.size) return false;
+    const key = `device:${queueDeviceId()}`;
+    if (!queueHasNext(this._queueLists[key])) return false;
+    this._queueCall(key, { action: "next" }).then((payload) => {
+      if (payload?.item) this._playQueueItem(payload.item, key);
+    });
+    return true;
+  }
+
+  _playQueueItem(entry, key) {
+    const item = {
+      source: entry.source,
+      id: entry.id,
+      title: entry.title,
+      channel: entry.artist,
+      duration: entry.duration_seconds,
+      thumbnail: entry.thumbnail_url,
+      ...(entry.url ? { url: entry.url } : {}),
+      ...(entry.media_content_type ? { media_content_type: entry.media_content_type } : {}),
+    };
+    // Chế độ của Queue quyết định xem hay chỉ nghe; bài không có hình thì luôn nghe.
+    const watch = (this._queueLists[key]?.mode || "video") === "video" && this._isVideoItem(item, item.source);
+    this._playResult(item, document.createElement("button"), -1, watch);
+  }
+
+  async _chonTrongQueue(key, uid) {
+    const payload = await this._queueCall(key, { action: "select", uid });
+    if (payload?.item) this._playQueueItem(payload.item, key);
+  }
+
+  _renderQueue() {
+    const box = this.shadowRoot?.querySelector(".queue-panel");
+    if (!box || this._view !== "queue") return;
+    const key = this._queueKey();
+    const list = this._queueLists[key] || { items: [], current: null, mode: "video", order: "sequential" };
+    /* «set hass» chạy nhiều lần mỗi giây: dựng lại vô điều kiện là xoá mất cú cuộn
+       đang dở. Chữ ký GỒM dữ liệu từ máy chủ, không thì dữ liệu về lại bị bỏ qua. */
+    const chuKy = `${key}|${JSON.stringify(list)}|${this._queueXoaHet ? 1 : 0}`;
+    if (chuKy === this._queueChuKy) return;
+    this._queueChuKy = chuKy;
+    box.replaceChildren();
+    const el = (tag, cls, text) => {
+      const node = document.createElement(tag);
+      if (cls) node.className = cls;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const icon = (name) => {
+      const node = document.createElement("ha-icon");
+      node.setAttribute("icon", name);
+      return node;
+    };
+    const head = el("div", "queue-head");
+    head.append(el("span", "queue-title", `Queue · ${this._queueName(key)}`),
+      el("span", "queue-count", `${list.items.length} bài`));
+    const controls = el("div", "queue-controls");
+    const nhom = (ten, lua) => {
+      const group = el("div", "queue-seg");
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", ten);
+      for (const [truong, giaTri, bieuTuong, nhan] of lua) {
+        const nut = el("button");
+        nut.type = "button";
+        nut.setAttribute("aria-pressed", String(list[truong] === giaTri));
+        nut.append(icon(bieuTuong), el("span", "", nhan));
+        nut.addEventListener("click", () => {
+          if (list[truong] !== giaTri) this._queueCall(key, { action: "set", [truong]: giaTri });
+        });
+        group.append(nut);
+      }
+      return group;
+    };
+    controls.append(
+      nhom("Chế độ phát", [["mode", "video", "mdi:television-play", "Xem video"],
+        ["mode", "audio", "mdi:headphones", "Nghe audio"]]),
+      nhom("Thứ tự", [["order", "sequential", "mdi:playlist-play", "Lần lượt"],
+        ["order", "shuffle", "mdi:shuffle-variant", "Trộn bài"]]),
+    );
+    if (list.items.length) {
+      /* Xoá hết là không lùi được: bấm lần đầu chỉ đổi nút sang lời hỏi lại, bấm lần
+         hai trong 4 giây mới xoá. Không dùng confirm() — app HA trên điện thoại chặn. */
+      const clear = el("button", "queue-clear");
+      clear.type = "button";
+      clear.append(icon("mdi:delete-sweep-outline"),
+        el("span", "", this._queueXoaHet ? "Bấm lần nữa để xoá hết" : "Xoá tất cả"));
+      clear.addEventListener("click", () => {
+        if (!this._queueXoaHet) {
+          this._queueXoaHet = true;
+          clearTimeout(this._queueXoaHetHen);
+          this._queueXoaHetHen = setTimeout(() => {
+            this._queueXoaHet = false;
+            this._renderQueue();
+          }, 4000);
+          this._renderQueue();
+          return;
+        }
+        this._queueXoaHet = false;
+        clearTimeout(this._queueXoaHetHen);
+        this._queueCall(key, { action: "clear" });
+      });
+      controls.append(clear);
+    }
+    box.append(head, controls);
+    if (!list.items.length) {
+      const empty = el("div", "queue-empty");
+      empty.append(el("span", "", "Queue đang trống. Tìm bài rồi bấm "), icon("mdi:tray-plus"),
+        el("span", "", " để thêm — hết bài đang phát sẽ tự sang bài kế."));
+      box.append(empty);
+      return;
+    }
+    const danh = el("div", "queue-list");
+    list.items.forEach((entry, index) => {
+      const dangPhat = entry.uid === list.current;
+      const row = el("article", `result queue-item${dangPhat ? " is-current" : ""}`);
+      row.tabIndex = 0;
+      row.title = `Phát “${entry.title}”`;
+      const so = el("div", "queue-so");
+      if (dangPhat) so.append(icon("mdi:equalizer"));
+      else so.textContent = String(index + 1);
+      const cover = el("img", "cover");
+      cover.alt = "";
+      cover.loading = "lazy";
+      if (/^https?:\/\//.test(entry.thumbnail_url || "")) cover.src = entry.thumbnail_url;
+      const track = el("div", "track");
+      const tieuDe = el("div", "track-title", entry.title);
+      const meta = el("div", "track-meta");
+      if (dangPhat) meta.append(el("span", "queue-badge", "Đang phát"));
+      meta.append(el("span", "", [entry.artist, this._formatDuration(entry.duration_seconds)]
+        .filter(Boolean).join(" · ")));
+      track.append(tieuDe, meta);
+      const actions = el("div", "result-actions");
+      const xoa = el("button", "icon-button queue-remove");
+      xoa.type = "button";
+      xoa.title = `Xoá “${entry.title}” khỏi Queue`;
+      xoa.setAttribute("aria-label", xoa.title);
+      xoa.append(icon("mdi:close"));
+      xoa.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._queueCall(key, { action: "remove", uid: entry.uid });
+      });
+      actions.append(xoa);
+      row.append(so, cover, track, actions);
+      const phat = () => this._chonTrongQueue(key, entry.uid);
+      row.addEventListener("click", phat);
+      row.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          phat();
+        }
+      });
+      danh.append(row);
+    });
+    box.append(danh);
+  }
+
   _showView(view) {
     /* MỘT CỬA VÀO duy nhất cho việc đổi khung. Lưu một playlist xong cũng tự nhảy
        sang khung Playlist, nên chặn ở đây thay vì vá từng chỗ gọi: Playlist bị ẩn
        trong cấu hình thì mọi đường vào đều quay về khung tìm kiếm. */
     const moPlaylist = view === "playlists" && this._config.show_playlist !== false;
-    this._view = moPlaylist ? "playlists" : "search";
+    this._view = moPlaylist ? "playlists" : view === "queue" ? "queue" : "search";
     const playlists = this._view === "playlists";
+    const queue = this._view === "queue";
     // Hàng nút đã gộp làm một, nên chính nó lo việc tô sáng mục đang mở.
     this._updateSourceButtons();
     /* KHÔNG ẩn «.source-switch» nữa: nút Playlist giờ nằm trong chính hàng đó.
        Ẩn nó đi là ẩn luôn đường quay về YouTube/Zing — mở Playlist xong sẽ kẹt
        lại, không có nút nào để thoát. Trước đây ẩn được vì hàng tab riêng vẫn còn. */
     for (const selector of ["form", ".results", ".yt-suggested-section"]) {
-      this.shadowRoot.querySelector(selector).hidden = playlists;
+      this.shadowRoot.querySelector(selector).hidden = this._view !== "search";
     }
     this.shadowRoot.querySelector(".playlist-panel").hidden = !playlists;
+    this.shadowRoot.querySelector(".queue-panel").hidden = !queue;
+    this._syncKetQuaThuGon();
     this._syncSavePlaylist();
     if (playlists) this._loadPlaylists();
+    if (queue) {
+      this._queueChuKy = "";
+      this._loadQueueList();
+    }
   }
 
   _syncSavePlaylist() {

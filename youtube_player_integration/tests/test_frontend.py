@@ -1034,5 +1034,44 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)", init_source)
 
 
+class QueueContractTests(unittest.TestCase):
+    """Queue (0.27.0): mỗi máy / mỗi loa một danh sách bài kế tiếp, lưu trên HA."""
+
+    def setUp(self):
+        self.script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(encoding="utf-8")
+
+    def test_tab_queue_nam_trong_hang_nut_nguon(self):
+        self.assertIn('data-view="queue"><ha-icon icon="mdi:playlist-play"></ha-icon><span>Queue</span>', self.script)
+        self.assertIn('<div class="queue-panel" hidden></div>', self.script)
+        self.assertIn("this._showView(button.dataset.view);", self.script)
+        # Năm nút: chỗ hẹp 3 cột, chỗ rộng 5 cột — khối đo đứng SAU luật ba cột.
+        hep = self.script.index(".source-switch.so-5 { grid-template-columns: repeat(3,")
+        rong = self.script.index(".source-switch.so-5 { grid-template-columns: repeat(5,")
+        self.assertLess(hep, rong)
+
+    def test_khoa_queue_loa_tich_dau_tien_hoac_may_nay(self):
+        self.assertIn("const loa = [...this._selectedPlayers][0];", self.script)
+        self.assertIn("return loa || `device:${queueDeviceId()}`;", self.script)
+        # http://IP không phải ngữ cảnh an toàn: randomUUID không có.
+        self.assertIn("crypto.getRandomValues(bytes);", self.script)
+        self.assertNotIn("crypto.randomUUID", self.script)
+
+    def test_het_bai_tren_may_nay_queue_di_truoc(self):
+        self.assertIn('if (typeof this.khiHetBai === "function" && this.khiHetBai()) return;', self.script)
+        self.assertIn("deviceAudio.khiHetBai = () => this._queueTiepTheo();", self.script)
+        self.assertIn("    if (this._queueTiepTheo()) return;\n    if (this._queueIndex >= 0", self.script)
+        # Đang tích loa thì bài kế ra loa do máy chủ lo, máy này không tự phát.
+        self.assertIn("if (this._selectedPlayers.size) return false;", self.script)
+
+    def test_bai_dang_phat_noi_han_va_ve_lai_co_chu_ky(self):
+        self.assertIn(".queue-item.is-current {", self.script)
+        self.assertIn('el("span", "queue-badge", "Đang phát")', self.script)
+        self.assertIn("if (chuKy === this._queueChuKy) return;", self.script)
+
+    def test_ket_qua_tim_kiem_khong_hien_lan_ngoai_man_tim_kiem(self):
+        self.assertIn('const ngoaiTimKiem = this._view !== "search";', self.script)
+        self.assertIn("results.hidden = ngoaiTimKiem || thuGon;", self.script)
+
+
 if __name__ == "__main__":
     unittest.main()

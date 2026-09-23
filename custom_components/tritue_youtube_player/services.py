@@ -11,6 +11,7 @@ from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .actions import async_play_on_players
 from .api import InvalidTargetError, YouTubePlayerApiError
+from .queue_store import get_queue_store
 from .const import (
     CONF_ENTRY_ID,
     CONF_MEDIA_CONTENT_TYPE,
@@ -213,6 +214,19 @@ async def async_skip(hass: HomeAssistant, entry, session_id: str | None, step: i
     if found is None:
         raise _validation_error("queue_end")
     _, item = found
+    return await _async_play_session_item(hass, entry, session, item)
+
+
+async def async_play_queue_next(hass: HomeAssistant, entry, session: dict) -> dict:
+    """Play the next song of the Queue of the session's first speaker on its speakers."""
+    outputs = list(session.get("output_entity_ids") or [])
+    item = await get_queue_store(hass).async_advance(outputs[0]) if outputs else None
+    if item is None:
+        raise _validation_error("queue_end")
+    return await _async_play_session_item(hass, entry, session, item)
+
+
+async def _async_play_session_item(hass: HomeAssistant, entry, session: dict, item: dict) -> dict:
     outputs = [
         entity_id
         for entity_id in session.get("output_entity_ids") or []

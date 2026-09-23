@@ -17,6 +17,7 @@ from .http import (
     TriTueEmbedView,
     TriTueHiddenPlayersView,
     TriTuePlaylistsView,
+    TriTueQueueView,
     TriTueProxyView,
     TriTueSearchView,
     TriTueStreamView,
@@ -39,6 +40,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     hass.http.register_view(TriTueStreamView)
     hass.http.register_view(TriTueProxyView)
     hass.http.register_view(TriTuePlaylistsView)
+    hass.http.register_view(TriTueQueueView)
     hass.http.register_view(TriTueHiddenPlayersView())
     # Khởi tạo sẵn (có ngoặc) vì view này giữ store và khoá riêng cho mỗi lần chạy,
     # giống TriTueHiddenPlayersView — các view còn lại không giữ trạng thái nên HA
