@@ -1241,6 +1241,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       show_zing: true,
       show_facebook: true,
       show_playlist: true,
+      show_queue: true,
       ...config,
     };
     /* Đổi «layout» trong trình sửa PHẢI thắng nút bấm trên card. Trước đây nút bấm
@@ -4685,7 +4686,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     let dem = 0;
     hang.querySelectorAll(".source-button").forEach((nut) => {
       // Nút Playlist nằm chung hàng nhưng không phải một nguồn — phân biệt bằng data-view.
-      const an = nut.dataset.view === "queue" ? false
+      const an = nut.dataset.view === "queue" ? this._config.show_queue === false
         : nut.dataset.view ? !hienPlaylist : !conLai.includes(nut.dataset.source);
       nut.hidden = an;
       if (!an) dem += 1;
@@ -4703,6 +4704,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._renderResults();
     }
     if (!hienPlaylist && this._view === "playlists") this._showView("search");
+    if (this._config.show_queue === false && this._view === "queue") this._showView("search");
     this._updateSourceButtons();
     this._syncSavePlaylist();
   }
@@ -5323,7 +5325,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         add.append(addIcon);
         add.addEventListener("click", () => this._toggleAddMenu(row, { ...item, source: item.source || this._source }));
         actions.append(add);
-        const hangCho = document.createElement("button");
+        const hangCho = this._config.show_queue === false ? null : document.createElement("button");
+        if (hangCho) {
         hangCho.type = "button";
         hangCho.className = "icon-button add-queue";
         hangCho.title = `Thêm “${title.textContent}” vào Queue`;
@@ -5333,6 +5336,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         hangCho.append(hangChoIcon);
         hangCho.addEventListener("click", () => this._addToQueue(item, hangCho));
         actions.append(hangCho);
+        }
         /* Bấm ghim thì MỞ BẢNG CHỌN MỤC ngay tại dòng bài hát, chứ không ghim thẳng.
            Trước đây nút này dùng mục đã chọn sẵn bên khu gợi ý, mà khu đó biến mất
            ngay khi có kết quả tìm — nên đúng lúc bấm thì không nhìn thấy đích đến,
@@ -8236,7 +8240,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
        sang khung Playlist, nên chặn ở đây thay vì vá từng chỗ gọi: Playlist bị ẩn
        trong cấu hình thì mọi đường vào đều quay về khung tìm kiếm. */
     const moPlaylist = view === "playlists" && this._config.show_playlist !== false;
-    this._view = moPlaylist ? "playlists" : view === "queue" ? "queue" : "search";
+    this._view = moPlaylist ? "playlists"
+      : view === "queue" && this._config.show_queue !== false ? "queue" : "search";
     const playlists = this._view === "playlists";
     const queue = this._view === "queue";
     // Hàng nút đã gộp làm một, nên chính nó lo việc tô sáng mục đang mở.
@@ -8835,6 +8840,10 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
             <label for="ed-show-playlist">Playlist <span class="hint">Ẩn cả nút Playlist lẫn nút lưu playlist</span></label>
             <input id="ed-show-playlist" type="checkbox" checked />
           </div>
+          <div class="row">
+            <label for="ed-show-queue">Queue <span class="hint">Ẩn tab Queue và nút thêm vào Queue</span></label>
+            <input id="ed-show-queue" type="checkbox" checked />
+          </div>
         </div>
         <div class="group">
           <h4>🔍 Thu phóng</h4>
@@ -8907,6 +8916,7 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     batTat("ed-show-zing", "show_zing");
     batTat("ed-show-facebook", "show_facebook");
     batTat("ed-show-playlist", "show_playlist");
+    batTat("ed-show-queue", "show_queue");
 
     /* Bộ màu dựng sẵn. Chủ máy chốt: "có thêm màu cố định nhưng vẫn nên để cả bảng
        RGB như hiện tại để chọn cho từng mục" — nên đây chỉ là lối tắt điền sẵn cả
@@ -9033,6 +9043,7 @@ class TriTueYouTubePlayerCardEditor extends HTMLElement {
     tich("ed-show-zing", config.show_zing);
     tich("ed-show-facebook", config.show_facebook);
     tich("ed-show-playlist", config.show_playlist);
+    tich("ed-show-queue", config.show_queue);
     const soDi = (id, hau) => {
       const el = this.shadowRoot.getElementById(id);
       const out = this.shadowRoot.getElementById(id + "-out");

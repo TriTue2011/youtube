@@ -1110,6 +1110,12 @@ class QueueContractTests(unittest.TestCase):
         self.assertIn('el("span", "queue-badge", "Đang phát")', self.script)
         self.assertIn("if (chuKy === this._queueChuKy) return;", self.script)
 
+    def test_an_duoc_queue_trong_trinh_sua(self):
+        self.assertIn("show_queue: true,", self.script)
+        self.assertIn('batTat("ed-show-queue", "show_queue");', self.script)
+        self.assertIn('nut.dataset.view === "queue" ? this._config.show_queue === false', self.script)
+        self.assertIn('view === "queue" && this._config.show_queue !== false ? "queue" : "search"', self.script)
+
     def test_ket_qua_tim_kiem_khong_hien_lan_ngoai_man_tim_kiem(self):
         self.assertIn('const ngoaiTimKiem = this._view !== "search";', self.script)
         self.assertIn("results.hidden = ngoaiTimKiem || thuGon;", self.script)

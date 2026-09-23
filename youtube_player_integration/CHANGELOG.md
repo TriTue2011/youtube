@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.2 - 2026-09-24
+
+### Ẩn được tab Queue
+
+Trình sửa thẻ có thêm ô «Queue» cạnh YouTube, Zing, Facebook và Playlist: bỏ chọn
+là ẩn tab Queue cùng nút thêm vào Queue trên từng kết quả.
+
 ## 0.27.1 - 2026-09-23
 
 ### iPhone: phóng to video phủ lại cả màn hình
