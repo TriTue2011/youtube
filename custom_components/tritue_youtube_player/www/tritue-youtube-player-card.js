@@ -92,6 +92,88 @@ const laSafariMayTinh = () => laSafari() && !laIOS();
    23/09/2026: mỗi máy một Queue, tích loa thì Queue của loa tích đầu tiên.
    Dùng getRandomValues chứ không randomUUID: HA mở qua http://IP không phải ngữ
    cảnh an toàn nên randomUUID không có. */
+/* SAFARI 15 KHÔNG CÓ CONTAINER QUERY — iPhone 7 (iOS 15.8.8, đọc từ sổ thiết bị HA)
+   và iMac macOS 12 của nhà, 23/09/2026. Mọi khối «@container» và đơn vị «cqw» bị
+   bỏ qua, nên card rơi về luật máy tính: cột danh sách định vị tuyệt đối đè lên
+   khối loa, thẻ bài ghim bị kéo cao, và «clamp(76px, 24cqw, 112px)» làm hỏng cả
+   dòng khai cột nên đĩa nhạc phình ra hết bề ngang.
+   Sửa theo LỚP chứ không vá từng luật: máy thiếu container query thì card tự đọc
+   CSS của chính nó, biến mỗi khối «@container TÊN (điều kiện)» thành các luật gắn
+   với lớp «ytcq-N» bọc trong «:where()» (độ ưu tiên 0 — thứ tự và độ ưu tiên y như
+   bản gốc), rồi đo bề rộng mốc bằng ResizeObserver để bật/tắt lớp. «Ncqw» thành
+   «calc(N * var(--ytcq-w))», biến ấy đặt trên từng mốc = 1% bề rộng của nó, nên
+   phần tử con tự lấy đúng mốc gần nhất như container query thật. Luật @container
+   thêm về sau tự được phủ, không phải nhớ sửa ở đây. */
+function coContainerQuery() {
+  try {
+    return CSS.supports("container-type: inline-size");
+  } catch (_error) {
+    return false;
+  }
+}
+
+function polyfillContainerQueries(root) {
+  if (!root || root._ytcq || coContainerQuery()) return;
+  const style = root.querySelector("style");
+  if (!style || typeof ResizeObserver === "undefined") return;
+  root._ytcq = true;
+  const css = style.textContent.replace(/\/\*[\s\S]*?\*\//g, "");
+  const dieuKien = [];
+  const mo = /@container\s+([\w-]+)\s*([^{]*)\{/g;
+  let ra = "";
+  let tu = 0;
+  let m;
+  while ((m = mo.exec(css))) {
+    let j = mo.lastIndex;
+    let sau = 1;
+    while (sau && j < css.length) {
+      if (css[j] === "{") sau += 1;
+      else if (css[j] === "}") sau -= 1;
+      j += 1;
+    }
+    const id = dieuKien.length;
+    const ve = [...m[2].matchAll(/(min|max)-width\s*:\s*([\d.]+)px/g)];
+    dieuKien.push({ ten: m[1], dung: (w) => ve.every(([, k, n]) => (k === "min" ? w >= Number(n) : w <= Number(n))) });
+    const trong = css.slice(mo.lastIndex, j - 1).replace(/([^{}]+)\{/g, (_, chon) =>
+      `${chon.split(",").map((mot) => `:where(.ytcq-${id}) ${mot.trim()}`).join(", ")} {`);
+    ra += css.slice(tu, m.index) + trong;
+    tu = j;
+    mo.lastIndex = j;
+  }
+  ra = (ra + css.slice(tu)).replace(/(-?[\d.]+)cqw\b/g, "calc($1 * var(--ytcq-w, 1vw))");
+  style.textContent = ra;
+  /* Mốc: luật nào khai «container-name». «:host» không mang lớp được cho luật bên
+     trong đo, nên lớp và biến đặt lên phần tử gốc ngay sau <style> (ha-card), còn
+     bề rộng đo trên chính card. */
+  const mocs = [...ra.matchAll(/([^{}]+)\{[^{}]*container-name:\s*([\w-]+)/g)].map(([, chon, ten]) => {
+    const la = chon.trim() === ":host";
+    const el = la ? style.nextElementSibling : root.querySelector(chon.trim());
+    return { ten, el, do: la ? root.host : el };
+  }).filter((moc) => moc.el && moc.do);
+  const tinh = () => {
+    for (const moc of mocs) {
+      const cs = getComputedStyle(moc.do);
+      const w = moc.do.getBoundingClientRect().width
+        - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0)
+        - (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+      moc.el.style.setProperty("--ytcq-w", `${w / 100}px`);
+      dieuKien.forEach((dk, id) => {
+        if (dk.ten === moc.ten) moc.el.classList.toggle(`ytcq-${id}`, dk.dung(w));
+      });
+    }
+  };
+  /* Bật lớp làm cột đổi bề rộng, tức lại có việc cho chính bộ đo — tính ngay trong
+     lượt báo thì trình duyệt ném «ResizeObserver loop …» ra console. Dời sang khung
+     hình kế tiếp. */
+  let hen = 0;
+  const ro = new ResizeObserver(() => {
+    cancelAnimationFrame(hen);
+    hen = requestAnimationFrame(tinh);
+  });
+  mocs.forEach((moc) => ro.observe(moc.do));
+  tinh();
+}
+
 const QUEUE_DEVICE_KEY = "tritue_youtube_player_queue_device";
 let queueDeviceMemo = "";
 function queueDeviceId() {
@@ -3271,6 +3353,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           </div>
         </div>
       </ha-card>`;
+    polyfillContainerQueries(this.shadowRoot);
     this.shadowRoot.querySelector("h2").textContent = this._config.title;
   }
 

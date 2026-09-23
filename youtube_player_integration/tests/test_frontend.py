@@ -1034,6 +1034,31 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)", init_source)
 
 
+class Safari15ContainerQueryTests(unittest.TestCase):
+    """iPhone 7 (iOS 15.8.8) và iMac macOS 12 chạy Safari 15: không có container
+    query. Card phải tự phủ mọi khối @container và đơn vị cqw."""
+
+    def setUp(self):
+        self.script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(encoding="utf-8")
+
+    def test_polyfill_chay_ngay_sau_khi_dung_shadow_dom(self):
+        self.assertIn('return CSS.supports("container-type: inline-size");', self.script)
+        self.assertIn("      </ha-card>`;\n    polyfillContainerQueries(this.shadowRoot);", self.script)
+
+    def test_giu_nguyen_do_uu_tien_va_phu_don_vi_cqw(self):
+        # :where() có độ ưu tiên 0 — luật đổi ra không thắng/thua gì hơn bản gốc.
+        self.assertIn("`:where(.ytcq-${id}) ${mot.trim()}`", self.script)
+        self.assertIn('"calc($1 * var(--ytcq-w, 1vw))"', self.script)
+        self.assertIn("hen = requestAnimationFrame(tinh);", self.script)
+
+    def test_moi_moc_container_deu_co_ten(self):
+        # Polyfill tìm mốc theo «container-name»; mốc không tên thì nó không phủ được.
+        import re
+        khoi = re.findall(r"@container\s+([\w-]+)?\s*\(", self.script)
+        self.assertTrue(khoi)
+        self.assertTrue(all(khoi), "có khối @container không nêu tên mốc")
+
+
 class QueueContractTests(unittest.TestCase):
     """Queue (0.27.0): mỗi máy / mỗi loa một danh sách bài kế tiếp, lưu trên HA."""
 

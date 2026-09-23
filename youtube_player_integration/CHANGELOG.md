@@ -19,6 +19,13 @@ kế trong Queue.
   Queue đi trước; hết Queue thì loa chạy tiếp như trước (kết quả tìm kiếm
   hoặc playlist đã chọn).
 
+### iPhone đời cũ và Safari trên macOS 12 hiển thị lại đúng
+
+Safari 15 (iPhone 7 lên được tối đa iOS 15, iMac chạy macOS 12) chưa có
+«container query» — thứ thẻ dùng để co giãn theo bề rộng. Thiếu nó, đĩa nhạc
+phình to hết bề ngang, cột danh sách và thẻ bài ghim đè lên phần chọn loa. Nay
+trên các máy ấy thẻ tự đo bề rộng và áp đúng các luật đó; máy mới không đổi gì.
+
 ### Sửa kèm
 
 Kết quả tìm kiếm không còn hiện lẫn vào tab Playlist/Queue sau khi bấm phát.
