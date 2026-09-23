@@ -1059,6 +1059,23 @@ class Safari15ContainerQueryTests(unittest.TestCase):
         self.assertTrue(all(khoi), "có khối @container không nêu tên mốc")
 
 
+class ExpandedOverlayTrappedTests(unittest.TestCase):
+    """Phóng to trên iPhone 7 (23/09/2026): dashboard HA nhốt «position: fixed» vào
+    một ô nhỏ; khối loa vẽ đè lên lớp phủ và bấm xuyên được."""
+
+    def setUp(self):
+        self.script = (COMPONENT_DIR / "www" / "tritue-youtube-player-card.js").read_text(encoding="utf-8")
+
+    def test_bu_toa_do_khi_bi_nhot_va_do_lai_khi_cuon(self):
+        self.assertIn("  _phuManHinh() {", self.script)
+        self.assertIn("    this._phuManHinh();\n    // Some dashboard layouts contain their cards", self.script)
+        self.assertIn("  _syncVideoExpandButton() {\n    this._phuManHinh();", self.script)
+        self.assertIn("width: `${innerWidth}px`, height: `${innerHeight}px`,", self.script)
+
+    def test_moi_anh_em_sau_lop_phu_deu_an(self):
+        self.assertIn(".player:is(.expanded, :fullscreen) ~ :not(.yt-zone-playlist) { visibility: hidden; }", self.script)
+
+
 class QueueContractTests(unittest.TestCase):
     """Queue (0.27.0): mỗi máy / mỗi loa một danh sách bài kế tiếp, lưu trên HA."""
 

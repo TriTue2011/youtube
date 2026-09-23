@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.1 - 2026-09-23
+
+### iPhone: phóng to video phủ lại cả màn hình
+
+Trên iPhone 7 (iOS 15), dashboard của Home Assistant giữ lớp phóng to trong ô
+của thẻ: hình chỉ hiện thành một dải ở đầu màn hình, khối chọn loa vẫn hiện đè
+lên và bấm xuyên được. Nay thẻ tự đo ô bị giữ rồi trùm lớp phủ lại cho khớp màn
+hình (cuộn hay xoay máy vẫn khớp), và mọi phần khác của thẻ ẩn đi khi phóng to.
+
 ## 0.27.0 - 2026-09-23
 
 ### Queue — danh sách bài phát kế tiếp

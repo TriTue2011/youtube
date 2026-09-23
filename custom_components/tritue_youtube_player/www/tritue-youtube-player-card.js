@@ -2409,6 +2409,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
            thoát vẫn còn: hàng biểu tượng «.stage-controls» nằm TRONG khung phát.
            Viết theo NGUYÊN TẮC («mọi con trực tiếp») chứ không liệt kê bảy lớp:
            thêm khối mới vào cột sau này thì tự được che, không ai phải nhớ. */
+        /* MỌI anh em đứng sau lớp phủ đều ẩn khi phóng to. WebKit trên iPhone vẽ anh em
+           đứng sau (có định vị) ĐÈ lên lớp phủ bất kể z-index — 19/09 là cột danh
+           sách, 23/09/2026 là khối loa (có «position: relative; z-index: 1» từ
+           0.26.81), vẫn bấm được xuyên qua hình. «visibility» chứ không «display»:
+           card giữ nguyên cỡ. Cột danh sách giữ luật riêng bên dưới (dải đang phát). */
+        .player:is(.expanded, :fullscreen) ~ :not(.yt-zone-playlist) { visibility: hidden; }
         .player:is(.expanded, :fullscreen) ~ .yt-zone-playlist .yt-playlist-inner > * {
           display: none;
         }
@@ -7312,6 +7318,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const expand = !player.classList.contains("expanded");
     player.classList.toggle("expanded", expand);
     if (!expand) player.classList.remove("rotated");
+    this._phuManHinh();
     // Some dashboard layouts contain their cards, which traps a fixed overlay
     // inside the card; fall back to the browser's fullscreen mode there.
     if (expand && player.getBoundingClientRect().width < window.innerWidth * 0.9) {
@@ -7330,7 +7337,52 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._syncVideoExpandButton();
   }
 
+  /** LỚP PHỦ BỊ NHỐT — bù toạ độ cho nó trùm lại cả màn hình.
+   *
+   *  «position: fixed» chỉ bám màn hình khi không tổ tiên nào có transform, filter,
+   *  backdrop-filter, contain hay will-change. Dashboard HA trên iPhone 7 (iOS 15,
+   *  ảnh chủ máy 23/09/2026) có một tổ tiên như vậy — trong card thì không: lớp phủ
+   *  «inset: 0» chỉ phủ đúng ô của tổ tiên ấy, khung xoay tính theo 100vw/100vh nên
+   *  lệch thành một dải ở đầu màn hình. Không cách nào đưa lớp phủ ra khỏi tổ tiên
+   *  mà không dời khung YouTube (dời là khung nạp lại, mất bài đang phát), nên đo ô
+   *  đang nhốt rồi dời/giãn lớp phủ cho khớp màn hình. Bị nhốt thì cuộn trang cũng
+   *  kéo lớp phủ theo, nên đo lại mỗi 200 ms tới khi thu nhỏ.
+   */
+  _phuManHinh() {
+    const player = this.shadowRoot?.querySelector(".player");
+    if (!player) return;
+    clearInterval(this._phuHen);
+    this._phuHen = null;
+    const tha = () => {
+      for (const k of ["top", "left", "right", "bottom", "width", "height"]) player.style.removeProperty(k);
+    };
+    if (!player.classList.contains("expanded")) {
+      tha();
+      return;
+    }
+    const khop = () => {
+      const o = player.getBoundingClientRect();
+      if (Math.abs(o.left) < 1 && Math.abs(o.top) < 1
+        && Math.abs(o.width - innerWidth) < 2 && Math.abs(o.height - innerHeight) < 2) return true;
+      const trai = (parseFloat(player.style.left) || 0) - o.left;
+      const tren = (parseFloat(player.style.top) || 0) - o.top;
+      Object.assign(player.style, {
+        top: `${tren}px`, left: `${trai}px`, right: "auto", bottom: "auto",
+        width: `${innerWidth}px`, height: `${innerHeight}px`,
+      });
+      return false;
+    };
+    tha();
+    if (!khop()) {
+      this._phuHen = setInterval(() => {
+        if (!player.classList.contains("expanded")) this._phuManHinh();
+        else khop();
+      }, 200);
+    }
+  }
+
   _syncVideoExpandButton() {
+    this._phuManHinh();
     const button = this.shadowRoot.querySelector(".video-expand");
     const expanded = this.shadowRoot.querySelector(".player").classList.contains("expanded");
     button.querySelector("ha-icon").setAttribute("icon", expanded ? "mdi:arrow-collapse" : "mdi:arrow-expand");
