@@ -86,172 +86,15 @@ const laTao = () => laIOS() || laSafari();
  *  của khung và dính lỗi 153. iPhone đang phát được thì không đi đường này. */
 const laSafariMayTinh = () => laSafari() && !laIOS();
 
-/** Phần tử tự nói nó phát được danh sách khúc. Safari và iPhone thì có,
- *  Chrome và Android thì không — không lập danh sách tên máy. */
+/** Phần tử tự nói nó phát được danh sách khúc. Chỉ tin lời này trên máy nhà
+ *  Táo: Chrome Android cũng trả «maybe» mà không phát nổi danh sách khúc của
+ *  thẻ — nhạc YouTube im trên Android từ 0.26.79, 0.26.75 (tệp liền) thì chạy. */
 function coThePhatDanhSach(element) {
   if (!element || !element.canPlayType) return false;
   const k = element.canPlayType("application/vnd.apple.mpegurl")
     || element.canPlayType("application/x-mpegURL");
   return k === "probably" || k === "maybe";
 }
-
-function huyKhucCua(element) {
-  element?._huyKhuc?.();
-}
-
-/** Nối từng khúc vào phần tử. Máy không phát danh sách sẵn (Chrome, Android)
- *  thì chỉ kéo khúc đang nghe và một ít phía trước, không kéo cả bài.
- *  Trả về false khi không nối được — người gọi phát tệp liền. */
-async function noiDanhSach(element, danhSach, { am = true, startAt = 0, phat = null } = {}) {
-  huyKhucCua(element);
-  let huy = false;
-  element._huyKhuc = () => { huy = true; };
-  const con = () => !huy;
-  let text;
-  try {
-    const tra = await fetch(danhSach);
-    if (!tra.ok) return false;
-    text = await tra.text();
-  } catch (_error) {
-    return false;
-  }
-  if (!con()) return false;
-  const ds = docDanhSach(text, danhSach);
-  if (!ds || typeof MediaSource === "undefined") return false;
-  const ms = new MediaSource();
-  const obj = URL.createObjectURL(ms);
-  element._khucUrl = obj;
-  element.src = obj;
-  const bo = () => {
-    if (element._khucUrl) {
-      URL.revokeObjectURL(element._khucUrl);
-      element._khucUrl = "";
-    }
-    return false;
-  };
-  let sb;
-  try {
-    await new Promise((ok, fail) => {
-      const hen = setTimeout(() => fail(new Error("mo")), 8000);
-      ms.addEventListener("sourceopen", () => { clearTimeout(hen); ok(); }, { once: true });
-    });
-    if (!con()) return bo();
-    const dau = await layKhuc(ds.map);
-    if (!con()) return bo();
-    const codec = am ? "mp4a.40.2" : codecVideo(dau);
-    const kieu = `${am ? "audio" : "video"}/mp4; codecs="${codec}"`;
-    if (!codec || !MediaSource.isTypeSupported(kieu)) return bo();
-    sb = ms.addSourceBuffer(kieu);
-    await themKhuc(sb, dau);
-    let i = 0;
-    if (startAt >= 1) {
-      let t = 0;
-      for (; i < ds.khuc.length - 1; i++) {
-        if (t + ds.khuc[i].giay > startAt) break;
-        t += ds.khuc[i].giay;
-      }
-    }
-    await themKhuc(sb, await layKhuc(ds.khuc[i]));
-    if (!con()) return bo();
-    if (startAt >= 1) {
-      try { element.currentTime = startAt; } catch (_error) { /* tua được thì tua */ }
-    }
-    if (phat) phat();
-    noiTiep(element, sb, ms, ds, i + 1, con);
-    return true;
-  } catch (_error) {
-    return bo();
-  }
-}
-
-function docDanhSach(text, goc) {
-  let map = null;
-  const khuc = [];
-  let giay = 0;
-  let byt = null;
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line.startsWith("#EXT-X-MAP:")) {
-      const uri = /URI="([^"]+)"/.exec(line);
-      const br = /BYTERANGE="(\d+)@(\d+)"/.exec(line);
-      if (!uri || !br) return null;
-      map = { uri: new URL(uri[1], goc).toString(), o: Number(br[2]), n: Number(br[1]) };
-    } else if (line.startsWith("#EXTINF:")) {
-      giay = parseFloat(line.slice("#EXTINF:".length)) || 0;
-    } else if (line.startsWith("#EXT-X-BYTERANGE:")) {
-      const m = /^#EXT-X-BYTERANGE:(\d+)@(\d+)/.exec(line);
-      byt = m ? { n: Number(m[1]), o: Number(m[2]) } : null;
-    } else if (line && !line.startsWith("#")) {
-      if (!byt) return null;
-      khuc.push({ uri: new URL(line, goc).toString(), o: byt.o, n: byt.n, giay });
-      byt = null;
-    }
-  }
-  if (!map || !khuc.length) return null;
-  return { map, khuc };
-}
-
-async function layKhuc(muc) {
-  const tra = await fetch(muc.uri, { headers: { Range: `bytes=${muc.o}-${muc.o + muc.n - 1}` } });
-  if (!tra.ok) throw new Error("khuc");
-  const buf = await tra.arrayBuffer();
-  if (buf.byteLength > muc.n + 16) throw new Error("ca tep");
-  return buf;
-}
-
-function themKhuc(sb, buf) {
-  return new Promise((ok, fail) => {
-    const hen = setTimeout(() => fail(new Error("tre")), 15000);
-    const xong = () => { clearTimeout(hen); sb.removeEventListener("error", hong); ok(); };
-    const hong = () => { clearTimeout(hen); sb.removeEventListener("updateend", xong); fail(new Error("noi")); };
-    sb.addEventListener("updateend", xong, { once: true });
-    sb.addEventListener("error", hong, { once: true });
-    try { sb.appendBuffer(buf); }
-    catch (error) { fail(error); }
-  });
-}
-
-function noiTiep(element, sb, ms, ds, i, con) {
-  const buoc = async () => {
-    if (!con()) return;
-    if (i >= ds.khuc.length) {
-      if (ms.readyState === "open" && !sb.updating) {
-        try { ms.endOfStream(); } catch (_error) { /* đã đóng */ }
-      }
-      return;
-    }
-    const cuoi = element.buffered?.length ? element.buffered.end(element.buffered.length - 1) : 0;
-    if (cuoi - (element.currentTime || 0) > 30) {
-      setTimeout(buoc, 1000);
-      return;
-    }
-    if (sb.updating) {
-      sb.addEventListener("updateend", () => buoc(), { once: true });
-      return;
-    }
-    try {
-      const buf = await layKhuc(ds.khuc[i]);
-      if (!con() || sb.updating) return;
-      sb.addEventListener("updateend", () => { i += 1; buoc(); }, { once: true });
-      sb.appendBuffer(buf);
-    } catch (_error) {
-      // Khúc này hỏng thì tiếng đã phát vẫn còn.
-    }
-  };
-  buoc();
-}
-
-/** Mã hình trong đoạn mở đầu. Chrome cần đúng mã này mới nối được. */
-function codecVideo(buf) {
-  const u = new Uint8Array(buf);
-  const s = new TextDecoder("latin1").decode(u);
-  const i = s.indexOf("avcC");
-  if (i < 0 || i + 7 >= u.length || u[i + 4] !== 1) return "";
-  const hex = (n) => n.toString(16).padStart(2, "0");
-  return `avc1.${hex(u[i + 5])}${hex(u[i + 6])}${hex(u[i + 7])}`;
-}
-
-
 
 /* HAI ĐỊA CHỈ NHÚNG, VÀ THẺ CHỈ ĐỔI KHI CHÍNH YOUTUBE TỪ CHỐI.
    «www.youtube.com» là đường mặc định, giữ nguyên từ 0.26.34. Chrome xét quyền tự
@@ -668,17 +511,12 @@ const deviceAudio = {
     const danhSach = this.nhoLuong.get(this.khoaLuong(item))?.danhSach || "";
     const laYoutube = (item?.source || "youtube") === "youtube";
     /* Danh sách khúc: vào tiếng sau khoảng 10 giây đầu, không chờ cả bài.
-       Máy phát được danh sách sẵn (Safari, iPhone) thì giao thẳng. Chrome và
-       Android không phát danh sách, nên nối từng khúc — nếu nối hỏng thì
-       quay về tệp liền. Zing và Facebook không có danh sách. */
-    if (laYoutube && danhSach && coThePhatDanhSach(audio)) {
+       Chỉ Safari và iPhone — nơi đã đo là nhanh (0.26.79). Máy khác phát tệp
+       liền, đúng đường 0.26.75 đã chạy trên Android. Bản 0.26.79–0.26.83 cho
+       Chrome/Android nối từng khúc hoặc giao thẳng danh sách, và Android mất
+       tiếng. Zing và Facebook không có danh sách. */
+    if (laYoutube && danhSach && laTao() && coThePhatDanhSach(audio)) {
       this._phatTep(audio, danhSach, startAt);
-    } else if (laYoutube && danhSach && typeof MediaSource !== "undefined"
-      && MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"')) {
-      noiDanhSach(audio, danhSach, { am: true, startAt, phat: () => this.phatVaGhi(audio) })
-        .then((ok) => {
-          if (!ok && generation === this.generation) this._phatTep(audio, url, startAt);
-        });
     } else {
       this._phatTep(audio, url, startAt);
     }
@@ -860,7 +698,6 @@ const deviceAudio = {
    *  MÁY NHÀ TÁO CẦN MỘT LỆNH NẠP TƯỜNG MINH. Đặt src rồi play() thì WebKit
    *  nằm ở nap=0; load() rồi play() thì chạy (đo 21/09/2026). */
   _phatTep(audio, url, startAt) {
-    huyKhucCua(audio);
     audio.src = url;
     if (laTao()) {
       try {
@@ -878,11 +715,6 @@ const deviceAudio = {
     this.alongKey = "";
     this.pausedByHide = false;
     if (!this.element) return;
-    huyKhucCua(this.element);
-    if (this.element._khucUrl) {
-      URL.revokeObjectURL(this.element._khucUrl);
-      this.element._khucUrl = "";
-    }
     this.element.pause();
     this.element.removeAttribute("src");
     this.element.load();
@@ -2322,6 +2154,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         @media (orientation: landscape) { .ctl.video-rotate { display: none; } }
         .player:is(.expanded, :fullscreen) > .stage > .video-frame {
           width: min(100%, calc(100dvh * 16 / 9));
+          /* Phóng to dùng lại tỉ lệ 16:9 như 0.26.75. «padding-top: 56.25%» tính theo
+             bề rộng KHỐI CHỨA (cả màn hình), không theo khung — khung bị giới hạn theo
+             chiều cao màn thì cao sai tỉ lệ. Đệm ấy chỉ dành cho khung ghim ở lưới. */
+          height: auto;
+          padding-top: 0;
+          aspect-ratio: 16 / 9;
           margin: 0 auto;
           border-radius: 0;
         }
@@ -2570,9 +2408,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
             padding: 10px;
           }
         }
-        .yt-layout > .player {
-          grid-area: video;
-          margin-top: 0;
+        .yt-layout > .player { grid-area: video; margin-top: 0; }
+        /* CHỈ LÚC THƯỜNG. «.yt-layout > .player» và «.player.expanded» cùng độ ưu
+           tiên (0,2,0) mà luật này đứng sau, nên ở 0.26.81–0.26.83 nó thắng lớp phủ
+           phóng to: «height: max-content» + «overflow: hidden» ép lớp phủ
+           «inset: 0» chỉ cao bằng nội dung — lỗi phóng to video. */
+        .yt-layout > .player:not(.expanded):not(:fullscreen) {
           /* Ô lưới mặc định không co dưới bề rộng nội dung. Khung video (iframe)
              khai bề rộng tối thiểu lớn hơn cột, rồi vẽ tràn xuống khối loa.
              «start» và «max-content»: ô video không được kéo cao bằng cột danh sách. */
@@ -6908,7 +6749,6 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         settled = true;
         clearTimeout(hen);
         if (!ok) {
-          huyKhucCua(element);
           element.removeAttribute("src");
           element.load();
           element.remove();

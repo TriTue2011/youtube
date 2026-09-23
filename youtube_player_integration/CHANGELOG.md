@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.26.84 - 2026-09-23
+
+### Android phát lại được nhạc YouTube
+
+Từ 0.26.79 thẻ chọn đường tiếng theo lời trình duyệt tự khai «phát được danh
+sách khúc». Chrome Android cũng khai vậy mà không phát nổi, nên nhạc YouTube
+im trên Android. Nay chỉ Safari và iPhone đi danh sách khúc — nơi đã đo là
+nhanh. Máy khác phát tệp liền như 0.26.75. Nhánh nối từng khúc cho Chrome đã
+gỡ bỏ.
+
+### Phóng to video phủ lại toàn màn hình
+
+Luật giữ khung ghim của 0.26.81 đè lên lớp phủ phóng to: lớp phủ chỉ cao bằng
+nội dung (điện thoại 354 trên 757 px), trên máy tính khung méo tỉ lệ. Nay luật
+ấy chỉ áp lúc thường; lúc phóng to khung về tỉ lệ 16:9 như 0.26.75.
+
 ## 0.26.83 - 2026-09-22
 
 ### Một số video hết «Đang nghe tiếng · không mở được hình»

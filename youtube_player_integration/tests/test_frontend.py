@@ -225,13 +225,15 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("if (!watch && isVideo && deviceAudio.laTrucTiep(item)) {", script)
         self.assertIn("đã mở hình để nghe", script)
         self.assertIn("async layLuong(item) {", script)
-        # 0.26.79: mọi máy phát YouTube theo khúc. Máy nào tự phát được danh
-        # sách thì giao thẳng; máy không (Chrome, Android) thì nối từng khúc.
-        # Không liệt kê tên trình duyệt để chọn đường.
+        # 0.26.84: danh sách khúc chỉ cho máy nhà Táo (đo nhanh ở 0.26.79).
+        # Chrome Android cũng trả «maybe» cho HLS mà không phát nổi — nhạc im
+        # từ 0.26.79. Máy khác phát tệp liền như 0.26.75; nhánh nối từng khúc
+        # bằng MediaSource đã gỡ.
         self.assertIn("danh_sach_url", script)
         self.assertIn('canPlayType("application/vnd.apple.mpegurl")', script)
-        self.assertIn("function noiDanhSach(", script)
-        self.assertIn("coThePhatDanhSach(audio)", script)
+        self.assertIn("if (laYoutube && danhSach && laTao() && coThePhatDanhSach(audio)) {", script)
+        self.assertNotIn("function noiDanhSach(", script)
+        self.assertNotIn("MediaSource", script)
         # Hình của video bị từ chối nhúng không đi danh sách khúc (danh sách
         # đó làm iPhone, Chrome và Android cùng báo không mở được hình).
         # Thử link thẳng rồi đường máy nhà.
@@ -244,6 +246,12 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn("height: 0;", script)
         self.assertIn("padding-top: 56.25%;", script)
         self.assertIn("grid-template-rows: max-content max-content;", script)
+        # 0.26.84: luật khung ghim KHÔNG được với tới lớp phủ phóng to. Cùng độ
+        # ưu tiên với «.player.expanded» mà đứng sau thì lớp phủ chỉ cao bằng
+        # nội dung (đo Chrome: 73–354px trên màn 757px).
+        self.assertIn(".yt-layout > .player:not(.expanded):not(:fullscreen) {\n          /* Ô lưới", script)
+        self.assertNotIn(".yt-layout > .player {\n          grid-area: video;\n          margin-top: 0;\n          /*", script)
+        self.assertIn("aspect-ratio: 16 / 9;\n          margin: 0 auto;", script)
         self.assertIn("if (ban && Date.now() - ban.luc <= 240000) return ban.url;", script)
         self.assertIn("deviceAudio.chuanBi({ ...item, source: item.source || this._source })", script)
         self.assertIn("if (ke) this.chuanBi(ke);", script)
