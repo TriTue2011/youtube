@@ -144,6 +144,26 @@ def pick_next(queue: dict[str, Any], rng: random.Random | None = None) -> dict[s
     return items[position] if position < len(items) else None
 
 
+def pick_prev(queue: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Bài TRƯỚC `current` (nút lùi bài): lần lượt = bài đứng trước; trộn = bài vừa
+    phát trước bài này (lùi theo lịch sử). Trả (Queue mới, bài) — None = đã ở đầu."""
+    items = queue["items"]
+    uids = [item["uid"] for item in items]
+    if queue["current"] not in uids:
+        return queue, None
+    if queue["order"] == "shuffle":
+        lich_su = [u for u in queue["played"] if u in uids]
+        if len(lich_su) < 2 or lich_su[-1] != queue["current"]:
+            return queue, None
+        truoc = lich_su[-2]
+        # Bài vừa rời được trả lại cho lượt bốc ngẫu nhiên sau.
+        return {**queue, "current": truoc, "played": lich_su[:-1]}, items[uids.index(truoc)]
+    vi_tri = uids.index(queue["current"]) - 1
+    if vi_tri < 0:
+        return queue, None
+    return _select(queue, uids[vi_tri]), items[vi_tri]
+
+
 def _select(queue: dict[str, Any], uid: str) -> dict[str, Any]:
     return {**queue, "current": uid, "played": [*[u for u in queue["played"] if u != uid], uid]}
 
@@ -217,4 +237,7 @@ def apply_queue_change(
         return _with_queue(document, key, _select(queue, uid)), item
     if action == "next":
         return advance_queue(document, key)
+    if action == "prev":
+        moi, item = pick_prev(queue)
+        return (_with_queue(document, key, moi), item) if item else (document, None)
     raise ValueError("invalid_action")

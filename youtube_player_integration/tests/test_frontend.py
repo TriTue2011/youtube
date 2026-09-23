@@ -1110,6 +1110,14 @@ class QueueContractTests(unittest.TestCase):
         self.assertIn('el("span", "queue-badge", "Đang phát")', self.script)
         self.assertIn("if (chuKy === this._queueChuKy) return;", self.script)
 
+    def test_nut_bai_sau_bai_truoc_di_theo_queue(self):
+        # Chủ máy 24/09/2026: "Queue không next hay lùi được bài".
+        self.assertIn("    if (await this._queueChuyen(step)) return;\n    if (deviceAudio.item) {", self.script)
+        self.assertIn("      if (this._queueChuyenDuoc(step)) return true;", self.script)
+        self.assertIn('{ action: step > 0 ? "next" : "prev" }', self.script)
+        # Lùi chỉ trong Queue khi bài đang phát là bài của Queue.
+        self.assertIn("this._dangPhatTuQueue(list) && queueHasPrev(list)", self.script)
+
     def test_an_duoc_queue_trong_trinh_sua(self):
         self.assertIn("show_queue: true,", self.script)
         self.assertIn('batTat("ed-show-queue", "show_queue");', self.script)

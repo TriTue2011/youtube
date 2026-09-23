@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.3 - 2026-09-24
+
+### Nút bài sau / bài trước đi theo Queue
+
+Trước đây hai nút này vẫn đi theo danh sách kết quả tìm kiếm (hoặc hàng đợi của
+loa), Queue chỉ dùng khi hết bài. Nay: bài sau lấy bài kế trong Queue (trộn thì
+bốc ngẫu nhiên bài chưa phát); bài trước lùi về bài đứng trước trong Queue — ở
+chế độ trộn là bài vừa nghe trước đó. Tới đầu Queue thì nút bài trước tự tắt.
+
 ## 0.27.2 - 2026-09-24
 
 ### Ẩn được tab Queue

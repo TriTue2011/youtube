@@ -202,6 +202,19 @@ function queueHasNext(list) {
   return items.findIndex((item) => item.uid === list.current) + 1 < items.length;
 }
 
+/** Lùi được trong Queue không — CÙNG LUẬT «pick_prev» (queue.py): lần lượt = còn
+ *  bài đứng trước; trộn = lịch sử đã phát có bài trước bài đang phát. */
+function queueHasPrev(list) {
+  const items = list?.items || [];
+  const uids = items.map((item) => item.uid);
+  if (!list || !uids.includes(list.current)) return false;
+  if (list.order === "shuffle") {
+    const lichSu = (list.played || []).filter((uid) => uids.includes(uid));
+    return lichSu.length >= 2 && lichSu[lichSu.length - 1] === list.current;
+  }
+  return uids.indexOf(list.current) > 0;
+}
+
 const QUEUE_ERRORS = {
   queue_full: "Queue đã đủ 200 bài — xoá bớt rồi thêm.",
   invalid_items: "Bài này không thêm vào Queue được.",
@@ -4252,6 +4265,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._toggleWaveAnimation(playing);
     playPause.disabled = !listening && !this._video.open && !this._targetsForService("media_play_pause").length;
     const canSkip = (step) => {
+      if (this._queueChuyenDuoc(step)) return true;
       if (listening) return deviceAudio.index >= 0 && !!deviceAudio.queue[deviceAudio.index + step];
       if (videoAlone) {
         const target = this._queueIndex + step;
@@ -7661,6 +7675,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   async _skip(step) {
+    if (await this._queueChuyen(step)) return;
     if (deviceAudio.item) {
       if (!deviceAudio.next(step)) this._setStatus(step > 0 ? "Đã ở cuối hàng đợi." : "Đã ở đầu hàng đợi.");
       return;
@@ -8075,6 +8090,35 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     setTimeout(() => icon?.setAttribute("icon", "mdi:tray-plus"), 1500);
     const n = payload.queue?.items?.length || 0;
     this._setStatus(`Đã thêm “${item.title || item.id}” vào Queue · ${this._queueName(key)} (${n} bài).`);
+  }
+
+  /** Bài đang phát (máy này, khung video, hay loa đang xem) có phải bài hiện tại
+   *  của Queue không — nút lùi chỉ lùi TRONG Queue khi đang phát từ Queue. */
+  _dangPhatTuQueue(list) {
+    const cur = (list?.items || []).find((item) => item.uid === list?.current);
+    if (!cur) return false;
+    const dang = deviceAudio.item || (this._video.open ? this._video.item : null)
+      || this._focusedSession() || null;
+    return !!dang && String(dang.id || "") === String(cur.id);
+  }
+
+  /** Nút bài sau/bài trước đi theo Queue (chủ máy 24/09/2026: "Queue không next hay
+   *  lùi được bài"). Bài sau: Queue còn bài kế thì đi Queue, như lúc hết bài tự nhiên.
+   *  Bài trước: chỉ khi bài đang phát là bài của Queue; không thì để hàng đợi cũ. */
+  _queueChuyenDuoc(step) {
+    const list = this._queueLists[this._queueKey()];
+    return step > 0 ? queueHasNext(list) : this._dangPhatTuQueue(list) && queueHasPrev(list);
+  }
+
+  async _queueChuyen(step) {
+    if (!this._queueChuyenDuoc(step)) return false;
+    const key = this._queueKey();
+    const payload = await this._queueCall(key, { action: step > 0 ? "next" : "prev" });
+    if (payload?.item) {
+      this._playQueueItem(payload.item, key);
+      return true;
+    }
+    return false;
   }
 
   /** Hết bài trên MÁY NÀY: còn bài kế trong Queue của máy này thì phát, trả true.

@@ -161,5 +161,50 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(str(loi.exception), "queue_full")
 
 
+
+class QueuePrevTests(unittest.TestCase):
+    """Nút lùi bài trong Queue (chủ máy 24/09/2026: "Queue không next hay lùi được bài")."""
+
+    def setUp(self):
+        self.q = load_queue_module()
+        self.dem = 0
+
+    def uid(self):
+        self.dem += 1
+        return f"{self.dem:08x}"
+
+    def lam(self, doc, **payload):
+        return self.q.apply_queue_change(doc, payload, self.uid)
+
+    def test_lan_luot_lui_ve_bai_dung_truoc_roi_dung_o_dau(self):
+        doc, _ = self.lam(self.q.normalize_document(None), key=LOA, action="add", items=[bai(i) for i in range(3)])
+        uids = [i["uid"] for i in self.q.get_queue(doc, LOA)["items"]]
+        doc, _ = self.lam(doc, key=LOA, action="select", uid=uids[2])
+        doc, item = self.lam(doc, key=LOA, action="prev")
+        self.assertEqual(item["title"], "Bài 1")
+        doc, item = self.lam(doc, key=LOA, action="prev")
+        self.assertEqual(item["title"], "Bài 0")
+        doc, item = self.lam(doc, key=LOA, action="prev")
+        self.assertIsNone(item)                       # đã ở đầu
+        _doc, ke = self.lam(doc, key=LOA, action="next")
+        self.assertEqual(ke["title"], "Bài 1")        # tiến lại đúng thứ tự
+
+    def test_tron_lui_theo_lich_su_va_tra_bai_cho_luot_boc_sau(self):
+        doc, _ = self.lam(self.q.normalize_document(None), key=LOA, action="add", items=[bai(i) for i in range(4)])
+        doc, _ = self.lam(doc, key=LOA, action="set", order="shuffle")
+        doc, a = self.q.advance_queue(doc, LOA, random.Random(1))
+        doc, b = self.q.advance_queue(doc, LOA, random.Random(2))
+        doc, item = self.lam(doc, key=LOA, action="prev")
+        self.assertEqual(item["uid"], a["uid"])
+        q = self.q.get_queue(doc, LOA)
+        self.assertNotIn(b["uid"], q["played"])        # bài vừa rời được bốc lại sau
+        self.assertEqual(q["current"], a["uid"])
+
+    def test_chua_phat_bai_nao_trong_queue_thi_khong_lui(self):
+        doc, _ = self.lam(self.q.normalize_document(None), key=MAY, action="add", items=[bai(0), bai(1)])
+        _doc, item = self.lam(doc, key=MAY, action="prev")
+        self.assertIsNone(item)
+
+
 if __name__ == "__main__":
     unittest.main()
