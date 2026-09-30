@@ -74,6 +74,11 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn('this._transport("media_play_pause")', script)
         self.assertIn('this._skip(1)', script)
         self.assertIn("this._renderSpeakerVolumes(", script)
+        # 0.27.4: thanh âm lượng không bám loa đã ẨN / mất kết nối; tích loa mới mà đích đang là loa không tích
+        # thì đích theo loa vừa tích (chủ máy 30/09/2026: ẩn loa cam rồi tích loa khác không chỉnh được âm lượng).
+        self.assertIn("!this._hiddenPlayers.has(entityId);", script)
+        self.assertIn("if (!this._dichAmLuongHopLe(this._volumeTarget)) {", script)
+        self.assertIn("if (!this._selectedPlayers.has(this._volumeTarget) || !this._dichAmLuongHopLe(this._volumeTarget)) {", script)
         # 0.9: the integration advances the queue (no browser needed); the card
         # must not advance speakers itself or songs would be skipped twice.
         self.assertNotIn("_checkAutoAdvance", script)

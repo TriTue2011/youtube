@@ -3663,6 +3663,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       checkbox.addEventListener("change", () => {
         this._manualSelection = true;
         if (checkbox.checked) {
+          // Thanh âm lượng đang chỉnh một loa KHÔNG tích (hay đã ẩn) → theo loa vừa tích: người dùng
+          // tích loa nào là muốn nghe — và chỉnh — loa đó.
+          if (!this._selectedPlayers.has(this._volumeTarget) || !this._dichAmLuongHopLe(this._volumeTarget)) {
+            this._volumeTarget = entityId;
+          }
           this._selectedPlayers.add(entityId);
           this._lastTicked = entityId;
           this._onSpeakerAdded(entityId);
@@ -3917,8 +3922,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const toggle = this.shadowRoot.querySelector(".spk-toggle");
     const nameBox = this.shadowRoot.querySelector(".spk-bar-name");
     if (!list || !toggle || !nameBox) return;
-    if (!this._volumeTarget || !this._hass?.states?.[this._volumeTarget]) {
-      this._volumeTarget = [...this._selectedPlayers][0] || "";
+    if (!this._dichAmLuongHopLe(this._volumeTarget)) {
+      this._volumeTarget = [...this._selectedPlayers].find((e) => this._dichAmLuongHopLe(e)) || "";
     }
     list.hidden = !this._speakerListOpen;
     toggle.setAttribute("aria-expanded", this._speakerListOpen ? "true" : "false");
@@ -3931,6 +3936,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       chip.classList.toggle("is-volume-target", chip.dataset.entity === this._volumeTarget);
     }
     this._renderSpeakerVolumes();
+  }
+
+  /* Loa đích của thanh âm lượng phải là loa ĐANG HIỆN trên thẻ. Trước đây đích chỉ đổi khi thực thể biến mất
+     khỏi Home Assistant — loa bị ẨN khỏi thẻ (hay mất kết nối) vẫn còn trong HA nên thanh âm lượng cứ bám
+     vào nó. Chủ máy 30/09/2026: "bỏ media cam trong youtube nhưng phần chọn loa vẫn cứ hiện nên tôi tích loa
+     khác không điều chỉnh âm lượng được". */
+  _dichAmLuongHopLe(entityId) {
+    const st = entityId ? this._hass?.states?.[entityId] : null;
+    return Boolean(st) && st.state !== "unavailable" && !this._hiddenPlayers.has(entityId);
   }
 
   _supportsFeature(entityId, feature) {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.4 - 2026-09-30
+
+### Âm lượng theo đúng loa đang chọn
+
+Ẩn một loa khỏi thẻ (vd loa camera) mà trước đó đang chỉnh âm lượng loa ấy thì thanh âm lượng vẫn bám
+vào loa đã ẩn — tích loa khác cũng không chỉnh được. Nay thanh âm lượng chỉ trỏ vào loa ĐANG HIỆN trên
+thẻ; loa đã ẩn hay mất kết nối thì tự chuyển sang loa đang tích. Tích một loa mới khi thanh đang chỉnh
+một loa không tích thì thanh chuyển sang loa vừa tích. Bấm vào TÊN loa vẫn chọn loa để chỉnh như cũ.
+
 ## 0.27.3 - 2026-09-24
 
 ### Nút bài sau / bài trước đi theo Queue
