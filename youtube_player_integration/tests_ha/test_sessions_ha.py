@@ -561,3 +561,55 @@ async def test_queue_qua_the_moi_nguoi_dang_nhap_deu_dung_duoc(hass, hass_client
         tra = await client.post(url, json=sai)
         assert tra.status == 400
     assert (await client.get(url, params={"key": "../../etc"})).status == 400
+
+
+async def test_tts_chen_giua_bai_doc_xong_phat_tiep_dung_giay(hass, addon_server):
+    """Chủ máy 30/09/2026: "đang phát nhạc, tts thì nhạc dừng không, đặc biệt youtube … loa gg, loa cam, loa r1" —
+    loa Google phát TTS là THAY bài đang phát; đọc xong tích hợp phát lại bài đó và tua tới giây đang dở."""
+    import asyncio
+
+    entry, calls = await _setup(hass, addon_server)
+
+    async def ghi(call: ServiceCall):
+        data = dict(call.data)
+        ids = data.get("entity_id")
+        data["entity_id"] = [ids] if isinstance(ids, str) else list(ids or [])
+        calls.append((call.service, data))
+
+    hass.services.async_register("media_player", "media_seek", ghi)
+    await entry.runtime_data.client.async_search("trót tin", limit=3)
+    await _choi(hass, entry, KET_QUA[0]["url"], [LOA_A])
+    luong = [d for s, d in calls if s == "play_media" and d["entity_id"] == [LOA_A]][-1]["media_content_id"]
+    co_tua = LOA_FEATURES | 2
+
+    async def phat_that(call: ServiceCall):
+        # Như loa thật: nhận bài là báo đang phát bài đó từ giây 0.
+        await ghi(call)
+        loa("playing", call.data["media_content_id"], 0)
+
+    hass.services.async_register("media_player", "play_media", phat_that)
+
+    def loa(trang_thai, mcid, vi_tri=None):
+        attrs = {"friendly_name": "Phòng khách", "device_class": "speaker", "supported_features": co_tua,
+                 "media_content_id": mcid}
+        if vi_tri is not None:
+            attrs.update(media_position=vi_tri, media_position_updated_at=dt_util.utcnow().isoformat(),
+                         media_duration=200)
+        hass.states.async_set(LOA_A, trang_thai, attrs)
+
+    calls.clear()
+    loa("playing", luong, 60)
+    await hass.async_block_till_done()
+    loa("playing", "http://ha/api/tts_proxy/abc.mp3")              # TTS chen vào — không phải hết bài
+    await hass.async_block_till_done()
+    loa("idle", "http://ha/api/tts_proxy/abc.mp3")                 # đọc xong
+    await hass.async_block_till_done()
+    phat = [d for s, d in calls if s == "play_media"]
+    assert [d["entity_id"] for d in phat] == [[LOA_A]], "phát lại đúng một lần, không chuyển bài"
+    assert _phien(hass)[0]["title"] == "Bai 1", "vẫn là bài đang nghe dở"
+    for _ in range(30):
+        await asyncio.sleep(0.1)
+        if any(s == "media_seek" for s, _ in calls):
+            break
+    tua = [d for s, d in calls if s == "media_seek"]
+    assert tua and tua[0]["entity_id"] == [LOA_A] and 59 <= tua[0]["seek_position"] <= 62

@@ -177,3 +177,44 @@ def observe_track(
         return True
     elapsed = max(0.0, (now - tracker["position_at"]).total_seconds())
     return position + elapsed >= duration - END_TOLERANCE_SECONDS
+
+
+def observe_interruption(
+    tracker: dict[str, Any],
+    state: str,
+    attributes: dict[str, Any],
+    now: datetime,
+    item: dict[str, Any] | None = None,
+) -> float | None:
+    """Theo dõi loa dẫn bị CHEN (TTS, thông báo) giữa bài; trả GIÂY cần phát tiếp đúng một lần khi loa đọc xong.
+
+    Chủ máy 30/09/2026: "đang phát nhạc, tts thì nhạc dừng không, đặc biệt youtube nữa … loa gg, loa cam, loa r1".
+    Loa Google / R1 phát TTS là THAY luôn bài đang phát, không tự phát lại. Dấu hiệu chung mọi loa đều báo: đang
+    phát LUỒNG của máy phát (``stream_target`` đọc được) rồi chuyển sang nội dung khác (``media_content_id`` lạ) —
+    nhớ giây đang dở; nội dung lạ dứt (loa về idle/off/standby hay tạm dừng) thì phát tiếp. Loa tự quay về luồng
+    của mình (loa camera tự phát tiếp sau thông báo) thì thôi, không làm gì.
+
+    ``tracker`` dùng chung với ``observe_track``: khi đang bị chen, bên gọi KHÔNG đưa trạng thái vào
+    ``observe_track`` (TTS dứt không phải là hết bài)."""
+    mcid = attributes.get("media_content_id")
+    target = stream_target(mcid)
+    if target is not None:
+        if plays_item(attributes, item):
+            tracker.pop("chen_tu", None)             # đang (hoặc lại) phát đúng bài của phiên
+            tracker["luong_minh"] = True
+        return None
+    if state in PLAYING_STATES and mcid and tracker.get("luong_minh") and "chen_tu" not in tracker:
+        position = tracker.get("position")
+        if position is None:
+            return None
+        elapsed = max(0.0, (now - tracker.get("position_at", now)).total_seconds())
+        duration = tracker.get("duration")
+        giay = position + elapsed
+        if duration and giay >= duration - END_TOLERANCE_SECONDS:
+            return None                               # gần hết bài: để chuyển bài như thường
+        tracker["chen_tu"] = giay
+        return None
+    if "chen_tu" in tracker and (state in FINISHED_STATES or state == "paused"):
+        tracker["luong_minh"] = False
+        return tracker.pop("chen_tu")
+    return None

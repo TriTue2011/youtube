@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.5 - 2026-09-30
+
+### TTS / thông báo chen giữa bài: đọc xong phát tiếp đúng chỗ
+
+Loa Google (Cast), Phicomm R1… phát TTS là THAY luôn bài đang phát và không tự phát lại — nghe nhạc YouTube mà
+có thông báo là mất bài. Nay tích hợp nhận ra loa dẫn của phiên đang phát luồng của mình thì chuyển sang nội dung
+khác (TTS), nhớ giây đang dở; loa đọc xong (về idle / tạm dừng) thì phát lại đúng bài đó và tua tới giây ấy (loa
+nào có Tua). TTS dứt không còn bị coi là hết bài rồi nhảy sang bài khác. Loa tự phát tiếp sau thông báo (loa
+camera `dahua_talk` ≥ 0.9.1) thì tích hợp không làm gì thêm. Gần hết bài thì để chuyển bài như thường.
+
 ## 0.27.4 - 2026-09-30
 
 ### Âm lượng theo đúng loa đang chọn

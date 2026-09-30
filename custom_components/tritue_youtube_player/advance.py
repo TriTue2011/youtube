@@ -20,7 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import LOGGER
 from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
-from .sessions import active_sessions, is_controlled_by, observe_track, queue_item
+from .sessions import active_sessions, is_controlled_by, observe_interruption, observe_track, queue_item
 
 
 class SessionAutoAdvance:
@@ -114,7 +114,18 @@ class SessionAutoAdvance:
     @callback
     def _observe(self, session: dict[str, Any], entity_id: str, state: str, attributes: dict[str, Any]) -> None:
         tracker = self._trackers.setdefault(self._track_key(session, entity_id), {})
-        if not observe_track(tracker, state, attributes, dt_util.utcnow(), session.get("item")):
+        now = dt_util.utcnow()
+        # TTS / thông báo chen giữa bài: đọc xong thì phát tiếp đúng chỗ, và KHÔNG coi TTS dứt là hết bài.
+        tiep = observe_interruption(tracker, state, attributes, now, session.get("item"))
+        if tiep is not None:
+            session_id = str(session.get("session_id") or "")
+            if session_id not in self._advancing:
+                self._advancing.add(session_id)
+                self.hass.async_create_task(self._async_resume(session, entity_id, tiep), eager_start=False)
+            return
+        if "chen_tu" in tracker:
+            return
+        if not observe_track(tracker, state, attributes, now, session.get("item")):
             return
         session_id = str(session.get("session_id") or "")
         if session_id in self._advancing or self._next_from(session) is None:
@@ -132,6 +143,59 @@ class SessionAutoAdvance:
         if queue_item(session, 1) is not None:
             return "session"
         return None
+
+    async def _async_resume(self, session: dict[str, Any], lead: str, position: float) -> None:
+        """Phát lại bài của phiên trên các loa của nó rồi tua tới ``position`` (loa nào có SEEK)."""
+        from .services import _async_play_session_item  # noqa: PLC0415
+
+        session_id = str(session.get("session_id") or "")
+        item = session.get("item") or {}
+        try:
+            LOGGER.info("Session %s interrupted on %s (TTS/announcement) — resuming at %.0f s",
+                        session_id, lead, position)
+            await _async_play_session_item(self.hass, self.entry, session, item)
+            await self._async_seek_when_playing(session, lead, position)
+        except HomeAssistantError as error:
+            LOGGER.warning("Resuming session %s after an interruption failed: %s", session_id, error)
+        finally:
+            self._advancing.discard(session_id)
+
+    async def _async_seek_when_playing(self, session: dict[str, Any], lead: str, position: float) -> None:
+        """Chờ loa dẫn phát lại (theo SỰ KIỆN đổi trạng thái, tối đa 15 s) rồi tua mọi loa của phiên có SEEK tới
+        ``position``."""
+        import asyncio  # noqa: PLC0415
+
+        from .sessions import PLAYING_STATES  # noqa: PLC0415
+
+        if position < 3:
+            return
+        state = self.hass.states.get(lead)
+        if state is None or state.state not in PLAYING_STATES:
+            da_phat: asyncio.Future = self.hass.loop.create_future()
+
+            @callback
+            def _doi(event: Event[EventStateChangedData]) -> None:
+                new_state = event.data["new_state"]
+                if new_state is not None and new_state.state in PLAYING_STATES and not da_phat.done():
+                    da_phat.set_result(None)
+
+            unsub = async_track_state_change_event(self.hass, [lead], _doi)
+            try:
+                await asyncio.wait_for(da_phat, 15)
+            except TimeoutError:
+                LOGGER.debug("Resume: %s did not start playing again, not seeking", lead)
+                return
+            finally:
+                unsub()
+        seek = [
+            entity_id for entity_id in session.get("output_entity_ids") or []
+            if (st := self.hass.states.get(entity_id)) is not None
+            and int(st.attributes.get("supported_features") or 0) & 2
+        ]
+        LOGGER.debug("Resume: %s playing again, seeking %s to %.0f s", lead, seek, position)
+        if seek:
+            await self.hass.services.async_call(
+                "media_player", "media_seek", {"entity_id": seek, "seek_position": round(position)}, blocking=True)
 
     async def _async_advance(self, session: dict[str, Any]) -> None:
         # services imports HA actions lazily

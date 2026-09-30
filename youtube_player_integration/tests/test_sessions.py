@@ -103,3 +103,54 @@ class SessionHelperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def stream_url(video_id):
+    import base64
+    import json
+    payload = base64.urlsafe_b64encode(json.dumps({"exp": 1, "source": "youtube", "target": video_id}).encode()).decode().rstrip("=")
+    return f"http://172.16.10.28:8099/api/stream/{payload}.c2lnbmF0dXJl"
+
+
+class ChenGiuaBaiTests(unittest.TestCase):
+    """Chủ máy 30/09/2026: "đang phát nhạc, tts thì nhạc dừng không, đặc biệt youtube … loa gg, loa cam, loa r1"."""
+
+    def setUp(self):
+        self.s = load_sessions_module()
+        self.item = {"id": "dQw4w9WgXcQ", "url": "u"}
+
+    def feed(self, tracker, state, mcid, t, position=None, duration=None):
+        attrs = {"media_content_id": mcid}
+        if position is not None:
+            attrs.update(media_position=position, media_position_updated_at=NOW + timedelta(seconds=t), media_duration=duration)
+        now = NOW + timedelta(seconds=t)
+        tiep = self.s.observe_interruption(tracker, state, attrs, now, self.item)
+        if "chen_tu" not in tracker and tiep is None:
+            self.s.observe_track(tracker, state, attrs, now, self.item)
+        return tiep
+
+    def test_loa_google_tts_thay_bai_thi_phat_tiep_dung_giay(self):
+        tr = {}
+        ours = stream_url("dQw4w9WgXcQ")
+        self.assertIsNone(self.feed(tr, "playing", ours, 0, position=40, duration=240))
+        self.assertIsNone(self.feed(tr, "playing", "http://ha/api/tts_proxy/abc.mp3", 10))   # TTS chen vào
+        self.assertAlmostEqual(tr["chen_tu"], 50, delta=0.5)
+        self.assertEqual(50, round(self.feed(tr, "idle", "http://ha/api/tts_proxy/abc.mp3", 14)))  # đọc xong
+        self.assertIsNone(self.feed(tr, "idle", None, 15), "chỉ phát tiếp MỘT lần")
+
+    def test_loa_tu_quay_ve_bai_minh_thi_khong_lam_gi(self):
+        tr = {}
+        ours = stream_url("dQw4w9WgXcQ")
+        self.feed(tr, "playing", ours, 0, position=40, duration=240)
+        self.feed(tr, "playing", "http://ha/api/tts_proxy/abc.mp3", 5)
+        self.assertIsNone(self.feed(tr, "playing", ours, 9, position=45, duration=240))
+        self.assertNotIn("chen_tu", tr)
+
+    def test_gan_het_bai_hay_chua_phat_luong_minh_thi_khong_chen(self):
+        tr = {}
+        self.feed(tr, "playing", stream_url("dQw4w9WgXcQ"), 0, position=230, duration=240)
+        self.feed(tr, "playing", "http://ha/api/tts_proxy/abc.mp3", 1)
+        self.assertNotIn("chen_tu", tr, "gần hết bài: để chuyển bài như thường")
+        tr2 = {}
+        self.feed(tr2, "playing", "http://radio/stream.mp3", 0)
+        self.assertIsNone(self.feed(tr2, "idle", "http://radio/stream.mp3", 5))
