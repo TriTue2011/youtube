@@ -78,6 +78,8 @@ class LovelaceCardContractTests(unittest.TestCase):
         # thì đích theo loa vừa tích (chủ máy 30/09/2026: ẩn loa cam rồi tích loa khác không chỉnh được âm lượng).
         self.assertIn("!this._hiddenPlayers.has(entityId);", script)
         self.assertIn("if (!this._dichAmLuongHopLe(this._volumeTarget)) {", script)
+        # 0.27.6: nghe bằng loa mà tiếng trên máy đang tạm dừng thì thanh tiến trình theo LOA, không đứng im.
+        self.assertIn("if (deviceAudio.item && ((amMay && !amMay.paused) || !coLoa)) {", script)
         self.assertIn("if (!this._selectedPlayers.has(this._volumeTarget) || !this._dichAmLuongHopLe(this._volumeTarget)) {", script)
         # 0.9: the integration advances the queue (no browser needed); the card
         # must not advance speakers itself or songs would be skipped twice.

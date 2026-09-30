@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.6 - 2026-09-30
+
+### Thanh tiến trình chạy theo loa
+
+Phát nhạc ra loa (vd loa camera) mà tiếng trên máy này đang tạm dừng / tắt thì thanh tiến trình vẫn đọc giây của
+tiếng trên máy nên đứng im một chỗ. Nay tiếng trên máy chỉ làm đồng hồ khi nó thật sự đang chạy (hoặc phiên không có
+loa nào); còn lại thanh theo vị trí loa báo. Loa camera `dahua_talk` cần ≥ 0.9.2 để báo vị trí trên HA 2026.9.
+
 ## 0.27.5 - 2026-09-30
 
 ### TTS / thông báo chen giữa bài: đọc xong phát tiếp đúng chỗ

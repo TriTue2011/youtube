@@ -4070,7 +4070,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
      chọn ấy, nên tách ra một chỗ dùng chung thay vì chép lại lần thứ hai — chép hai
      bản là kiểu sai về sau, sửa một bên quên bên kia. */
   _progressState() {
-    if (deviceAudio.item) {
+    /* Tiếng trên máy chỉ làm ĐỒNG HỒ khi nó thật sự đang chạy (hay phiên không có loa nào). Chủ máy 30/09/2026:
+       "thanh tiến trình nhạc thấy đứng yên 1 chỗ khi phát nhạc ra cam" — nghe bằng loa, tiếng trên máy tạm
+       dừng / tắt mà thanh vẫn đọc giây của nó nên đứng im trong khi loa đang phát. */
+    const amMay = deviceAudio.item ? deviceAudio.real() : null;
+    const coLoa = (this._focusedSession()?.output_entity_ids || []).length > 0;
+    if (deviceAudio.item && ((amMay && !amMay.paused) || !coLoa)) {
       const heard = deviceAudio.position();
       return { kieu: "may", viTri: heard ? heard.time : null, tong: heard?.duration || 0 };
     }
