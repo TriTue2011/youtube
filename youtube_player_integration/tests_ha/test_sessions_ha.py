@@ -613,3 +613,46 @@ async def test_tts_chen_giua_bai_doc_xong_phat_tiep_dung_giay(hass, addon_server
             break
     tua = [d for s, d in calls if s == "media_seek"]
     assert tua and tua[0]["entity_id"] == [LOA_A] and 59 <= tua[0]["seek_position"] <= 62
+
+
+async def test_issue3_tts_tren_loa_nghi_va_stop_tren_loa_khong_chuyen_bai(hass, addon_server):
+    """Issue #3 (30/09/2026 22:42): TTS trên loa camera đang nghỉ làm nhạc tự bật bài kế; bấm Stop trên loa cũng nhảy bài.
+    Loa camera báo vị trí nhưng KHÔNG báo media_duration; thông báo trên loa nghỉ không đặt media_content_id."""
+    entry, calls = await _setup(hass, addon_server)
+    await entry.runtime_data.client.async_search("trót tin", limit=3)
+    await _choi(hass, entry, KET_QUA[0]["url"], [LOA_A])
+    luong = [d for s, d in calls if s == "play_media" and d["entity_id"] == [LOA_A]][-1]["media_content_id"]
+
+    def loa(trang_thai, mcid=None, vi_tri=None):
+        attrs = {"friendly_name": "Phòng khách", "device_class": "speaker", "supported_features": LOA_FEATURES}
+        if mcid:
+            attrs["media_content_id"] = mcid
+        if vi_tri is not None:
+            attrs.update(media_position=vi_tri, media_position_updated_at=dt_util.utcnow().isoformat())
+        hass.states.async_set(LOA_A, trang_thai, attrs)
+
+    # Bài đang phát (không media_duration) rồi một câu TTS chen vào lúc loa đang phát luồng của mình → không nhảy bài.
+    calls.clear()
+    loa("playing", luong, 30)
+    await hass.async_block_till_done()
+    loa("idle", luong)                       # loa nghỉ giữa chừng (vd TTS của hệ thống khác dừng nó)
+    await hass.async_block_till_done()
+    loa("playing", None)                     # TTS announce trên loa nghỉ: không media_content_id
+    await hass.async_block_till_done()
+    loa("idle", None)
+    await hass.async_block_till_done()
+    assert [d for s, d in calls if s == "play_media"] == [], "TTS trên loa nghỉ không được bật bài kế"
+
+
+async def test_turn_off_thuc_the_youtube_dung_phien(hass, addon_server):
+    """Issue #3: `turn_off` vào thực thể YouTube báo ServiceNotSupported — nay là dừng hẳn."""
+    entry, calls = await _setup(hass, addon_server)
+    await entry.runtime_data.client.async_search("trót tin", limit=3)
+    await _choi(hass, entry, KET_QUA[0]["url"], [LOA_A])
+    ent = next(st.entity_id for st in hass.states.async_all("media_player") if "sessions" in st.attributes)
+    assert hass.states.get(ent).attributes["supported_features"] & 256, "TURN_OFF"
+    await hass.services.async_call("media_player", "turn_off", {"entity_id": ent}, blocking=True)
+    await hass.async_block_till_done()
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert _phien(hass) == []

@@ -126,6 +126,10 @@ class SessionAutoAdvance:
         if "chen_tu" in tracker:
             return
         if not observe_track(tracker, state, attributes, now, session.get("item")):
+            if tracker.pop("dung_som", False):
+                # Stop pressed on the speaker (idle well before the end): take that speaker out of the session instead
+                # of skipping to the next song (issue #3). A one-speaker session ends.
+                self.hass.async_create_task(self._async_remove_speaker(session, entity_id), eager_start=False)
             return
         session_id = str(session.get("session_id") or "")
         if session_id in self._advancing or self._next_from(session) is None:
@@ -143,6 +147,16 @@ class SessionAutoAdvance:
         if queue_item(session, 1) is not None:
             return "session"
         return None
+
+    async def _async_remove_speaker(self, session: dict[str, Any], entity_id: str) -> None:
+        from .services import async_remove_players  # noqa: PLC0415
+
+        try:
+            LOGGER.info("Session %s: %s stopped before the end of the song — removing it from the session",
+                        session.get("session_id"), entity_id)
+            await async_remove_players(self.hass, self.entry, [entity_id])
+        except HomeAssistantError as error:
+            LOGGER.warning("Removing %s from session %s failed: %s", entity_id, session.get("session_id"), error)
 
     async def _async_resume(self, session: dict[str, Any], lead: str, position: float) -> None:
         """Phát lại bài của phiên trên các loa của nó rồi tua tới ``position`` (loa nào có SEEK)."""

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.27.7 - 2026-10-01
+
+### Không tự bật nhạc sau TTS, Stop trên loa không nhảy bài (issue #3)
+
+- Loa báo nội dung KHÁC luồng của máy phát (TTS `/api/tts_proxy/…`, `media-source://tts/…`, nguồn khác) không còn bị
+  coi là bài của phiên. Loa không báo `media_content_id` chỉ được tin khi chưa từng phát luồng của phiên. Trước đây
+  một câu TTS trên loa camera đang nghỉ làm nhạc tự bật bài kế (gặp thật 22:42).
+- Loa không báo `media_duration` dùng thời lượng bài của phiên; loa không báo vị trí thì tính từ lúc bắt đầu phát.
+  Vẫn không biết thì "idle" KHÔNG còn bị coi là hết bài.
+- Dừng trên loa giữa bài (idle sớm hơn hẳn cuối bài): gỡ loa đó khỏi phiên thay vì chuyển bài; phiên một loa thì kết
+  thúc.
+- Thực thể YouTube nhận `turn_off` (dừng hẳn — trước báo ServiceNotSupported), `media_pause` / `media_play` (chuyển
+  xuống các loa của phiên).
+
 ## 0.27.6 - 2026-09-30
 
 ### Thanh tiến trình chạy theo loa

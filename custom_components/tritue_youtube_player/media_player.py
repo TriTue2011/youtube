@@ -27,7 +27,7 @@ from .api import InvalidTargetError, YouTubePlayerApiError
 from .const import CONF_TARGET_ENTITY_ID, DOMAIN
 from .coordinator import YouTubePlayerConfigEntry
 from .entity import YouTubePlayerEntity
-from .sessions import compact_sessions
+from .sessions import active_sessions, compact_sessions, is_controlled_by
 from .playback import (
     UnsupportedCastMediaError,
     UnsupportedTargetMediaError,
@@ -53,6 +53,9 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.BROWSE_MEDIA
         | MediaPlayerEntityFeature.SEARCH_MEDIA
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.PAUSE
+        | MediaPlayerEntityFeature.PLAY
     )
     _attr_translation_key = "player"
 
@@ -300,6 +303,32 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
                 target={ATTR_ENTITY_ID: target},
             )
         await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self) -> None:
+        """Tắt = dừng hẳn (issue #3: `turn_off` báo ServiceNotSupported — tắt nhạc ban đêm là nhu cầu hay gặp)."""
+        await self.async_media_stop()
+
+    async def async_media_pause(self) -> None:
+        """Tạm dừng các loa đang phát phiên do tích hợp này điều khiển (loa nào có PAUSE)."""
+        await self._chuyen_xuong_loa("media_pause", MediaPlayerEntityFeature.PAUSE)
+
+    async def async_media_play(self) -> None:
+        """Phát tiếp trên các loa của phiên (loa nào có PLAY)."""
+        await self._chuyen_xuong_loa("media_play", MediaPlayerEntityFeature.PLAY)
+
+    async def _chuyen_xuong_loa(self, service: str, feature: int) -> None:
+        loa = [
+            entity_id
+            for session in active_sessions(self.coordinator.data)
+            if is_controlled_by(session, self.entry.entry_id)
+            for entity_id in session.get("output_entity_ids") or []
+            if (state := self.hass.states.get(entity_id)) is not None
+            and int(state.attributes.get("supported_features") or 0) & feature
+        ]
+        if loa:
+            await self.hass.services.async_call(
+                MEDIA_PLAYER_DOMAIN, service, blocking=True, target={ATTR_ENTITY_ID: sorted(set(loa))}
+            )
 
     def _target_or_raise(self) -> str:
         """Return a loaded physical target which is not this virtual player."""

@@ -124,17 +124,29 @@ def stream_target(media_content_id: Any) -> str | None:
     return str(target) if target else None
 
 
-def plays_item(attributes: dict[str, Any], item: dict[str, Any] | None) -> bool:
+def plays_item(attributes: dict[str, Any], item: dict[str, Any] | None,
+               tracker: dict[str, Any] | None = None) -> bool:
     """Whether the speaker's reported media is this session's song.
 
     Right after a new song is sent the speaker still reports the previous song's
     position and duration for a few seconds; reading those as the new song's
     made the picture jump to the old second and could count the old song
-    ending as the new one's."""
-    target = stream_target(attributes.get("media_content_id"))
-    if target is None or not item:
+    ending as the new one's.
+
+    Issue #3 (30/09/2026): a speaker reporting OTHER content (TTS ``/api/tts_proxy/…``, another source) is not the
+    session's song — before, any ``media_content_id`` that was not a player stream counted as the song, so a TTS
+    announcement on an idle speaker "finished" the song and the next one started at 22:42. A TV's own YouTube app
+    reports the video id itself, which still matches. A speaker reporting no ``media_content_id`` at all is only
+    trusted while it never reported this session's stream (``tracker["luong_minh"]``)."""
+    if not item:
         return True
+    mcid = attributes.get("media_content_id")
+    target = stream_target(mcid)
     item_id = str(item.get("id") or "")
+    if target is None:
+        if mcid:
+            return bool(item_id) and str(mcid) in {item_id, str(item.get("url") or "")}
+        return not (tracker or {}).get("luong_minh")
     return target in {item_id, str(item.get("url") or "")} or bool(item_id and item_id in target)
 
 
@@ -151,9 +163,12 @@ def observe_track(
     end of the track. Pause never counts; a stop well before the end does not
     count either. Playing reports of another song than ``item`` are ignored."""
     if state in PLAYING_STATES:
-        if not plays_item(attributes, item):
+        if not plays_item(attributes, item, tracker):
             return False
+        if stream_target(attributes.get("media_content_id")) is not None:
+            tracker["luong_minh"] = True
         tracker["seen_playing"] = True
+        tracker.setdefault("playing_since", now)
         position = _number(attributes.get("media_position"))
         if position is not None:
             updated = attributes.get("media_position_updated_at")
@@ -171,12 +186,22 @@ def observe_track(
     if state not in FINISHED_STATES or not tracker.get("seen_playing"):
         return False
     tracker["seen_playing"] = False
-    duration = tracker.get("duration")
+    # Speakers that report no media_duration (a camera speaker) use the song's own duration. Still unknown → an
+    # idle speaker is NOT a finished song (issue #3: every Stop pressed on such a speaker skipped to the next song).
+    duration = tracker.get("duration") or _number((item or {}).get("duration"))
     position = tracker.get("position")
+    position_at = tracker.get("position_at")
+    if position is None and tracker.get("playing_since") is not None:
+        # Speaker that never reports its position: count from when it was first seen playing this song.
+        position, position_at = 0.0, tracker["playing_since"]
+    tracker.pop("playing_since", None)
     if not duration or position is None:
+        return False
+    elapsed = max(0.0, (now - position_at).total_seconds())
+    if position + elapsed >= duration - END_TOLERANCE_SECONDS:
         return True
-    elapsed = max(0.0, (now - tracker["position_at"]).total_seconds())
-    return position + elapsed >= duration - END_TOLERANCE_SECONDS
+    tracker["dung_som"] = True        # stopped well before the end — the caller takes the speaker out of the session
+    return False
 
 
 def observe_interruption(
@@ -199,7 +224,7 @@ def observe_interruption(
     mcid = attributes.get("media_content_id")
     target = stream_target(mcid)
     if target is not None:
-        if plays_item(attributes, item):
+        if plays_item(attributes, item, tracker):
             tracker.pop("chen_tu", None)             # đang (hoặc lại) phát đúng bài của phiên
             tracker["luong_minh"] = True
         return None

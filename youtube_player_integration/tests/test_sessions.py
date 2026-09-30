@@ -69,9 +69,19 @@ class SessionHelperTests(unittest.TestCase):
         observe(stopped, "playing", {"media_position": 50, "media_position_updated_at": NOW.isoformat(), "media_duration": 200}, NOW)
         self.assertFalse(observe(stopped, "idle", {}, NOW + timedelta(seconds=5)))  # stopped mid-track
 
+        # Speaker that reports neither position nor duration (issue #3): unknown length → idle is NOT the end —
+        # before, every Stop and every TTS on such a speaker skipped to the next song.
         no_position = {}
         observe(no_position, "playing", {}, NOW)
-        self.assertTrue(observe(no_position, "off", {}, NOW))  # speaker without position: trust the state
+        self.assertFalse(observe(no_position, "off", {}, NOW + timedelta(seconds=30)))
+        # …but the SONG's duration is known: count from when it started playing.
+        song = {"id": "a", "duration": 200}
+        tr = {}
+        observe(tr, "playing", {}, NOW, song)
+        self.assertFalse(observe(tr, "idle", {}, NOW + timedelta(seconds=60), song), "stopped at 60/200")
+        self.assertTrue(tr.pop("dung_som"), "stopped early is reported so the speaker leaves the session")
+        observe(tr, "playing", {}, NOW, song)
+        self.assertTrue(observe(tr, "idle", {}, NOW + timedelta(seconds=195), song))
 
     def test_reports_of_the_previous_song_are_ignored(self):
         import base64
@@ -154,3 +164,35 @@ class ChenGiuaBaiTests(unittest.TestCase):
         tr2 = {}
         self.feed(tr2, "playing", "http://radio/stream.mp3", 0)
         self.assertIsNone(self.feed(tr2, "idle", "http://radio/stream.mp3", 5))
+
+
+class Issue3Tests(unittest.TestCase):
+    """Issue #3: TTS on an idle camera speaker started the next song at 22:42; Stop on the speaker skipped songs."""
+
+    def setUp(self):
+        self.s = load_sessions_module()
+        self.item = {"id": "dQw4w9WgXcQ", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "duration": 240}
+
+    def test_tts_tren_loa_dang_nghi_khong_la_het_bai(self):
+        tr = {}
+        ours = stream_url("dQw4w9WgXcQ")
+        self.s.observe_track(tr, "playing", {"media_content_id": ours, "media_position": 30,
+                                             "media_position_updated_at": NOW.isoformat()}, NOW, self.item)
+        self.s.observe_track(tr, "idle", {}, NOW + timedelta(seconds=235), self.item)       # the song ended normally
+        # Later: TTS announce on the idle speaker — no media_content_id (camera speaker) or a TTS url.
+        for mcid in (None, "http://ha/api/tts_proxy/x.mp3", "media-source://tts/abc"):
+            attrs = {"media_content_id": mcid} if mcid else {}
+            self.assertFalse(self.s.plays_item(attrs, self.item, tr), mcid)
+            self.s.observe_track(tr, "playing", attrs, NOW + timedelta(seconds=300), self.item)
+            self.assertFalse(self.s.observe_track(tr, "idle", attrs, NOW + timedelta(seconds=305), self.item))
+
+    def test_tivi_app_goc_bao_ma_video_van_khop(self):
+        self.assertTrue(self.s.plays_item({"media_content_id": "dQw4w9WgXcQ"}, self.item))
+        self.assertFalse(self.s.plays_item({"media_content_id": "M7lc1UVf-VE"}, self.item))
+
+    def test_stop_giua_bai_bao_dung_som(self):
+        tr = {}
+        self.s.observe_track(tr, "playing", {"media_content_id": stream_url("dQw4w9WgXcQ"), "media_position": 30,
+                                             "media_position_updated_at": NOW.isoformat()}, NOW, self.item)
+        self.assertFalse(self.s.observe_track(tr, "idle", {}, NOW + timedelta(seconds=20), self.item))
+        self.assertTrue(tr.get("dung_som"))
