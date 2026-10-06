@@ -10,6 +10,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .actions import async_play_on_players
+from .dung_loa import async_dung_loa_luong
 from .api import InvalidTargetError, YouTubePlayerApiError
 from .queue_store import get_queue_store
 from .const import (
@@ -23,6 +24,7 @@ from .const import (
     SERVICE_REMOVE_PLAYERS,
     SERVICE_SKIP,
     SERVICE_STOP_SESSION,
+    LOGGER,
 )
 from .playback import (
     UnsupportedCastMediaError,
@@ -259,6 +261,10 @@ async def async_stop_session(hass: HomeAssistant, entry, session_id: str | None)
         await hass.services.async_call(
             "media_player", "media_stop", blocking=True, target={ATTR_ENTITY_ID: outputs}
         )
+    da_dung = list(outputs)
+    if session is None and not session_id:
+        # Máy phát không còn phiên (add-on dừng / khởi động lại giữa bài) mà loa vẫn phát luồng của nó.
+        da_dung += await async_dung_loa_luong(hass, ly_do="Stop: máy phát không còn phiên")
     try:
         if session and session.get("session_id"):
             await entry.runtime_data.client.async_stop(session_id=session["session_id"])
@@ -267,7 +273,9 @@ async def async_stop_session(hass: HomeAssistant, entry, session_id: str | None)
         else:
             await entry.runtime_data.client.async_stop()
     except YouTubePlayerApiError as error:
-        raise _validation_error("playback_error") from error
+        if not da_dung:
+            raise _validation_error("playback_error") from error
+        LOGGER.warning("Stop: đã dừng %s nhưng máy phát không nhận lệnh dừng: %s", ", ".join(da_dung), error)
     await entry.runtime_data.async_refresh()
 
 

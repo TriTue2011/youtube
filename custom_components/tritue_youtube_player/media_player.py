@@ -17,14 +17,15 @@ from homeassistant.components.media_player import (
     SearchMedia,
     SearchMediaQuery,
 )
-from homeassistant.const import ATTR_ENTITY_ID, SERVICE_MEDIA_STOP
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api import InvalidTargetError, YouTubePlayerApiError
-from .const import CONF_TARGET_ENTITY_ID, DOMAIN
+from .const import CONF_TARGET_ENTITY_ID, DOMAIN, LOGGER
+from .dung_loa import async_dung_loa_luong
 from .coordinator import YouTubePlayerConfigEntry
 from .entity import YouTubePlayerEntity
 from .sessions import active_sessions, compact_sessions, is_controlled_by
@@ -287,21 +288,21 @@ class TriTueYouTubePlayer(YouTubePlayerEntity, MediaPlayerEntity):
             )
 
     async def async_media_stop(self) -> None:
-        """Stop the player page and selected HA media player."""
+        """Dừng hẳn: mọi loa đang phát luồng của máy phát TRƯỚC, rồi mới báo máy phát.
+
+        Trước 0.27.8 gọi máy phát trước — máy phát chết (add-on dừng) thì lỗi ngay, không bao giờ tới bước dừng loa;
+        còn máy phát đã quên phiên thì loa không nằm trong phiên nào nên không ai dừng nó."""
+        da_dung = await async_dung_loa_luong(
+            self.hass, them=[self.target_entity_id] if self.target_entity_id else [],
+            ly_do="Stop trên thực thể YouTube")
         try:
             await self.coordinator.client.async_stop()
         except YouTubePlayerApiError as error:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN, translation_key="communication_error"
-            ) from error
-        if self.target_entity_id:
-            target = self._target_or_raise()
-            await self.hass.services.async_call(
-                MEDIA_PLAYER_DOMAIN,
-                SERVICE_MEDIA_STOP,
-                blocking=True,
-                target={ATTR_ENTITY_ID: target},
-            )
+            if not da_dung:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN, translation_key="communication_error"
+                ) from error
+            LOGGER.warning("Stop: đã dừng loa nhưng máy phát không nhận lệnh: %s", error)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:

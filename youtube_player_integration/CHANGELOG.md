@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.27.8 - 2026-10-06
+
+### Dừng là dừng hẳn — kể cả khi máy phát đã quên phiên
+
+Tái hiện trên loa camera thật: máy phát xoá phiên giữa bài (add-on dừng / gỡ / khởi động lại) → thực thể YouTube
+báo idle, thẻ báo «Không có gì đang phát», nút Stop không gửi gì xuống loa — loa vẫn phát luồng; một câu TTS chen
+vào là nhạc tự phát lại vì tích hợp còn giữ phiên «ma» từ lần hỏi cuối.
+
+- Dừng mọi loa đang phát LUỒNG của máy phát (nhận theo URL có ký), không chỉ loa trong phiên máy phát còn nhớ: khi
+  bấm Stop mà không còn phiên, khi máy phát im 15 giây, khi Home Assistant dừng / khởi động lại, khi gỡ / tắt tích hợp.
+  Loa không có Stop thì Turn off, không có nữa thì Pause — không bỏ qua im lặng loa nào.
+- Máy phát không trả lời: thôi điều khiển phiên ngay — không tự phát lại sau TTS, không tự chuyển bài.
+- Stop trên thực thể YouTube dừng loa TRƯỚC rồi mới báo máy phát; máy phát chết không còn chặn việc dừng loa.
+- Thẻ: không còn phiên và không tick loa nào thì Stop nhờ tích hợp dò loa còn phát (trước báo «Không có gì đang
+  phát» trong khi loa vẫn kêu).
+
 ## 0.27.7 - 2026-10-01
 
 ### Không tự bật nhạc sau TTS, Stop trên loa không nhảy bài (issue #3)

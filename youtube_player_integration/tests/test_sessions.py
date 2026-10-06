@@ -196,3 +196,26 @@ class Issue3Tests(unittest.TestCase):
                                              "media_position_updated_at": NOW.isoformat()}, NOW, self.item)
         self.assertFalse(self.s.observe_track(tr, "idle", {}, NOW + timedelta(seconds=20), self.item))
         self.assertTrue(tr.get("dung_som"))
+
+
+class LoaPhatLuongTests(unittest.TestCase):
+    """06/10/2026, tái hiện trên loa camera thật: máy phát quên phiên giữa bài mà loa vẫn phát luồng của nó —
+    Stop phải tìm loa theo LUỒNG trên loa, không theo danh sách phiên."""
+
+    def setUp(self):
+        self.s = load_sessions_module()
+
+    def test_chi_loa_dang_phat_luong_cua_may_phat(self):
+        tt = {
+            "media_player.cam": ("playing", {"media_content_id": stream_url("abc")}),
+            "media_player.cast": ("paused", {"media_content_id": stream_url("xyz")}),     # TTS chen giữa / Pause
+            "media_player.tts": ("playing", {"media_content_id": "media-source://tts/google?message=x"}),
+            "media_player.tv": ("playing", {"media_content_id": "https://www.youtube.com/watch?v=abc"}),
+            "media_player.xong": ("idle", {"media_content_id": stream_url("abc")}),         # đã dừng
+            "media_player.youtube": ("playing", {"media_content_id": stream_url("abc")}),   # thực thể của tích hợp
+        }
+        self.assertEqual(self.s.loa_phat_luong(tt, {"media_player.youtube"}), ["media_player.cam", "media_player.cast"])
+
+    def test_khong_co_gi(self):
+        self.assertEqual(self.s.loa_phat_luong({}), [])
+        self.assertEqual(self.s.loa_phat_luong({"media_player.a": ("playing", {})}), [])

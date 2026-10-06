@@ -8012,6 +8012,13 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       }
       const entityIds = this._targetsForService("media_stop");
       if (!entityIds.length) {
+        // Không còn phiên mà loa vẫn có thể phát luồng của máy phát (máy phát dừng / khởi động lại giữa bài —
+        // chủ máy 06/10/2026). Tích hợp dò loa theo LUỒNG đang phát và dừng hết (0.27.8).
+        if (this._entryId()) {
+          await this._hass.callService("tritue_youtube_player", "stop_session", { entry_id: this._entryId() });
+          this._setStatus("Đã dừng mọi loa còn phát nhạc.");
+          return;
+        }
         this._setStatus(this._video.open ? "Đã dừng video." : "Không có gì đang phát.", !this._video.open);
         return;
       }

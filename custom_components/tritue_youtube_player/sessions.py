@@ -106,6 +106,27 @@ def _number(value: Any) -> float | None:
     return float(value)
 
 
+#: Loa còn "giữ" bài: đang phát, tạm dừng (TTS chen giữa / Pause), đang nạp. "on" cho loa chỉ báo bật/tắt.
+DANG_PHAT = frozenset({"playing", "paused", "buffering", "on"})
+
+
+def loa_phat_luong(trang_thai: dict[str, tuple[str, dict[str, Any]]],
+                   bo_qua: frozenset[str] | set[str] = frozenset()) -> list[str]:
+    """Loa đang phát LUỒNG của máy phát (URL có ký ``/api/stream/<token>``), kể cả khi máy phát đã QUÊN phiên.
+
+    06/10/2026, tái hiện trên loa camera thật: máy phát xoá phiên giữa bài (add-on dừng / máy phát khởi động lại) →
+    thực thể YouTube báo idle, thẻ thấy «không có gì đang phát», nút Stop không gửi gì xuống loa — loa vẫn phát tiếp
+    vì luồng còn chạy. Dò theo LUỒNG trên loa chứ không theo danh sách phiên thì không sót loa nào.
+    ``trang_thai``: entity_id → (state, attributes); ``bo_qua``: thực thể của chính tích hợp."""
+    return sorted(
+        entity_id
+        for entity_id, (state, attributes) in trang_thai.items()
+        if entity_id not in bo_qua
+        and state in DANG_PHAT
+        and stream_target((attributes or {}).get("media_content_id")) is not None
+    )
+
+
 def stream_target(media_content_id: Any) -> str | None:
     """Song a speaker is playing, read from the player's signed stream URL.
 

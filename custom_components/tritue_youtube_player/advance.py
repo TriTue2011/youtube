@@ -49,6 +49,10 @@ class SessionAutoAdvance:
         return stop
 
     def _sessions(self) -> list[dict[str, Any]]:
+        # Máy phát không trả lời: coordinator vẫn giữ dữ liệu LẦN CUỐI → phiên «ma» — TTS dứt là tự phát lại bài của
+        # một máy phát đã dừng (chủ máy 06/10/2026). Không trả lời = không điều khiển phiên nào.
+        if not self.entry.runtime_data.last_update_success:
+            return []
         return [
             session
             for session in active_sessions(self.entry.runtime_data.data)
