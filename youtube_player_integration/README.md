@@ -77,6 +77,177 @@ playlist, ví dụ `https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID`.
   hứa": trợ lý hiện tối đa 10 bài để chọn, hỏi loa (một, nhiều hay tất cả) rồi
   phát; "bài kế ở bếp", "dừng loa phòng khách", "đang phát gì" cũng được.
 
+## Tham chiếu action (6 action)
+
+Tất cả action thuộc domain `tritue_youtube_player`, gọi được từ automation,
+script và Developer Tools → Actions. `entry_id` là ID của bản cài integration —
+trong UI chọn từ danh sách thả xuống, không cần gõ tay.
+
+### Lấy mã playlist / mã video ở đâu
+
+- **playlist_code** (đúng 12 ký tự): nhấn nút chép mã trên thẻ
+  `tritue-youtube-player-card` (nút `mdi:code-tags` ở mỗi dòng playlist) hoặc
+  nút ⧉ trong web app. Đây là mã nội bộ của thư viện, KHÔNG phải mã video
+  YouTube (YouTube chỉ 11 ký tự) — gõ mã video vào đây sẽ bị từ chối.
+- **queue_code**: nút chép mã trên thẻ, ví dụ `media_player.loa_phong_khach`.
+- **target**: mã video YouTube 11 ký tự (phần `v=` trong URL), URL video đầy
+  đủ, hoặc URL bài Zing lấy từ kết quả tìm kiếm của card/web app. Trên thẻ có
+  nút chép mã/URL của video đang phát; web app có nút "⧉ Chép mã đang phát"
+  và nút ⧉ ở từng mục lịch sử. Khi clipboard API bị chặn (app HA trên điện
+  thoại hay gặp), cả hai đều mở `window.prompt` để copy tay.
+
+### 1. play_on_players — phát một bài lên loa
+
+| Tham số | Bắt buộc | Mô tả |
+|---|---|---|
+| `entry_id` | Có | ID bản cài integration |
+| `source` | Có | `youtube`, `zing`, `facebook` hoặc `http` |
+| `target` | Có | mã video/URL (xem cách lấy ở trên) |
+| `entity_id` | Có | một hoặc nhiều `media_player` |
+| `volume_level` | Không | 0–1, ví dụ `0.35` |
+| `mode` | Không | danh sách chọn: `audio` (chỉ âm thanh, kể cả trên TV) hoặc `video` (để TV/hộp mở ứng dụng YouTube gốc). Không có mức 360p…1080p: chất lượng hình do ứng dụng trên thiết bị tự chọn. Chỉ áp dụng nguồn `youtube`; với `zing`/`facebook`/`http` thì bị bỏ qua |
+| `session_id` | Không | ID phiên muốn nối vào |
+| `join` | Không | `true` = cho loa vào phiên đang phát (mặc định `false`) |
+| `playlist_id` | Không | tham số nâng cao, để trống khi dùng thông thường |
+
+```yaml
+action: tritue_youtube_player.play_on_players
+data:
+  entry_id: 01J00000000000000000000000
+  source: youtube
+  target: dQw4w9WgXcQ
+  entity_id:
+    - media_player.phong_khach
+  volume_level: 0.35
+  mode: video
+```
+
+Ví dụ HTTP audio trực tiếp:
+
+```yaml
+action: tritue_youtube_player.play_on_players
+data:
+  entry_id: 01J00000000000000000000000
+  source: http
+  target: https://audio.example/music/song.flac
+  media_content_type: audio/flac
+  entity_id:
+    - media_player.phong_khach
+```
+
+### 2. play_playlist — phát playlist trong thư viện
+
+| Tham số | Bắt buộc | Mô tả |
+|---|---|---|
+| `entry_id` | Có | ID bản cài integration |
+| `playlist_code` | Có | mã thư viện đúng 12 ký tự (chép từ thẻ) |
+| `entity_id` | Có | một hoặc nhiều `media_player` |
+| `volume_level` | Không | 0–1 |
+| `mode` | Không | như `play_on_players` |
+
+```yaml
+action: tritue_youtube_player.play_playlist
+data:
+  entry_id: 01J00000000000000000000000
+  playlist_code: abcdef012345
+  entity_id:
+    - media_player.phong_bep
+  mode: audio
+```
+
+### 3. play_queue — phát hàng đợi đã lưu
+
+| Tham số | Bắt buộc | Mô tả |
+|---|---|---|
+| `entry_id` | Có | ID bản cài integration |
+| `queue_code` | Có | mã hàng đợi chép từ thẻ, ví dụ `media_player.loa_phong_khach` |
+| `entity_id` | Có | một hoặc nhiều `media_player` |
+| `volume_level` | Không | 0–1 |
+| `mode` | Không | như `play_on_players` |
+
+```yaml
+action: tritue_youtube_player.play_queue
+data:
+  entry_id: 01J00000000000000000000000
+  queue_code: media_player.loa_phong_khach
+  entity_id:
+    - media_player.loa_phong_khach
+  mode: audio
+```
+
+### 4. skip — chuyển bài trong phiên
+
+| Tham số | Bắt buộc | Mô tả |
+|---|---|---|
+| `entry_id` | Có | ID bản cài integration |
+| `session_id` | Không | ID phiên; bỏ trống = phiên mới nhất |
+| `step` | Không | `1` = bài kế (mặc định), `-1` = bài trước |
+
+```yaml
+action: tritue_youtube_player.skip
+data:
+  entry_id: 01J00000000000000000000000
+  step: 1
+```
+
+### 5. stop_session — dừng phiên phát
+
+| Tham số | Bắt buộc | Mô tả |
+|---|---|---|
+| `entry_id` | Có | ID bản cài integration |
+| `session_id` | Không | ID phiên; bỏ trống = phiên mới nhất |
+
+```yaml
+action: tritue_youtube_player.stop_session
+data:
+  entry_id: 01J00000000000000000000000
+```
+
+### 6. remove_players — gỡ loa khỏi phiên
+
+| Tham số | Bắt buộc | Mô tả |
+|---|---|---|
+| `entry_id` | Có | ID bản cài integration |
+| `entity_id` | Có | một hoặc nhiều `media_player` cần gỡ |
+
+```yaml
+action: tritue_youtube_player.remove_players
+data:
+  entry_id: 01J00000000000000000000000
+  entity_id:
+    - media_player.loa_cu
+```
+
+## Assist — trợ lý giọng nói (9 công cụ)
+
+Bật trợ lý: **Cài đặt → Trợ lý giọng nói** → mở trợ lý dùng LLM (OpenAI,
+Google, Ollama hoặc OpenAI tương thích…) → tuỳ chọn → tích **TriTue Music**
+cạnh **Assist**. Sau đó nói hoặc gõ như dưới đây.
+
+| # | Công cụ | Nói gì | Ví dụ |
+|---|---|---|---|
+| 1 | `tim_nhac` — tìm nhạc | Tên bài hoặc ca sĩ | "tìm bài trót tin vào lời hứa" |
+| 2 | `danh_sach_loa` — liệt kê loa | Hỏi có loa nào | "có những loa nào" |
+| 3 | `phat_nhac` — phát nhạc | Bài + loa (+ chế độ phát) | "phát bài số 2 ra loa phòng khách", "phát video 1080 bài này lên TV" |
+| 4 | `dieu_khien_nhac` — điều khiển | 5 lệnh: tạm dừng, tiếp tục, bài kế, bài trước, dừng | "tạm dừng loa bếp", "bài kế ở phòng khách" |
+| 5 | `dang_phat` — đang phát gì | Hỏi trạng thái | "đang phát gì" |
+| 6 | `tim_playlist` — tìm playlist | Tên playlist | "tìm playlist nhạc lofi" |
+| 7 | `phat_playlist` — phát playlist | Playlist + loa | "phát playlist lofi ra loa bếp" |
+| 8 | `phat_hang_doi` — phát hàng đợi | Loa | "phát hàng đợi loa phòng khách" |
+| 9 | `hang_doi` — quản lý hàng đợi | xem / xóa bài số N / nhảy tới bài N / xóa hết | "xem hàng đợi", "xóa bài số 3", "nhảy tới bài 5", "xóa hết hàng đợi" |
+
+Ví dụ hội thoại đầy đủ: "tìm bài trót tin vào lời hứa" → trợ lý hiện tối đa
+10 bài để chọn → "phát bài số 1 ra loa phòng khách và loa bếp" → nếu nhà có
+nhiều loa mà anh không nêu loa, trợ lý HỎI LẠI danh sách loa thay vì tự đoán.
+
+Giới hạn đã biết (đã soát):
+
+- `dieu_khien_nhac` chỉ có 5 lệnh trên — **không có lệnh tua**; yêu cầu "tua
+  tới phút 2" sẽ không thực hiện được.
+- Phát ra nhiều loa mà không nêu tên loa → trợ lý trả danh sách loa để anh
+  chọn, không tự phát lung tung.
+- Chế độ chỉ có `audio` và `video`; trợ lý được dặn không bịa mức độ phân giải (360p, 720p, 1080p, 2k, 4k) vì tích hợp không chọn được chất lượng hình.
+
 ## Card tìm kiếm và chọn nhiều loa
 
 Sau khi integration đã tải, vào **Settings → Dashboards → Resources**, thêm

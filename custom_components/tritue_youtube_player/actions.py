@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .playback import (
+    CHON_MODE_HOP_LE,
     UnsupportedTargetMediaError,
     build_direct_audio_request,
     build_stream_request,
@@ -86,7 +87,7 @@ async def async_play_on_players(
     target_supported_features = target_supported_features or {}
     if volume_level is not None and not 0 <= float(volume_level) <= 1:
         raise ValueError("invalid_volume_level")
-    if mode is not None and mode not in {"video", "audio"}:
+    if mode is not None and mode not in CHON_MODE_HOP_LE:
         raise ValueError("invalid_mode")
 
     def capabilities(entity_id: str) -> dict[str, Any]:

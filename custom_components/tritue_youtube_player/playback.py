@@ -230,6 +230,13 @@ def build_target_request(
     raise UnsupportedTargetMediaError("youtube_transport_unsupported")
 
 
+#: Mọi giá trị `mode` mà schema service chấp nhận (dùng chung cho vol.In ở services.py/llm_api.py).
+#: "audio" = chỉ âm thanh (kể cả trên TV); "video" = để TV/hộp mở ứng dụng YouTube gốc. Chất lượng hình do
+#: ứng dụng trên thiết bị tự chọn — tích hợp KHÔNG điều khiển được, nên không có mức 360p…1080p ở đây
+#: (đã gỡ vì là ô giả: không tới luồng nào ở đường action).
+CHON_MODE_HOP_LE = ("audio", "video")
+
+
 def build_target_call(
     item: dict[str, Any],
     *,

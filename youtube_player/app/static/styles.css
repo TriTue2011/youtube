@@ -237,9 +237,9 @@ input::placeholder {
   list-style: none;
 }
 
-.history-item button {
+.history-item > button:first-child {
   display: flex;
-  width: 100%;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -249,14 +249,14 @@ input::placeholder {
   text-align: left;
 }
 
-.history-item button span:first-child {
+.history-item > button:first-child span:first-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.history-item button:hover {
+.history-item > button:first-child:hover {
   border-color: var(--border);
   background: #292c33;
 }
@@ -272,6 +272,42 @@ input::placeholder {
 .empty-history {
   margin-bottom: 0;
   color: var(--muted);
+}
+
+/* Nút chép mã: hiện trong tiêu đề khung phát và mỗi mục lịch sử.
+   Dùng chung đường lùi window.prompt khi clipboard API không dùng được. */
+.play-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.play-heading .secondary {
+  flex: 0 0 auto;
+}
+
+.history-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.history-item > button:first-child {
+  flex: 1 1 auto;
+}
+
+.history-copy {
+  flex: 0 0 auto;
+  min-width: 2.75rem;
+  border: 0.0625rem solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.history-copy:hover {
+  background: var(--surface-raised);
 }
 
 @media (min-width: 40rem) {

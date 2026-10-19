@@ -26,6 +26,9 @@ const embedError = document.querySelector("#embed-error");
 const embedErrorText = document.querySelector("#embed-error-text");
 const embedErrorLink = document.querySelector("#embed-error-link");
 let currentVideoId = "";
+/* Mục đang phát (dạng target của API) — nút copy dùng để chép mã/URL. */
+let currentCopyTarget = null;
+const copyCurrentBtn = document.querySelector("#copy-current-btn");
 
 /* Ghép «origin» vào địa chỉ khung nhúng.
    Chỉ TRÌNH DUYỆT mới biết trang đang mở bằng địa chỉ nào, máy chủ thì không —
@@ -89,6 +92,14 @@ function play(target) {
   if (embedErrorLink) embedErrorLink.hidden = true;
   currentEmbedUrl = target.embed_url;
   currentVideoId = target.kind === "video" ? String(target.id || "") : "";
+  currentCopyTarget = target;
+  if (copyCurrentBtn) {
+    const xau = TriTueCopy.buildCopyText(target);
+    copyCurrentBtn.hidden = !xau;
+    copyCurrentBtn.title = target.kind === "playlist"
+      ? `Chép URL playlist (${target.id})`
+      : `Chép mã/URL video đang phát (${target.id})`;
+  }
   player.src = themOrigin(target.embed_url);
   player.hidden = false;
   emptyPlayer.hidden = true;
@@ -112,6 +123,8 @@ function stopPlayer() {
   }
   currentEmbedUrl = "";
   currentVideoId = "";
+  currentCopyTarget = null;
+  if (copyCurrentBtn) copyCurrentBtn.hidden = true;
   player.src = "";
   player.hidden = true;
   emptyPlayer.hidden = false;
@@ -147,8 +160,7 @@ function renderHistory(items) {
     kind.textContent = historyLabel(target);
 
     button.append(identifier, kind);
-    button.addEventListener("click", async () => {
-      // The web page only owns the YouTube iframe; Zing and HTTP items are played
+    button.addEventListener("click", async () => {      // The web page only owns the YouTube iframe; Zing and HTTP items are played
       // on speakers from Home Assistant, so open their public source instead.
       if (source !== "youtube") {
         if (target.url) window.open(target.url, "_blank", "noopener");
@@ -166,6 +178,22 @@ function renderHistory(items) {
       }
     });
     item.append(button);
+    const xauSaoChep = TriTueCopy.buildCopyText(target);
+    if (xauSaoChep) {
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "history-copy";
+      copyBtn.textContent = "⧉";
+      copyBtn.title = target.kind === "playlist"
+        ? `Chép URL playlist “${target.title || target.id}”`
+        : `Chép mã/URL “${target.title || target.id}”`;
+      copyBtn.setAttribute("aria-label", copyBtn.title);
+      copyBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        TriTueCopy.copyText(xauSaoChep, "Sao chép mã:");
+      });
+      item.append(copyBtn);
+    }
     historyList.append(item);
   }
 }
@@ -188,6 +216,14 @@ async function refreshPlayer() {
   } else {
     stopPlayer();
   }
+}
+
+if (copyCurrentBtn) {
+  copyCurrentBtn.addEventListener("click", () => {
+    if (!currentCopyTarget) return;
+    const xau = TriTueCopy.buildCopyText(currentCopyTarget);
+    if (xau) TriTueCopy.copyText(xau, "Sao chép mã:");
+  });
 }
 
 form.addEventListener("submit", async (event) => {

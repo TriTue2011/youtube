@@ -30,6 +30,7 @@ from .const import (
     LOGGER,
 )
 from .playback import (
+    CHON_MODE_HOP_LE,
     UnsupportedCastMediaError,
     UnsupportedTargetMediaError,
     async_play_queue,
@@ -67,7 +68,7 @@ PLAY_ON_PLAYERS_SCHEMA = vol.Schema(
         vol.Optional(CONF_SESSION_ID): cv.string,
         vol.Optional(CONF_JOIN, default=False): cv.boolean,
         vol.Optional(CONF_PLAYLIST_ID): cv.string,
-        vol.Optional("mode"): vol.In(["audio", "video"]),
+        vol.Optional("mode"): vol.In(CHON_MODE_HOP_LE),
     }
 )
 PLAY_PLAYLIST_SCHEMA = vol.Schema(
@@ -78,7 +79,7 @@ PLAY_PLAYLIST_SCHEMA = vol.Schema(
         vol.Optional(CONF_VOLUME_LEVEL): vol.All(
             vol.Coerce(float), vol.Range(min=0, max=1)
         ),
-        vol.Optional("mode"): vol.In(["audio", "video"]),
+        vol.Optional("mode"): vol.In(CHON_MODE_HOP_LE),
     }
 )
 PLAY_QUEUE_SCHEMA = vol.Schema(
@@ -89,7 +90,7 @@ PLAY_QUEUE_SCHEMA = vol.Schema(
         vol.Optional(CONF_VOLUME_LEVEL): vol.All(
             vol.Coerce(float), vol.Range(min=0, max=1)
         ),
-        vol.Optional("mode"): vol.In(["audio", "video"]),
+        vol.Optional("mode"): vol.In(CHON_MODE_HOP_LE),
     }
 )
 SKIP_SCHEMA = vol.Schema(

@@ -57,7 +57,7 @@ play_on_players:
           mode: slider
     mode:
       name: Playback mode
-      description: Choose audio stream or video stream. Only applies to YouTube source (ignored for zing/facebook/http).
+      description: "'audio' = sound only (even on a TV). 'video' = let a TV/box open the YouTube app (picture quality is chosen by the app on the device, not by this integration). Only applies to the YouTube source; ignored for zing/facebook/http. Leave empty to keep the default per device."
       required: false
       selector:
         select:
@@ -116,7 +116,7 @@ play_playlist:
           mode: slider
     mode:
       name: Playback mode
-      description: Choose audio stream or video stream. Only applies to YouTube source.
+      description: "'audio' = sound only (even on a TV). 'video' = let a TV/box open the YouTube app (picture quality is chosen by the app on the device, not by this integration). Only applies to the YouTube source; ignored for zing/facebook/http. Leave empty to keep the default per device."
       required: false
       selector:
         select:
@@ -162,7 +162,7 @@ play_queue:
           mode: slider
     mode:
       name: Playback mode
-      description: Choose audio stream or video stream. Only applies to YouTube source.
+      description: "'audio' = sound only (even on a TV). 'video' = let a TV/box open the YouTube app (picture quality is chosen by the app on the device, not by this integration). Only applies to the YouTube source; ignored for zing/facebook/http. Leave empty to keep the default per device."
       required: false
       selector:
         select:

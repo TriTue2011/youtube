@@ -21,6 +21,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util.json import JsonObjectType
 
 from .api import YouTubePlayerApiError
+from .playback import CHON_MODE_HOP_LE
 from .assist_tools import (
     PLAYLIST_SOURCES,
     SEARCH_LIMIT,
@@ -60,6 +61,8 @@ API_PROMPT = (
     "and more than one speaker is available, it returns a numbered list of speakers to ask the user which one to use. "
     "Use hang_doi to view, remove or jump queued songs. "
     "Use dieu_khien_nhac to pause, resume, skip, go back, or stop, and dang_phat to say what is playing where. "
+    "Playback mode for phat_nhac/phat_playlist/phat_hang_doi: 'audio' for sound only, or 'video' to let a TV open the "
+    "YouTube app. Do NOT invent resolution modes (360p, 720p, 1080p, 2k, 4k): the integration cannot choose picture quality. "
     "Answer in the user's language."
 )
 
@@ -193,7 +196,7 @@ class PlayMusicTool(llm.Tool):
         {
             vol.Required("bai", description="Number from tim_nhac, or a YouTube video ID / link"): str,
             vol.Required("loa", description="Speaker names/numbers separated by commas, or 'tất cả'"): str,
-            vol.Optional("mode", description="Playback mode: 'audio' or 'video'"): vol.In(["audio", "video"]),
+            vol.Optional("mode", description="Playback mode: 'audio' (sound only) or 'video' (TV opens the YouTube app); no resolution choice"): vol.In(CHON_MODE_HOP_LE),
         }
     )
 
@@ -405,7 +408,7 @@ class PlayPlaylistTool(llm.Tool):
             vol.Required("danh_sach", description="Number from tim_playlist, or 12-char library playlist code"): str,
             vol.Required("loa", description="Speaker names/numbers separated by commas, or 'tất cả'"): str,
             vol.Required("nguon_playlist", description="'kho' or 'youtube'"): vol.In(list(PLAYLIST_SOURCES)),
-            vol.Optional("mode", description="Playback mode: 'audio' or 'video'"): vol.In(["audio", "video"]),
+            vol.Optional("mode", description="Playback mode: 'audio' (sound only) or 'video' (TV opens the YouTube app); no resolution choice"): vol.In(CHON_MODE_HOP_LE),
         }
     )
 
@@ -498,7 +501,7 @@ class PlayQueueTool(llm.Tool):
     parameters = vol.Schema(
         {
             vol.Optional("loa", description="Speaker names/numbers separated by commas, or 'tất cả'"): str,
-            vol.Optional("mode", description="Playback mode: 'audio' or 'video'"): vol.In(["audio", "video"]),
+            vol.Optional("mode", description="Playback mode: 'audio' (sound only) or 'video' (TV opens the YouTube app); no resolution choice"): vol.In(CHON_MODE_HOP_LE),
         }
     )
 
