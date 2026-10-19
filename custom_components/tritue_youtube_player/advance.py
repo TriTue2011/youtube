@@ -177,6 +177,9 @@ class SessionAutoAdvance:
         if "chen_tu" in tracker:
             return
         if not observe_track(tracker, state, attributes, now, session.get("item")):
+            if tracker.pop("het_khong_ro", False):
+                self._xu_ly_het_khong_ro(session, entity_id, context, now)
+                return
             if tracker.pop("dung_som", False):
                 vi_tri = tracker.pop("dung_som_vi_tri", None)
                 session_id = str(session.get("session_id") or "")
@@ -218,7 +221,7 @@ class SessionAutoAdvance:
         Nút trên loa là chỗ nhập nhằng duy nhất, nên chỉ tự cứu MỘT lần cho mỗi (phiên, loa): dừng sớm lần nữa trong
         CHO_XAC_NHAN_DUNG_THAT_GIAY giây là Stop thật. Ghi cảnh báo để lần sau có bằng chứng trong log.
         """
-        da_ra_lenh = bool(getattr(context, "user_id", None) or getattr(context, "parent_id", None))
+        da_ra_lenh = self._da_ra_lenh(context)
         truoc = self._lan_tu_cuu.get((session_id, entity_id))
         gan_day = truoc is not None and (now - truoc).total_seconds() < CHO_XAC_NHAN_DUNG_THAT_GIAY
         tu_cuu = vi_tri is not None and not da_ra_lenh and not gan_day
@@ -230,6 +233,40 @@ class SessionAutoAdvance:
             "luồng bị cắt, giữ nhạc chạy" if tu_cuu else "coi là Stop, gỡ loa khỏi phiên",
         )
         return tu_cuu
+
+    @staticmethod
+    def _da_ra_lenh(context: Any) -> bool:
+        """Sự kiện đổi trạng thái do người dùng hoặc automation trong Home Assistant ra lệnh (mang user_id / parent_id)."""
+        return bool(getattr(context, "user_id", None) or getattr(context, "parent_id", None))
+
+    def _xu_ly_het_khong_ro(
+        self, session: dict[str, Any], entity_id: str, context: Any, now: Any
+    ) -> None:
+        """Loa về idle khi KHÔNG biết thời lượng bài: sang bài kế hoặc dừng hẳn, không để phiên «playing» mà loa đã im.
+
+        Không phân biệt được hết bài / luồng cắt / nút trên loa nên LUÔN sang bài kế (không phát lại: phát lại bài đã hết là
+        sai). Stop trong Home Assistant (user_id/parent_id) hoặc hết bài kế → gỡ loa (dừng là dừng hẳn); đã tự chuyển trong
+        CHO_XAC_NHAN_DUNG_THAT_GIAY giây → Stop thật (nút trên loa/remote).
+        """
+        session_id = str(session.get("session_id") or "")
+        if session_id in self._advancing:
+            return
+        truoc = self._lan_tu_cuu.get((session_id, entity_id))
+        gan_day = truoc is not None and (now - truoc).total_seconds() < CHO_XAC_NHAN_DUNG_THAT_GIAY
+        co_bai_ke = self._next_from(session) is not None
+        sang_bai_ke = co_bai_ke and not self._da_ra_lenh(context) and not gan_day
+        LOGGER.warning(
+            "Session %s: %s went idle, bài không rõ thời lượng (user_id=%s parent_id=%s, có bài kế=%s, tự chuyển lần trước %s s trước) — %s",
+            session_id, entity_id, getattr(context, "user_id", None), getattr(context, "parent_id", None), co_bai_ke,
+            "-" if truoc is None else f"{(now - truoc).total_seconds():.0f}",
+            "sang bài kế" if sang_bai_ke else "coi là Stop/hết hàng đợi, gỡ loa khỏi phiên",
+        )
+        if sang_bai_ke:
+            self._ghi_tu_cuu(session_id, entity_id, now)
+            self._advancing.add(session_id)
+            self.hass.async_create_task(self._async_advance(session), eager_start=False)
+        else:
+            self.hass.async_create_task(self._async_remove_speaker(session, entity_id), eager_start=False)
 
     def _ghi_tu_cuu(self, session_id: str, entity_id: str, now: Any) -> None:
         self._lan_tu_cuu[(session_id, entity_id)] = now

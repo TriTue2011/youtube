@@ -194,5 +194,104 @@ class DungSomQuyetDinhTests(unittest.TestCase):
         self.adv._async_remove_speaker.assert_not_called()
 
 
+class BaiKhongRoThoiLuongTests(unittest.TestCase):
+    """Bài KHÔNG có thời lượng (duration 0/None, ví dụ bài dài «LK Bolero» 19/10/2026): trước đây loa về idle thì KHÔNG có gì xảy ra
+    (`observe_track` thấy không biết thời lượng nên không coi là hết bài cũng không là dừng sớm) → phiên «playing» mà loa đã im (23:16:31),
+    và tự chuyển bài không bao giờ chạy cho loại bài này.
+
+    Không biết thời lượng thì không phân biệt được hết bài / luồng cắt / nút trên loa, nên LUÔN sang bài kế (không phát lại — phát lại bài
+    đã hết là sai); Stop trong Home Assistant (user_id/parent_id) vẫn dừng hẳn; hết bài kế thì gỡ loa (dừng là dừng hẳn); đã tự chuyển trong
+    CHO_XAC_NHAN_DUNG_THAT_GIAY giây thì là Stop thật.
+    """
+
+    def setUp(self):
+        self.hass = MagicMock()
+        self.hass.async_create_task = MagicMock(side_effect=lambda coro, **kw: None)
+        self.adv = advance_mod.SessionAutoAdvance(self.hass, MagicMock())
+        self.adv._async_resume = MagicMock(return_value="coro-resume")
+        self.adv._async_remove_speaker = MagicMock(return_value="coro-remove")
+        self.adv._async_advance = MagicMock(return_value="coro-advance")
+        self.adv._next_from = MagicMock(return_value="queue")
+        self.session = {"session_id": "s1", "item": {**ITEM, "duration": 0}, "queue": {"index": 0}}
+
+    def _attrs(self, seconds, features=KHONG_TUA):
+        return {
+            "media_content_id": "dQw4w9WgXcQ", "supported_features": features,
+            "media_position_updated_at": (T0 + timedelta(seconds=seconds)).isoformat(),
+        }
+
+    def _play(self, seconds=0, features=KHONG_TUA):
+        with patch.object(advance_mod.dt_util, "utcnow", return_value=T0 + timedelta(seconds=seconds)):
+            self.adv._observe(self.session, SPEAKER, "playing", self._attrs(seconds, features), ctx())
+
+    def _idle(self, seconds, context, features=KHONG_TUA):
+        self.adv._advancing.clear()
+        with patch.object(advance_mod.dt_util, "utcnow", return_value=T0 + timedelta(seconds=seconds)):
+            self.adv._observe(self.session, SPEAKER, "idle", {"supported_features": features}, context)
+
+    def test_observe_track_khong_biet_thoi_luong_dat_co_khong_ro(self):
+        tracker = {}
+        observe_track(tracker, "playing", {"media_content_id": "dQw4w9WgXcQ"}, T0, {**ITEM, "duration": 0})
+        self.assertFalse(observe_track(tracker, "idle", {}, T0 + timedelta(seconds=200), {**ITEM, "duration": 0}))
+        self.assertTrue(tracker.get("het_khong_ro"))
+        self.assertNotIn("dung_som", tracker)
+
+    def test_loa_chua_tung_phat_roi_idle_thi_khong_co_gi(self):
+        tracker = {}
+        self.assertFalse(observe_track(tracker, "idle", {}, T0, {**ITEM, "duration": 0}))
+        self.assertNotIn("het_khong_ro", tracker)
+
+    def test_loa_tu_idle_thi_sang_bai_ke(self):
+        self._play(0)
+        self._idle(200, ctx())
+        self.adv._async_advance.assert_called_once()
+        self.adv._async_resume.assert_not_called()
+        self.adv._async_remove_speaker.assert_not_called()
+
+    def test_loa_tua_duoc_van_sang_bai_ke_khong_phat_lai(self):
+        self._play(0, CO_TUA)
+        self._idle(200, ctx(), CO_TUA)
+        self.adv._async_advance.assert_called_once()
+        self.adv._async_resume.assert_not_called()
+
+    def test_stop_trong_ha_dung_han(self):
+        for context in (ctx(user_id="u1"), ctx(parent_id="auto")):
+            with self.subTest(context=context):
+                self.adv._async_advance.reset_mock()
+                self.adv._async_remove_speaker.reset_mock()
+                self._play(0)
+                self._idle(200, context)
+                self.adv._async_remove_speaker.assert_called_once()
+                self.adv._async_advance.assert_not_called()
+
+    def test_het_bai_ke_thi_go_loa(self):
+        self.adv._next_from = MagicMock(return_value=None)
+        self._play(0)
+        self._idle(200, ctx())
+        self.adv._async_remove_speaker.assert_called_once()
+        self.adv._async_advance.assert_not_called()
+
+    def test_idle_lan_hai_trong_90_giay_la_stop_that(self):
+        self._play(0)
+        self._idle(200, ctx())
+        self.assertEqual(1, self.adv._async_advance.call_count)
+        self.session = {**self.session, "item": {**ITEM, "id": "vid2", "duration": 0}, "queue": {"index": 1}}
+        with patch.object(advance_mod.dt_util, "utcnow", return_value=T0 + timedelta(seconds=205)):
+            self.adv._observe(self.session, SPEAKER, "playing", {**self._attrs(205), "media_content_id": "vid2"}, ctx())
+        self._idle(240, ctx())                                           # chỉ 40 s sau lần tự chuyển
+        self.adv._async_remove_speaker.assert_called_once()
+        self.assertEqual(1, self.adv._async_advance.call_count)
+
+    def test_bai_dai_lan_hai_het_that_van_sang_bai_ke(self):
+        self._play(0)
+        self._idle(200, ctx())
+        self.session = {**self.session, "item": {**ITEM, "id": "vid2", "duration": 0}, "queue": {"index": 1}}
+        with patch.object(advance_mod.dt_util, "utcnow", return_value=T0 + timedelta(seconds=205)):
+            self.adv._observe(self.session, SPEAKER, "playing", {**self._attrs(205), "media_content_id": "vid2"}, ctx())
+        self._idle(205 + 200, ctx())                                     # bài thứ hai phát 200 s rồi hết
+        self.assertEqual(2, self.adv._async_advance.call_count)
+        self.adv._async_remove_speaker.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

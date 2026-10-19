@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.11 - 2026-10-19
+
+### Bài không có thời lượng không còn làm phiên «đang phát» khi loa đã im
+
+- Bài không có thời lượng (nguồn không khai, như bài dài «LK Bolero» đo 19/10/2026 23:16:31: loa `d50s` về `idle` sau ~451 s, thực thể YouTube vẫn báo `playing` nhiều phút) trước đây KHÔNG gây phản ứng nào: `observe_track` không biết thời lượng nên không coi là hết bài cũng không là dừng sớm. Hệ quả kép: phiên «sống» mà loa đã im, và tự chuyển bài không bao giờ chạy cho loại bài này.
+- Nay loa về `idle` sau khi đã phát: luôn SANG BÀI KẾ (không phát lại — không phân biệt được hết bài / luồng cắt / nút trên loa, phát lại bài đã hết là sai). Stop trong Home Assistant (`user_id`/`parent_id`) hoặc hết bài kế → gỡ loa khỏi phiên, nhạc dừng hẳn. Đã tự chuyển trong 90 giây → coi là Stop thật. Mọi đường dừng cứng (Home Assistant dừng/khởi động lại, máy phát im > 15 giây, gỡ tích hợp) giữ nguyên. Hạn chế đã biết: bài không rõ thời lượng ngắn hơn 90 giây mà hết liên tiếp bị coi là Stop.
+- Mỗi quyết định ghi một cảnh báo vào log Home Assistant.
+
 ## 0.27.10 - 2026-10-19
 
 ### Mã chép từ thẻ dùng được trong action và Assist

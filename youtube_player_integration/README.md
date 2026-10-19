@@ -79,6 +79,8 @@ playlist, ví dụ `https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID`.
 
 ### Loa tự dừng giữa bài
 
+Bài không có thời lượng (nguồn không khai): loa về `idle` thì luôn sang bài kế (hết bài kế hoặc Stop trong Home Assistant thì dừng hẳn); tích hợp không phân biệt được hết bài với luồng cắt nên không phát lại bài.
+
 Nếu loa tự về `idle` giữa bài mà không ai ra lệnh trong Home Assistant (luồng bị ngắt, thiết bị trục trặc), tích hợp giữ nhạc chạy: loa tua được thì phát tiếp đúng chỗ, loa không tua được (không có SEEK) thì sang bài kế. Stop bấm trong Home Assistant (hoặc do automation) luôn được tôn trọng ngay. Nút Stop trên chính loa/remote không phân biệt được với luồng bị cắt, nên chỉ được cứu MỘT lần: bấm lần nữa trong 90 giây là dừng thật. Mỗi lần xảy ra có một dòng cảnh báo trong log Home Assistant (`went idle early`).
 
 ## Tham chiếu action (6 action)

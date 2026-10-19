@@ -217,6 +217,10 @@ def observe_track(
         position, position_at = 0.0, tracker["playing_since"]
     tracker.pop("playing_since", None)
     if not duration or position is None:
+        if not duration:
+            # Không biết thời lượng (ví dụ bài dài, nguồn không khai) thì không phân biệt được hết bài / luồng cắt / nút trên
+            # loa. Báo cho nơi gọi quyết định (sang bài kế hoặc dừng hẳn) thay vì im lặng để phiên «playing» mà loa đã im.
+            tracker["het_khong_ro"] = True
         return False
     elapsed = max(0.0, (now - position_at).total_seconds())
     if position + elapsed >= duration - END_TOLERANCE_SECONDS:
