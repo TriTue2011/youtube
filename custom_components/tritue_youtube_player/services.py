@@ -37,6 +37,7 @@ from .playback import (
     normalize_target_entity_ids,
 )
 from .queue import QUEUE_KEY
+from .share_codes import async_playlist_id_from_code
 from .sessions import (
     active_sessions,
     attach_session_queue,
@@ -249,22 +250,24 @@ async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) ->
     if not code:
         raise _validation_error("invalid_playlist_code")
 
-    # 1. Mã chia sẻ: báo lỗi rõ ràng hướng dẫn người dùng nhập vào kho
-    if code.startswith("TTPL1."):
-        raise _validation_error("playlist_is_share_code")
-
-    # 2. YouTube playlist link/id: báo lỗi nhập vào kho trước
-    if "list=" in code or code.startswith("PL"):
-        raise _validation_error("youtube_playlist_not_imported")
-
-    # 3. Mã playlist gia đình trong kho (12 ký tự a-z0-9)
-    if re.fullmatch(r"^[a-z0-9]{12}$", code):
+    # 1. Id trong kho (12 ký tự a-z0-9) hoặc mã chia sẻ TTPL1. của nút chia sẻ trên thẻ. Mã chia sẻ được nhập vào
+    #    kho MỘT lần (nhớ ánh xạ mã -> id) nên automation chạy lặp không đẻ bản trùng.
+    if code.startswith("TTPL1.") or re.fullmatch(r"^[a-z0-9]{12}$", code):
+        try:
+            playlist_id = await async_playlist_id_from_code(hass, entry.runtime_data.client, code)
+        except ValueError as err:
+            key = str(err)
+            raise _validation_error(
+                key if key in {"invalid_playlist_code", "playlist_empty", "playlist_import_failed"} else "invalid_playlist_code"
+            ) from err
+        except YouTubePlayerApiError as err:
+            raise _validation_error("communication_error") from err
         try:
             data = await entry.runtime_data.client.async_playlists()
         except Exception as err:
             raise _validation_error("communication_error") from err
         playlists = data.get("playlists") or []
-        found = next((p for p in playlists if p.get("id") == code), None)
+        found = next((p for p in playlists if p.get("id") == playlist_id), None)
         if not found:
             raise _validation_error("playlist_not_found")
         items = found.get("items") or []
@@ -280,10 +283,14 @@ async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) ->
             target=target,
             entity_ids=call.data[ATTR_ENTITY_ID],
             volume_level=call.data.get(CONF_VOLUME_LEVEL),
-            playlist_id=code,
+            playlist_id=playlist_id,
             mode=call.data.get("mode"),
         )
         return
+
+    # 2. Link / id playlist YouTube: phải nhập vào kho trước (thẻ làm được, action thì không tạo bản trùng).
+    if "list=" in code or code.startswith("PL"):
+        raise _validation_error("youtube_playlist_not_imported")
 
     raise _validation_error("invalid_playlist_code")
 

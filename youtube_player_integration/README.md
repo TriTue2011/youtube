@@ -85,10 +85,16 @@ trong UI chọn từ danh sách thả xuống, không cần gõ tay.
 
 ### Lấy mã playlist / mã video ở đâu
 
-- **playlist_code** (đúng 12 ký tự): nhấn nút chép mã trên thẻ
-  `tritue-youtube-player-card` (nút `mdi:code-tags` ở mỗi dòng playlist) hoặc
-  nút ⧉ trong web app. Đây là mã nội bộ của thư viện, KHÔNG phải mã video
-  YouTube (YouTube chỉ 11 ký tự) — gõ mã video vào đây sẽ bị từ chối.
+- **playlist_code** (đúng 12 ký tự): nhấn nút **«Chép mã playlist (12 ký tự,
+  dùng cho automation)»** (biểu tượng `mdi:code-tags`) ở mỗi dòng playlist trên
+  thẻ `tritue-youtube-player-card`, hoặc nút ⧉ trong web app. Đây là mã nội bộ
+  của thư viện, KHÔNG phải mã video YouTube (YouTube chỉ 11 ký tự) — gõ mã
+  video vào đây sẽ bị từ chối. Nút **«Chia sẻ cho nhà khác (mã TTPL1)»** cạnh
+  bên xuất mã chia sẻ `TTPL1.…` (toàn bộ playlist nén + base64, rất dài) để gửi
+  cho nhà khác. Mã này cũng dùng được làm `playlist_code` và Assist `phat_playlist`:
+  lần đầu playlist được NHẬP vào kho (như dán mã vào ô Playlist của thẻ), các lần
+  sau dùng lại bản đã nhập nên chạy automation lặp không đẻ bản trùng. Mã 12 ký
+  tự ngắn và rõ ràng hơn, nên dùng nó trong automation nếu playlist đã có trong kho.
 - **queue_code**: nút chép mã trên thẻ, ví dụ `media_player.loa_phong_khach`.
 - **target**: mã video YouTube 11 ký tự (phần `v=` trong URL), URL video đầy
   đủ, hoặc URL bài Zing lấy từ kết quả tìm kiếm của card/web app. Trên thẻ có
@@ -140,7 +146,7 @@ data:
 | Tham số | Bắt buộc | Mô tả |
 |---|---|---|
 | `entry_id` | Có | ID bản cài integration |
-| `playlist_code` | Có | mã thư viện đúng 12 ký tự (chép từ thẻ) |
+| `playlist_code` | Có | mã thư viện 12 ký tự (chép từ thẻ) hoặc mã chia sẻ `TTPL1.…` (nhập vào kho một lần) |
 | `entity_id` | Có | một hoặc nhiều `media_player` |
 | `volume_level` | Không | 0–1 |
 | `mode` | Không | như `play_on_players` |

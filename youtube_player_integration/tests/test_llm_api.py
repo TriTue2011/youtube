@@ -356,6 +356,48 @@ class AssistLLMAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("can_hoi", result)
         self.assertEqual(2, len(result["danh_sach"]))
 
+    # --- Mã chia sẻ TTPL1. (nút chia sẻ của thẻ) cho phat_playlist -----------------------------------------
+    CODE_TTPL1 = "TTPL1.eNqrVkrLz1eyUkpKLFKqBQAcVwTr"
+
+    def _tool_input(self, choice):
+        return sys.modules["homeassistant.helpers.llm"].ToolInput(
+            "phat_playlist", {"danh_sach": choice, "loa": "phòng khách", "nguon_playlist": "kho"}
+        )
+
+    async def test_play_playlist_ttpl1_nhap_vao_kho_roi_phat(self):
+        playlist = {"id": "abcdef012345", "name": "Nhac thu", "items": [{"source": "youtube", "id": "dQw4w9WgXcQ"}]}
+        self.client.async_playlists = AsyncMock(side_effect=[{"playlists": []}, {"playlists": [playlist]}])
+        self.client.async_playlist_action = AsyncMock(return_value={"playlist": {"id": "abcdef012345"}})
+        store = MagicMock(async_load=AsyncMock(return_value={}), async_save=AsyncMock())
+        with patch("custom_components.tritue_youtube_player.share_codes.Store", return_value=store), \
+             patch("custom_components.tritue_youtube_player.services.async_dispatch",
+                   new=AsyncMock(return_value={"skipped_targets": []})) as dispatch:
+            result = await self.api_mod.PlayPlaylistTool().async_call(
+                self.hass, self._tool_input(self.CODE_TTPL1), self.context
+            )
+        self.assertNotIn("loi", result)
+        self.client.async_playlist_action.assert_awaited_once_with({"action": "import", "text": self.CODE_TTPL1})
+        self.assertEqual("abcdef012345", dispatch.await_args.kwargs["playlist_id"])
+        self.assertEqual("dQw4w9WgXcQ", dispatch.await_args.kwargs["target"])
+
+    async def test_play_playlist_ttpl1_hong_la_loi_sach_khong_cham_may_phat(self):
+        result = await self.api_mod.PlayPlaylistTool().async_call(
+            self.hass, self._tool_input("TTPL1.%%%"), self.context
+        )
+        self.assertIn("không hợp lệ", result["loi"])
+        self.client.async_playlist_action.assert_not_called()
+
+    async def test_play_playlist_ttpl1_may_phat_khong_tra_loi(self):
+        from custom_components.tritue_youtube_player.api import CannotConnectError
+        self.client.async_playlist_action = AsyncMock(side_effect=CannotConnectError("cannot_connect"))
+        store = MagicMock(async_load=AsyncMock(return_value={}), async_save=AsyncMock())
+        with patch("custom_components.tritue_youtube_player.share_codes.Store", return_value=store):
+            result = await self.api_mod.PlayPlaylistTool().async_call(
+                self.hass, self._tool_input(self.CODE_TTPL1), self.context
+            )
+        self.assertIn("không trả lời", result["loi"])
+        store.async_save.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

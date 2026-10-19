@@ -104,9 +104,6 @@
     "invalid_playlist_code": {
       "message": "Mã playlist không hợp lệ."
     },
-    "playlist_is_share_code": {
-      "message": "Đây là mã chia sẻ; hãy nhập vào kho bằng nút trên thẻ rồi dùng id trong kho."
-    },
     "youtube_playlist_not_imported": {
       "message": "Hãy nhập playlist này vào kho trước."
     },
@@ -121,6 +118,9 @@
     },
     "queue_empty": {
       "message": "Hàng đợi không có bài hát nào để phát."
+    },
+    "playlist_import_failed": {
+      "message": "Không nhập được playlist từ mã chia sẻ. Hãy thử lại hoặc nhập bằng nút trên thẻ."
     }
   },
   "services": {
@@ -180,7 +180,7 @@
         },
         "playlist_code": {
           "name": "Mã playlist",
-          "description": "Mã playlist 12 ký tự trong kho."
+          "description": "Mã playlist trong kho (12 ký tự) hoặc mã chia sẻ TTPL1. chép từ thẻ (nhập vào kho một lần)."
         },
         "entity_id": {
           "name": "Loa và màn hình",

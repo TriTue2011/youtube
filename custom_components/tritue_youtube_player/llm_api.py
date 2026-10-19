@@ -22,6 +22,7 @@ from homeassistant.util.json import JsonObjectType
 
 from .api import YouTubePlayerApiError
 from .playback import CHON_MODE_HOP_LE
+from .share_codes import async_playlist_id_from_code
 from .assist_tools import (
     PLAYLIST_SOURCES,
     SEARCH_LIMIT,
@@ -420,29 +421,40 @@ class PlayPlaylistTool(llm.Tool):
         user_key = _user_key(llm_context)
         source = tool_input.tool_args["nguon_playlist"]
 
+        playlist_id = None
+        title = ""
         if choice.startswith("TTPL1."):
-            return {"loi": "Đây là mã chia sẻ; hãy nhập vào kho bằng nút trên thẻ rồi dùng id trong kho."}
-        if "list=" in choice or choice.startswith("PL") or source == "youtube":
+            # Mã chia sẻ chép từ thẻ: nhập vào kho một lần rồi phát (không tạo bản trùng khi hỏi lại).
+            try:
+                playlist_id = await async_playlist_id_from_code(hass, entry.runtime_data.client, choice)
+            except ValueError as err:
+                return {"loi": "Playlist trong mã chia sẻ không có bài phát được." if str(err) == "playlist_empty"
+                        else "Mã chia sẻ playlist không hợp lệ."}
+            except YouTubePlayerApiError:
+                return {"loi": "Không nhập được playlist từ mã chia sẻ lúc này (máy phát không trả lời)."}
+            title = playlist_id
+        elif "list=" in choice or choice.startswith("PL") or source == "youtube":
             return {"loi": "Hãy nhập playlist này vào kho trước."}
 
-        mem = _memory(hass)
-        sub = mem.get(f"playlist_{source}_{user_key}") or mem.get(f"playlist_{source}", {}).get(user_key) or {}
-        items = sub.get("items") or []
+        if playlist_id is None:
+            mem = _memory(hass)
+            sub = mem.get(f"playlist_{source}_{user_key}") or mem.get(f"playlist_{source}", {}).get(user_key) or {}
+            items = sub.get("items") or []
 
-        safe_num = parse_safe_integer(choice)
-        if safe_num is not None:
-            if not items or (time.monotonic() - sub.get("at", 0) >= SEARCH_TTL):
-                return {"loi": "Danh sách tìm kiếm đã hết hạn hoặc chưa tìm, vui lòng tìm lại playlist."}
-            if not 1 <= safe_num <= len(items):
-                return {"loi": f"Số thứ tự {safe_num} không hợp lệ trong kết quả tìm kiếm (1-{len(items)})."}
-            selected = items[safe_num - 1]
-            playlist_id = str(selected.get("id"))
-            title = str(selected.get("name") or selected.get("title") or playlist_id)
-        elif re.fullmatch(r"^[a-z0-9]{12}$", choice):
-            playlist_id = choice
-            title = choice
-        else:
-            return {"loi": f"Mã playlist '{choice}' không hợp lệ. Vui lòng nhập số thứ tự từ tìm kiếm hoặc mã 12 ký tự trong kho."}
+            safe_num = parse_safe_integer(choice)
+            if safe_num is not None:
+                if not items or (time.monotonic() - sub.get("at", 0) >= SEARCH_TTL):
+                    return {"loi": "Danh sách tìm kiếm đã hết hạn hoặc chưa tìm, vui lòng tìm lại playlist."}
+                if not 1 <= safe_num <= len(items):
+                    return {"loi": f"Số thứ tự {safe_num} không hợp lệ trong kết quả tìm kiếm (1-{len(items)})."}
+                selected = items[safe_num - 1]
+                playlist_id = str(selected.get("id"))
+                title = str(selected.get("name") or selected.get("title") or playlist_id)
+            elif re.fullmatch(r"^[a-z0-9]{12}$", choice):
+                playlist_id = choice
+                title = choice
+            else:
+                return {"loi": f"Mã playlist '{choice}' không hợp lệ. Vui lòng nhập số thứ tự từ tìm kiếm hoặc mã 12 ký tự trong kho."}
 
         try:
             pl_data = await entry.runtime_data.client.async_playlists()

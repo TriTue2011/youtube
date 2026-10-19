@@ -90,7 +90,7 @@ play_playlist:
           integration: tritue_youtube_player
     playlist_code:
       name: Playlist code
-      description: 12-character library playlist ID (e.g. abcdef012345). Share codes must be imported into library first.
+      description: 12-character library playlist ID (e.g. abcdef012345), or a TTPL1. share code copied from the card (imported into the library once, then reused). A YouTube playlist link must be imported into the library first.
       required: true
       example: abcdef012345
       selector:

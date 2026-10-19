@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.10 - 2026-10-19
+
+### Mã chép từ thẻ dùng được trong action và Assist
+
+- **`play_playlist` và Assist `phat_playlist` nhận mã chia sẻ `TTPL1.`** (nút «Chia sẻ» của thẻ), ngoài id 12 ký tự trong kho. Trước đây mã này bị từ chối nên mã chép từ thẻ không dùng được. Mã được nhập vào kho một lần; ánh xạ «mã → id» được nhớ nên automation lặp không tạo bản trùng. Mã sai khuôn bị từ chối trước khi chạm máy phát; máy phát không trả lời thì báo `communication_error`.
+- **Thẻ:** các nút chép mã dùng hàm thuần (`CARD-COPY-HELPERS`, có `test-card-copy.js`): nút chép playlist luôn ra id 12 ký tự và từ chối mã dài; nhãn hai nút trên dòng playlist rõ ràng (chia sẻ cho nhà khác / chép mã cho automation). Phần này do Muse làm.
+- Khôi phục `test_services.py` (8 test của agy) bị sót khỏi bản 0.27.9, và thêm `test_share_code.py` (mã `TTPL1.`).
+- Tăng phiên bản vì tệp thẻ được nạp kèm `?v=<phiên bản>`: giữ 0.27.9 thì trình duyệt có thể vẫn dùng thẻ cũ trong bộ nhớ đệm.
+
 ## 0.27.9 - 2026-10-19
 
 ### Chạy action toàn bộ thông tin trên thẻ & Assist LLM API hoàn chỉnh

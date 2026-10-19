@@ -104,9 +104,6 @@
     "invalid_playlist_code": {
       "message": "The playlist code is not valid."
     },
-    "playlist_is_share_code": {
-      "message": "This is a share code. Please import it into your library using the button on the card, then use the 12-character library ID."
-    },
     "youtube_playlist_not_imported": {
       "message": "Please import this YouTube playlist into your library first."
     },
@@ -121,6 +118,9 @@
     },
     "queue_empty": {
       "message": "The queue contains no playable songs."
+    },
+    "playlist_import_failed": {
+      "message": "The playlist could not be imported from the share code. Try again or import it with the button on the card."
     }
   },
   "services": {
@@ -180,7 +180,7 @@
         },
         "playlist_code": {
           "name": "Playlist code",
-          "description": "12-character library playlist ID."
+          "description": "12-character library playlist ID, or a TTPL1. share code (imported into the library once)."
         },
         "entity_id": {
           "name": "Speakers and displays",

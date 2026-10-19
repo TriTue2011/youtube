@@ -41,6 +41,40 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 /* Mã video Facebook là một CHUỖI SỐ dài, khác hẳn mã 11 ký tự của YouTube. Dùng
    «VIDEO_ID» cho mục Facebook sẽ loại sạch chúng mà không báo lỗi gì. */
 const FB_VIDEO_ID = /^[0-9]{5,25}$/;
+/* === BEGIN CARD-COPY-HELPERS === */
+/* Chuỗi copy cho các nút «chép mã» trên thẻ — hàm thuần, không chạm DOM.
+   Test bởi youtube_player_integration/tests/test-card-copy.js (trích đoạn giữa hai mốc BEGIN/END rồi chạy
+   bằng node). Sửa ở đây thì chạy lại test đó.
+
+   BUG 2026-10-19 (chủ máy báo): bấm copy trên dòng playlist chép ra blob
+   TTPL1 khổng lồ (toàn bộ playlist nén + base64) thay vì mã playlist 12 ký tự.
+   Nguyên nhân: nút «Chép mã chia sẻ» cạnh bên cố ý xuất mã chia sẻ TTPL1 để
+   gửi cho nhà khác — còn nút chép mã phải LUÔN ra mã nội bộ 12 ký tự.
+   Vì vậy các hàm dưới TỪ CHỐI chép bất cứ thứ gì không đúng khuôn: id lạ
+   hoặc blob TTPL1 -> trả chuỗi rỗng, phía gọi hiện thông báo thay vì dán rác
+   vào clipboard. */
+const CARD_PLAYLIST_ID = /^[a-z0-9]{12}$/; // mã nội bộ do backend cấp (secrets.token_hex(6))
+const CARD_SHARE_PREFIX = "TTPL1."; // mã chia sẻ: base64url(zlib(JSON)) toàn bộ playlist
+
+function cardCopyPlaylistText(playlist) {
+  const id = String(playlist?.id ?? "").trim();
+  if (!CARD_PLAYLIST_ID.test(id)) return "";
+  return `playlist_code: ${id}`;
+}
+
+function cardCopyItemText(item, fallbackSource) {
+  const source = String(item?.source || fallbackSource || "youtube").trim() || "youtube";
+  const target = String(item?.id ?? "").trim() || String(item?.url ?? "").trim();
+  if (!target) return "";
+  if (target.startsWith(CARD_SHARE_PREFIX) || target.length > 2048) return "";
+  return `source: ${source}\ntarget: ${target}`;
+}
+
+function cardCopyQueueText(key) {
+  const k = String(key ?? "").trim();
+  return k ? `queue_code: ${k}` : "";
+}
+/* === END CARD-COPY-HELPERS === */
 const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
 /** Máy này có phải iOS / iPadOS không.
@@ -8669,8 +8703,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       play.addEventListener("click", () => this._playResult(playlist.items[0], play, 0, false, playlist));
       tools.append(
         play,
-        iconButton("mdi:content-copy", `Chép mã chia sẻ “${playlist.name}”`, (button) => this._sharePlaylist(playlist, button)),
-        iconButton("mdi:code-tags", `Chép id playlist “${playlist.name}”`, () => this._copyPlaylistCode(playlist)),
+        iconButton("mdi:content-copy", `Chia sẻ “${playlist.name}” cho nhà khác (mã TTPL1, chép để gửi đi)`, (button) => this._sharePlaylist(playlist, button)),
+        iconButton("mdi:code-tags", `Chép mã playlist “${playlist.name}” (12 ký tự, dùng cho automation)`, () => this._copyPlaylistCode(playlist)),
         iconButton("mdi:pencil", `Đổi tên “${playlist.name}”`, (button) => {
           const newName = window.prompt("Tên mới của playlist:", playlist.name);
           if (newName && newName.trim() && newName.trim() !== playlist.name) {
@@ -8765,25 +8799,30 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   }
 
   _copyItemCode(item, title = "") {
-    const target = item?.id || item?.url || "";
-    if (!target) return;
+    const text = cardCopyItemText(item, this._source);
+    const name = title || item?.title || "";
+    if (!text) {
+      this._setStatus(`Không lấy được mã bài hát “${name}” — thử tải lại thẻ.`, true);
+      return;
+    }
     const source = item?.source || this._source || "youtube";
-    const name = title || item?.title || target;
-    const yaml = `source: ${source}\ntarget: ${target}`;
-    this._copyText(yaml, `Đã chép mã bài hát nguồn ${source}: “${name}”`, `Cấu hình automation cho bài hát “${name}”:`);
+    this._copyText(text, `Đã chép mã bài hát nguồn ${source}: “${name}”`, `Cấu hình automation cho bài hát “${name}”:`);
   }
 
   _copyQueueCode(key, name = "") {
-    if (!key) return;
+    const yaml = cardCopyQueueText(key);
+    if (!yaml) return;
     const ten = name || this._queueName(key) || key;
-    const yaml = `queue_code: ${key}`;
     this._copyText(yaml, `Đã chép mã hàng đợi “${ten}” (${key})`, `Cấu hình automation cho hàng đợi “${ten}”:`);
   }
 
   _copyPlaylistCode(playlist) {
-    if (!playlist?.id) return;
-    const yaml = `playlist_code: ${playlist.id}`;
-    this._copyText(yaml, `Đã chép id playlist kho “${playlist.name}” (${playlist.id})`, `Cấu hình automation cho playlist “${playlist.name}”:`);
+    const yaml = cardCopyPlaylistText(playlist);
+    if (!yaml) {
+      this._setStatus(`Không lấy được mã playlist “${playlist?.name || ""}” — thử tải lại thẻ.`, true);
+      return;
+    }
+    this._copyText(yaml, `Đã chép mã playlist “${playlist.name}” (${playlist.id})`, `Cấu hình automation cho playlist “${playlist.name}”:`);
   }
 
   _setStatus(message, error = false) {
