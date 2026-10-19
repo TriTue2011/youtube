@@ -1033,6 +1033,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "invalid_stream_token"})
             return
         response_started = False
+        so_chunk = 0
         try:
             source, target = verify_stream_token(token, self.server.integration_token)
             range_header = self.headers.get("Range")
@@ -1076,6 +1077,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                         self.wfile.write(piece)
                 if end is None or at > end:
                     break
+                so_chunk += 1
                 response, resolved = self.open_upstream(
                     source, target, at, min(at + STREAM_CHUNK - 1, end)
                 )
@@ -1083,9 +1085,18 @@ class PlayerHandler(BaseHTTPRequestHandler):
             self.send_json(403, {"error": "invalid_stream_token"})
         except (BrokenPipeError, ConnectionResetError):
             return
-        except (StreamUnavailableError, OSError):
+        except (StreamUnavailableError, OSError) as error:
             if not response_started:
                 self.send_json(502, {"error": "stream_unavailable"})
+            else:
+                # Chunk lỗi SAU KHI đã bắt đầu trả response: loa thấy stream đứt
+                # đột ngột và dừng giữa bài. Trước đây im lặng return; nay log
+                # ERROR để tra được nguyên nhân. Chỉ log 8 ký tự đầu token.
+                self.log_message(
+                    "ERROR proxy_stream: chunk %d bi loi sau khi response da started "
+                    "(token %s..., source=%s): %s: %s",
+                    so_chunk, token[:8], source,
+                    type(error).__name__, error)
 
     def open_upstream(self, source, target, tu, den):
         """Open one BOUNDED chunk of the audio upstream.

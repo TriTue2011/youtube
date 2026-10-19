@@ -22,6 +22,9 @@
   - `async_stop_session` gọi `detach_session_queue` khi phiên kết thúc (trước đây hàm tồn tại nhưng không nơi nào gọi, bản đồ hàng đợi gắn phiên phình vô hạn); gỡ lệnh `tua` khỏi `ControlMusicTool`.
   - Hàm phân tích số an toàn `parse_safe_integer` chống tràn số (`9*5000`) và ký tự Unicode (`²`).
   - `extract_item_id` dùng bộ kiểm chuẩn của YouTube và suggestions.
+- **Web app máy phát:** nút «⧉ Chép mã đang phát» và nút chép cho từng mục «Đã phát gần đây» (`copy.js`, có đường lùi `window.prompt` khi clipboard hỏng); thẻ Home Assistant đã có sẵn các nút chép mã nên không đổi.
+- **Tự chuyển bài không còn dừng im lặng khi YouTube giới hạn tốc độ:** lỗi tạm thời (429, hết giờ, mất mạng) thử lại tối đa 3 lần (chờ 2s/5s/10s); video bị xoá thì bỏ qua và chuyển bài kế (dừng sau 5 bài lỗi liên tiếp); hết thử lại thì báo bằng `persistent_notification` thay vì chỉ ghi log. Máy phát ghi log lỗi khi đường chuyển tiếp đứt giữa chừng (không ghi token). CHƯA kiểm trên YouTube thật: nguyên nhân «tự dừng sau 2–3 bài» là suy luận từ mã, chưa tái hiện.
+- **`mode` của action/Assist chỉ có `audio` và `video`:** các mức 360p…1080p đã được thử rồi gỡ vì không tới luồng hình nào ở đường action (TV mở ứng dụng YouTube gốc và tự chọn chất lượng); test `test_mode_hop_le` giữ chỗ để không thêm lại ô giả.
 
 ## 0.27.8 - 2026-10-06
 

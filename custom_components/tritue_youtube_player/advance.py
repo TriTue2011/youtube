@@ -9,6 +9,7 @@ same speakers.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
@@ -21,6 +22,39 @@ from .const import LOGGER
 from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
 from .sessions import active_sessions, is_controlled_by, observe_interruption, observe_track, queue_item, session_queue_key
+
+#: Chờ giữa các lần thử lại lỗi tạm thời khi tự chuyển bài (giây): 2s, 5s, 10s.
+CHO_GIUA_CAC_LAN_THU_GIAY = (2, 5, 10)
+#: Bỏ qua tối đa N bài lỗi vĩnh viễn liên tiếp trước khi dừng và báo người dùng.
+BO_QUA_VINH_VIEN_TOI_DA = 5
+
+
+def _loai_loi_tu_dong_chuyen(error: BaseException) -> str:
+    """Phân loại lỗi tự chuyển bài: 'tam_thoi' | 'vinh_vien' | 'het'.
+
+    - 'tam_thoi': 429/throttle/timeout/mất mạng → thử lại với chờ tăng dần.
+    - 'vinh_vien': video bị xoá/không tồn tại/target không hợp lệ → bỏ qua bài, chuyển bài kế.
+    - 'het': hết hàng đợi/phiên không còn → không phải lỗi, dừng êm.
+    """
+    from .api import CannotConnectError, InvalidTargetError  # noqa: PLC0415
+
+    da_thay: set[int] = set()
+    xau: BaseException | None = error
+    while xau is not None and id(xau) not in da_thay:
+        da_thay.add(id(xau))
+        if isinstance(xau, CannotConnectError):
+            return "tam_thoi"
+        if isinstance(xau, InvalidTargetError):
+            return "vinh_vien"
+        xau = xau.__cause__ or xau.__context__
+    khoa = getattr(error, "translation_key", None)
+    if khoa in ("queue_end", "session_not_found"):
+        return "het"
+    if khoa == "invalid_target":
+        return "vinh_vien"
+    # playback_error và các lỗi HA khác: mặc định coi là tạm thời vì throttle
+    # lúc yt-dlp extract là ca phổ biến nhất của tự dừng sau 2-3 bài.
+    return "tam_thoi"
 
 
 class SessionAutoAdvance:
@@ -224,11 +258,114 @@ class SessionAutoAdvance:
 
         session_id = str(session.get("session_id") or "")
         try:
-            if self._next_from(session) == "queue":
-                await async_play_queue_next(self.hass, self.entry, session)
-            else:
-                await async_skip(self.hass, self.entry, session.get("session_id"), 1)
-        except HomeAssistantError as error:
-            LOGGER.warning("Auto-advance of session %s failed: %s", session_id, error)
+            await self._async_chuyen_bai_co_thu_lai(session, async_play_queue_next, async_skip)
         finally:
             self._advancing.discard(session_id)
+
+    async def _async_chuyen_bai(self, session: dict[str, Any], fn_queue_next, fn_skip) -> None:
+        """Chuyển sang bài kế một lần (không thử lại)."""
+        if self._next_from(session) == "queue":
+            await fn_queue_next(self.hass, self.entry, session)
+        else:
+            await fn_skip(self.hass, self.entry, session.get("session_id"), 1)
+
+    async def _async_chuyen_bai_co_thu_lai(
+        self, session: dict[str, Any], fn_queue_next, fn_skip
+    ) -> None:
+        """Tự chuyển bài có phân loại lỗi (sửa bug tự dừng sau 2-3 bài).
+
+        - Lỗi tạm thời (YouTube throttle/429 lúc extract, mất mạng): thử lại với
+          chờ tăng dần. Lưu ý đường queue đã pop bài trước khi phát nên "thử lại"
+          thực chất là thử bài kế — vẫn tốt hơn dừng hẳn.
+        - Lỗi vĩnh viễn (video bị xoá/không tồn tại): bỏ qua bài ngay, chuyển bài kế.
+        - Hết hàng đợi: dừng êm, không báo.
+        Hết retry hoặc quá nhiều bài lỗi vĩnh viễn liên tiếp → báo người dùng qua
+        persistent_notification thay vì im lặng như trước.
+        """
+        session_id = str(session.get("session_id") or "")
+        bo_qua_vinh_vien = 0
+        loi_cho_xu_ly: HomeAssistantError | None = None
+        while True:
+            try:
+                if loi_cho_xu_ly is not None:
+                    raise loi_cho_xu_ly
+                await self._async_chuyen_bai(session, fn_queue_next, fn_skip)
+                return
+            except HomeAssistantError as error:
+                loi_cho_xu_ly = None
+                loai = _loai_loi_tu_dong_chuyen(error)
+                if loai == "het":
+                    LOGGER.debug("Auto-advance of session %s: hết hàng đợi, dừng êm", session_id)
+                    return
+                if loai == "vinh_vien":
+                    bo_qua_vinh_vien += 1
+                    if bo_qua_vinh_vien >= BO_QUA_VINH_VIEN_TOI_DA:
+                        LOGGER.error(
+                            "Auto-advance of session %s: %d bài lỗi vĩnh viễn liên tiếp — dừng",
+                            session_id, bo_qua_vinh_vien)
+                        await self._async_bao_loi_nguoi_dung(
+                            session_id,
+                            f"Tự chuyển bài dừng: {bo_qua_vinh_vien} bài liên tiếp không phát được "
+                            "(video có thể đã bị xoá hoặc không tồn tại).")
+                        return
+                    LOGGER.warning(
+                        "Auto-advance of session %s: bỏ qua bài lỗi vĩnh viễn (%s), chuyển bài kế (%d/%d)",
+                        session_id, error, bo_qua_vinh_vien, BO_QUA_VINH_VIEN_TOI_DA)
+                    continue
+                # loai == "tam_thoi"
+                loi_cuoi = await self._async_thu_lai_tam_thoi(
+                    session, fn_queue_next, fn_skip, session_id, error)
+                if loi_cuoi is None:
+                    return
+                if _loai_loi_tu_dong_chuyen(loi_cuoi) == "tam_thoi":
+                    LOGGER.error(
+                        "Auto-advance of session %s: vẫn lỗi sau %d lần thử (%s) — dừng",
+                        session_id, len(CHO_GIUA_CAC_LAN_THU_GIAY), loi_cuoi)
+                    await self._async_bao_loi_nguoi_dung(
+                        session_id,
+                        "Tự chuyển bài dừng: máy phát nhạc không trả lời sau nhiều lần thử "
+                        f"({loi_cuoi}). Hãy thử phát lại.")
+                    return
+                # Lỗi đổi loại trong lúc thử lại → vòng lặp phân loại lại từ đầu.
+                loi_cho_xu_ly = loi_cuoi
+
+    async def _async_thu_lai_tam_thoi(
+        self, session: dict[str, Any], fn_queue_next, fn_skip,
+        session_id: str, loi_dau: HomeAssistantError,
+    ) -> HomeAssistantError | None:
+        """Thử lại lỗi tạm thời với chờ tăng dần.
+
+        Trả None nếu một lần thử thành công; ngược lại trả lỗi cuối cùng
+        (có thể đã đổi loại — để vòng ngoài phân loại lại).
+        """
+        loi = loi_dau
+        for lan, cho_giay in enumerate(CHO_GIUA_CAC_LAN_THU_GIAY, start=1):
+            LOGGER.warning(
+                "Auto-advance of session %s thất bại (lần thử %d/%d): %s — thử lại sau %d giây",
+                session_id, lan, len(CHO_GIUA_CAC_LAN_THU_GIAY), loi, cho_giay)
+            await asyncio.sleep(cho_giay)
+            try:
+                await self._async_chuyen_bai(session, fn_queue_next, fn_skip)
+            except HomeAssistantError as loi_moi:
+                if _loai_loi_tu_dong_chuyen(loi_moi) != "tam_thoi":
+                    return loi_moi
+                loi = loi_moi
+            else:
+                LOGGER.info(
+                    "Auto-advance of session %s: thử lại lần %d thành công", session_id, lan)
+                return None
+        return loi
+
+    async def _async_bao_loi_nguoi_dung(self, session_id: str, thong_bao: str) -> None:
+        """Báo cho người dùng qua persistent notification (không im lặng như trước)."""
+        try:
+            await self.hass.services.async_call(
+                "persistent_notification", "create",
+                {"title": "TriTue YouTube Player",
+                 "message": thong_bao,
+                 "notification_id": f"tritue_youtube_advance_{session_id}"},
+                blocking=False,
+            )
+        except Exception as error:  # noqa: BLE001 — báo lỗi không được làm hỏng luồng chính
+            LOGGER.warning(
+                "Không gửi được thông báo tự chuyển bài cho phiên %s: %s", session_id, error)
