@@ -244,32 +244,79 @@ các **mục** chứa **video ghim sẵn** (bấm là phát).
 
 ### 3.7. Nói với trợ lý Assist
 
-Bật **TriTue Music** trong trợ lý (LLM) của Home Assistant rồi nói *"mở bài …"*. Trợ lý
-đưa 10 bài, hỏi phát ra loa nào (một, nhiều, hay tất cả) rồi phát. Nói được cả *"bài
-kế ở bếp"*, *"dừng loa phòng khách"*, *"đang phát gì"*.
+Bật **TriTue Music** trong trợ lý (LLM) của Home Assistant để tìm và điều khiển nhạc bằng giọng nói tự nhiên:
 
-### 3.8. Tự động hoá
+- **Bài hát:**
+  - *"Tìm bài Nơi này có anh"* → trợ lý gọi `tim_nhac`, trả danh sách đánh số 1..N.
+  - *"Phát số 1 ở phòng khách"* hoặc *"Phát bài theo mã dQw4w9WgXcQ ra phòng ngủ"* → trợ lý gọi `phat_nhac`. Hỗ trợ chọn chế độ `mode: video` hoặc `audio`.
+- **Playlist:**
+  - Gồm hai loại nguồn do agent hội thoại quyết định theo câu nói: `kho` (playlist lưu trong nhà) hoặc `youtube` (playlist trên YouTube).
+  - *"Tìm playlist của tôi / trong kho"* hoặc *"Tìm playlist Sơn Tùng trên YouTube"* → trợ lý gọi `tim_playlist` với `nguon_playlist: kho` hoặc `youtube`.
+  - *"Phát playlist số 1"* hoặc *"Phát playlist mã abcd1234efgh"* → trợ lý gọi `phat_playlist`.
+- **Hàng đợi (Queue):**
+  - *"Phát hàng đợi ở phòng khách"* → trợ lý gọi `phat_hang_doi` (chạy luôn không hỏi lại; nếu không nói rõ loa thì tự chọn loa theo thứ tự ưu tiên hoặc hỏi 1 lần).
+  - *"Xem hàng đợi"*, *"Xoá bài 2 khỏi hàng đợi"*, *"Xoá hết hàng đợi"*, *"Nhảy tới bài 2"* → trợ lý gọi `hang_doi`.
+- **Điều khiển phát:**
+  - *"Tạm dừng"*, *"Tiếp tục"*, *"Bài tiếp theo"*, *"Bài trước"*, *"Dừng phát"*, *"Đang phát bài gì"*.
 
-Tích hợp có bốn action dùng được trong script và automation:
+#### Dùng cùng Music Assistant hoặc các nguồn nhạc khác
+
+TriTue Player tuân theo nguyên tắc mở, không độc quyền nguồn phát. Nếu ngôi nhà có nhiều nguồn nhạc (ví dụ Music Assistant, Spotify, TriTue YouTube Player):
+- Khi câu nói của người dùng đã chỉ rõ nguồn (ví dụ: *"trên YouTube"*, *"trong kho"*, *"trên Music Assistant"*), trợ lý gọi đúng công cụ của nguồn đó.
+- Khi người dùng chỉ nói chung chung *"Bật nhạc Trịnh Công Sơn"* mà nhiều nguồn đều đáp ứng được, trợ lý LLM sẽ liệt kê các nguồn khả dĩ thành danh sách đánh số (1. TriTue YouTube / Kho gia đình, 2. Music Assistant...) để người dùng lựa chọn trước khi phát.
+
+### 3.8. Tự động hoá và Actions
+
+Mọi thông tin trên thẻ đều có thể lấy mã bằng nút **Chép mã** (`mdi:content-copy`, chép đoạn YAML 2 dòng dán thẳng vào automation) để chạy trong automation, script, hoặc Developer Tools:
 
 | Action | Làm gì |
 |---|---|
-| `tritue_youtube_player.play_on_players` | Phát một bài YouTube, Zing công khai hoặc link HTTP ra một hoặc nhiều loa; đặt được âm lượng, nhập vào nhóm đang phát, hoặc phát cả playlist |
-| `tritue_youtube_player.skip` | Sang bài kế (hoặc lùi bài) của một nhóm loa |
-| `tritue_youtube_player.stop_session` | Dừng hẳn một nhóm loa |
-| `tritue_youtube_player.remove_players` | Rút một số loa khỏi nhóm, các loa còn lại tiếp tục |
+| `tritue_youtube_player.play_on_players` | Phát một bài YouTube, Zing công khai hoặc link HTTP theo mã/URL; tuỳ chọn `mode` (audio/video, chỉ áp dụng cho YouTube), âm lượng |
+| `tritue_youtube_player.play_playlist` | Phát playlist theo id 12 ký tự trong kho (chép từ nút «Chép id playlist» trên thẻ) ra các loa |
+| `tritue_youtube_player.play_queue` | Phát toàn bộ hàng đợi theo mã khoá (`queue_code`) ra các loa (`entity_id` bắt buộc) |
+| `tritue_youtube_player.skip` | Sang bài kế (hoặc lùi bài) của một phiên phát |
+| `tritue_youtube_player.stop_session` | Dừng hẳn phiên phát trên các loa |
+| `tritue_youtube_player.remove_players` | Rút một số loa khỏi phiên, các loa còn lại tiếp tục |
 
-Ví dụ — sáng 6 giờ bật nhạc ra loa phòng khách:
+> [!NOTE]
+> Action được thiết kế **chỉ phát theo mã cụ thể** (lấy từ nút chép mã trên thẻ hoặc dán từ YouTube), không tìm kiếm hay liệt kê qua action. Để tìm kiếm tương tác bằng ngôn ngữ tự nhiên, hãy dùng trợ lý Assist.
+
+**Ví dụ 1 — Phát bài hát theo mã (chế độ video trên TV):**
 
 ```yaml
 action: tritue_youtube_player.play_on_players
 data:
-  entry_id: 01J00000000000000000000000   # mã mục cấu hình của tích hợp
-  source: youtube                        # youtube | zing | http
-  target: dQw4w9WgXcQ                    # mã video, link YouTube, hoặc link Zing
+  entry_id: 01J00000000000000000000000   # chọn qua danh sách config_entry
+  source: youtube
+  target: dQw4w9WgXcQ                    # mã video hoặc link
   entity_id:
-    - media_player.phong_khach
-  volume_level: 0.35
+    - media_player.tv_phong_khach
+  mode: video
+  volume_level: 0.4
+```
+
+**Ví dụ 2 — Phát playlist theo ID trong kho:**
+
+```yaml
+action: tritue_youtube_player.play_playlist
+data:
+  entry_id: 01J00000000000000000000000
+  playlist_code: abcd1234efgh          # mã 12 ký tự trong kho chép từ nút Chép id playlist trên thẻ
+  entity_id:
+    - media_player.loa_phong_ngu
+  mode: audio
+  volume_level: 0.3
+```
+
+**Ví dụ 3 — Phát hàng đợi đã lưu ra loa:**
+
+```yaml
+action: tritue_youtube_player.play_queue
+data:
+  entry_id: 01J00000000000000000000000
+  queue_code: media_player.loa_phong_khach   # mã hàng đợi chép từ nút sao chép ở header Queue
+  entity_id:
+    - media_player.loa_phong_khach
 ```
 
 Tham số đầy đủ xem trong **Developer tools → Actions**, hoặc tệp

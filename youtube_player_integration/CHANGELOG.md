@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.27.9 - 2026-10-19
+
+### Chạy action toàn bộ thông tin trên thẻ & Assist LLM API hoàn chỉnh
+
+- **Sửa hồi quy và chuẩn hoá selector action (N1, N2, N5):**
+  - Gỡ giá trị mặc định `mode: audio` ở schema và `services.yaml` để giữ nguyên hành vi khi không truyền `mode` (Cast TV/Android TV tự động nhận dạng đúng thay vì bị ép `audio/mpeg`).
+  - Gỡ ô giả `video_quality` khỏi schema, services.yaml và tài liệu (do máy phát chưa hỗ trợ `max_height` cho YouTube/Zing).
+  - Chuẩn hoá schema khớp 100% `services.yaml`: `entity_id` bắt buộc ở cả `play_queue` lẫn `play_playlist`; gỡ các trường thừa `session_id`, `join` khỏi `services.yaml` của `play_playlist` và `play_queue`; giữ selector `entry_id` kiểu `text:` cho `skip`, `stop_session`, `remove_players`.
+- **Hàng đợi và phiên phát (N3, N4):**
+  - `play_queue` và `phat_hang_doi` dùng chung logic `async_play_queue`: phát bài đầu tiên, đánh dấu `current` + `played`, gắn mã hàng đợi vào phiên phát (`attach_session_queue`) để `advance` tự chuyển bài đúng hàng đợi.
+  - `phat_hang_doi` và lệnh `nhay` của `hang_doi` không ép `queue.get("mode")` mà để mặc định `None` tránh lỗi trên loa thuần âm thanh; `nhay` bắt `HomeAssistantError`/`ServiceValidationError` và chỉ dời `current` khi phát thành công.
+- **Playlist và mã chia sẻ (N6, N7, N8):**
+  - Action `play_playlist` và `phat_playlist` chỉ nhận mã id 12 ký tự trong kho (`^[a-z0-9]{12}$`). Mã chia sẻ `TTPL1.` và link YouTube chưa import được từ chối với thông báo lỗi rõ ràng thay vì tạo bản ghi trùng lặp hoặc phát thất bại.
+  - `tim_playlist` và `hang_doi` trả danh sách ứng viên `can_hoi` khi có nhiều kết quả khớp thay vì chọn ngẫu nhiên bài đầu tiên.
+  - `phat_playlist` yêu cầu bắt buộc `nguon_playlist`.
+- **Nút chép mã trên thẻ (N7, N9):**
+  - Bổ sung nút «Chép id playlist» bên cạnh nút chia sẻ playlist trong kho.
+  - Nút chép mã trên thẻ xuất đoạn YAML 2 dòng dán thẳng vào automation: `source: ...\ntarget: ...` cho bài hát, `playlist_code: ...` cho playlist, và `queue_code: ...` cho hàng đợi.
+- **Dọn dẹp mã và kiểm soát ngoại lệ (N10, N11):**
+  - `async_stop_session` gọi `detach_session_queue` khi phiên kết thúc (trước đây hàm tồn tại nhưng không nơi nào gọi, bản đồ hàng đợi gắn phiên phình vô hạn); gỡ lệnh `tua` khỏi `ControlMusicTool`.
+  - Hàm phân tích số an toàn `parse_safe_integer` chống tràn số (`9*5000`) và ký tự Unicode (`²`).
+  - `extract_item_id` dùng bộ kiểm chuẩn của YouTube và suggestions.
+
 ## 0.27.8 - 2026-10-06
 
 ### Dừng là dừng hẳn — kể cả khi máy phát đã quên phiên

@@ -3244,6 +3244,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                       <div class="nghe-phu">Chọn một bài trong kết quả để bắt đầu.</div>
                     </div>
                     <span class="nghe-nguon" hidden></span>
+                    <button class="icon-button nghe-copy" type="button" aria-label="Chép mã bài đang phát" title="Chép mã bài đang phát" hidden><ha-icon icon="mdi:content-copy"></ha-icon></button>
                   </div>
                   <div class="nghe-hang">
                     <div class="nghe-bia" role="button" tabindex="0" aria-pressed="false" aria-label="Dừng hoặc cho đĩa quay lại" title="Bấm để dừng đĩa">
@@ -3283,6 +3284,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
                   <button class="ctl video-expand" type="button" aria-label="Phóng to video" title="Phóng to" hidden><ha-icon icon="mdi:arrow-expand"></ha-icon></button>
                   <button class="ctl video-fullscreen" type="button" aria-label="Xem toàn màn hình" title="Toàn màn hình" hidden><ha-icon icon="mdi:fullscreen"></ha-icon></button>
                   <button class="ctl video-close" type="button" aria-label="Đóng video" title="Đóng video" hidden><ha-icon icon="mdi:close"></ha-icon></button>
+                  <button class="ctl copy-current" type="button" aria-label="Chép mã bài đang phát" title="Chép mã bài đang phát" hidden><ha-icon icon="mdi:content-copy"></ha-icon></button>
                 </div>
                 <div class="device-row">
                   <button class="pill device-sound" type="button" aria-pressed="false" hidden><ha-icon icon="mdi:volume-off"></ha-icon><span>Nghe trên máy này</span></button>
@@ -3477,6 +3479,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this.shadowRoot.querySelector(".next").addEventListener("click", () => this._skip(1));
     this.shadowRoot.querySelector(".stop").addEventListener("click", () => this._stop());
     this.shadowRoot.querySelector(".watch").addEventListener("click", () => this._watchCurrent());
+    const saoChepDangPhat = () => {
+      const phien = this._focusedSession();
+      const bai = (this._video.open && this._video.item)
+        ? this._video.item
+        : (deviceAudio.item || (phien?.title ? { id: phien.id, url: phien.url, title: phien.title } : null));
+      if (bai) this._copyItemCode(bai, bai.title);
+    };
+    this.shadowRoot.querySelector(".copy-current")?.addEventListener("click", saoChepDangPhat);
+    this.shadowRoot.querySelector(".nghe-copy")?.addEventListener("click", saoChepDangPhat);
     this.shadowRoot.querySelector(".results-toggle").addEventListener("click", () => {
       this._ketQuaThuGon = !this._ketQuaThuGon;
       this._syncKetQuaThuGon();
@@ -4487,6 +4498,20 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       ".video-fullscreen", ".video-close"]) {
       this.shadowRoot.querySelector(selector).hidden = !hienHinh;
     }
+    const curItem = video.open
+      ? video.item
+      : (deviceAudio.item || (session?.title ? { id: session.id, url: session.url, title: session.title } : null));
+    const curCode = curItem ? (curItem.id || curItem.url || "") : "";
+    const copyCtl = this.shadowRoot.querySelector(".copy-current");
+    if (copyCtl) {
+      copyCtl.hidden = !hienHinh || !curCode;
+      if (curCode) copyCtl.title = `Chép mã video đang phát (${curCode})`;
+    }
+    const ngheCopy = this.shadowRoot.querySelector(".nghe-copy");
+    if (ngheCopy) {
+      ngheCopy.hidden = !curCode;
+      if (curCode) ngheCopy.title = `Chép mã bài đang phát (${curCode})`;
+    }
     // "Nghe trên máy này": speakers play, and this device plays the sound too (the
     // picture's own sound, or an audio element following the speakers).
     const soundOn = deviceAudio.along || (video.open && video.withSpeakers && video.soundHere);
@@ -5391,6 +5416,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           ghim.addEventListener("click", () => this._toggleGhimMenu(row, item, title.textContent));
           actions.append(ghim);
         }
+        const copySong = document.createElement("button");
+        copySong.type = "button";
+        copySong.className = "icon-button copy-song-code";
+        copySong.title = `Chép mã bài hát “${title.textContent}”`;
+        copySong.setAttribute("aria-label", copySong.title);
+        const copySongIcon = document.createElement("ha-icon");
+        copySongIcon.setAttribute("icon", "mdi:content-copy");
+        copySong.append(copySongIcon);
+        copySong.addEventListener("click", () => this._copyItemCode(item, title.textContent));
+        actions.append(copySong);
       }
       if (this._isVideoItem(item, item.source || this._source)) action("mdi:television-play", "Xem video", true);
       action("mdi:headphones", "Nghe (chỉ tiếng)", false);
@@ -8203,7 +8238,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return node;
     };
     const head = el("div", "queue-head");
+    const copyQueue = el("button", "icon-button queue-copy");
+    copyQueue.type = "button";
+    copyQueue.title = `Chép mã hàng đợi “${this._queueName(key)}” (${key})`;
+    copyQueue.setAttribute("aria-label", copyQueue.title);
+    copyQueue.append(icon("mdi:content-copy"));
+    copyQueue.addEventListener("click", () => this._copyQueueCode(key, this._queueName(key)));
     head.append(el("span", "queue-title", `Queue · ${this._queueName(key)}`),
+      copyQueue,
       el("span", "queue-count", `${list.items.length} bài`));
     const controls = el("div", "queue-controls");
     const nhom = (ten, lua) => {
@@ -8281,6 +8323,16 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .filter(Boolean).join(" · ")));
       track.append(tieuDe, meta);
       const actions = el("div", "result-actions");
+      const copyItem = el("button", "icon-button queue-item-copy");
+      copyItem.type = "button";
+      copyItem.title = `Chép mã bài hát “${entry.title}”`;
+      copyItem.setAttribute("aria-label", copyItem.title);
+      copyItem.append(icon("mdi:content-copy"));
+      copyItem.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this._copyItemCode(entry, entry.title);
+      });
+      actions.append(copyItem);
       const xoa = el("button", "icon-button queue-remove");
       xoa.type = "button";
       xoa.title = `Xoá “${entry.title}” khỏi Queue`;
@@ -8618,6 +8670,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       tools.append(
         play,
         iconButton("mdi:content-copy", `Chép mã chia sẻ “${playlist.name}”`, (button) => this._sharePlaylist(playlist, button)),
+        iconButton("mdi:code-tags", `Chép id playlist “${playlist.name}”`, () => this._copyPlaylistCode(playlist)),
         iconButton("mdi:pencil", `Đổi tên “${playlist.name}”`, (button) => {
           const newName = window.prompt("Tên mới của playlist:", playlist.name);
           if (newName && newName.trim() && newName.trim() !== playlist.name) {
@@ -8699,6 +8752,38 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       // Plain http page or a blocked clipboard: show the code to copy by hand.
       window.prompt("Mã chia sẻ — chép rồi gửi cho người nhận:", payload.code);
     }
+  }
+
+  async _copyText(text, successMsg, promptLabel) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(String(text));
+      this._setStatus(successMsg);
+    } catch (_error) {
+      window.prompt(promptLabel || "Sao chép mã:", String(text));
+    }
+  }
+
+  _copyItemCode(item, title = "") {
+    const target = item?.id || item?.url || "";
+    if (!target) return;
+    const source = item?.source || this._source || "youtube";
+    const name = title || item?.title || target;
+    const yaml = `source: ${source}\ntarget: ${target}`;
+    this._copyText(yaml, `Đã chép mã bài hát nguồn ${source}: “${name}”`, `Cấu hình automation cho bài hát “${name}”:`);
+  }
+
+  _copyQueueCode(key, name = "") {
+    if (!key) return;
+    const ten = name || this._queueName(key) || key;
+    const yaml = `queue_code: ${key}`;
+    this._copyText(yaml, `Đã chép mã hàng đợi “${ten}” (${key})`, `Cấu hình automation cho hàng đợi “${ten}”:`);
+  }
+
+  _copyPlaylistCode(playlist) {
+    if (!playlist?.id) return;
+    const yaml = `playlist_code: ${playlist.id}`;
+    this._copyText(yaml, `Đã chép id playlist kho “${playlist.name}” (${playlist.id})`, `Cấu hình automation cho playlist “${playlist.name}”:`);
   }
 
   _setStatus(message, error = false) {

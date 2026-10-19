@@ -100,6 +100,27 @@
     },
     "queue_end": {
       "message": "Hàng đợi của phiên này không còn bài kế tiếp hoặc bài trước."
+    },
+    "invalid_playlist_code": {
+      "message": "Mã playlist không hợp lệ."
+    },
+    "playlist_is_share_code": {
+      "message": "Đây là mã chia sẻ; hãy nhập vào kho bằng nút trên thẻ rồi dùng id trong kho."
+    },
+    "youtube_playlist_not_imported": {
+      "message": "Hãy nhập playlist này vào kho trước."
+    },
+    "playlist_not_found": {
+      "message": "Không tìm thấy playlist được yêu cầu."
+    },
+    "playlist_empty": {
+      "message": "Playlist không có bài hát nào để phát."
+    },
+    "invalid_queue_code": {
+      "message": "Mã hàng đợi không hợp lệ."
+    },
+    "queue_empty": {
+      "message": "Hàng đợi không có bài hát nào để phát."
     }
   },
   "services": {
@@ -131,6 +152,10 @@
           "name": "Âm lượng",
           "description": "Đặt âm lượng trước khi phát (tuỳ chọn)."
         },
+        "mode": {
+          "name": "Loại phát",
+          "description": "Chọn luồng âm thanh (audio) hoặc hình ảnh (video, chỉ nguồn YouTube)."
+        },
         "session_id": {
           "name": "Phiên",
           "description": "Phát tiếp trong phiên này (giữ hàng đợi)."
@@ -142,6 +167,58 @@
         "playlist_id": {
           "name": "Playlist",
           "description": "Hàng đợi là cả playlist đã lưu (mã playlist lấy từ thẻ)."
+        }
+      }
+    },
+    "play_playlist": {
+      "name": "Phát playlist theo mã",
+      "description": "Phát playlist đã lưu theo mã trong kho ra một hay nhiều loa.",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "playlist_code": {
+          "name": "Mã playlist",
+          "description": "Mã playlist 12 ký tự trong kho."
+        },
+        "entity_id": {
+          "name": "Loa và màn hình",
+          "description": "Các media player nhận playlist."
+        },
+        "volume_level": {
+          "name": "Âm lượng",
+          "description": "Đặt âm lượng trước khi phát (tuỳ chọn)."
+        },
+        "mode": {
+          "name": "Loại phát",
+          "description": "Chọn luồng âm thanh (audio) hoặc hình ảnh (video, chỉ nguồn YouTube)."
+        }
+      }
+    },
+    "play_queue": {
+      "name": "Phát hàng đợi theo mã",
+      "description": "Phát hàng đợi đã lưu theo mã ra trực tiếp các loa.",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "queue_code": {
+          "name": "Mã hàng đợi",
+          "description": "Mã khoá hàng đợi chép từ thẻ."
+        },
+        "entity_id": {
+          "name": "Loa và màn hình",
+          "description": "Các media player nhận bài."
+        },
+        "volume_level": {
+          "name": "Âm lượng",
+          "description": "Đặt âm lượng trước khi phát (tuỳ chọn)."
+        },
+        "mode": {
+          "name": "Loại phát",
+          "description": "Chọn luồng âm thanh (audio) hoặc hình ảnh (video, chỉ nguồn YouTube)."
         }
       }
     },

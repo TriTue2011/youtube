@@ -15,16 +15,32 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er, llm
 from homeassistant.helpers.storage import Store
 from homeassistant.util.json import JsonObjectType
 
 from .api import YouTubePlayerApiError
-from .assist_tools import SEARCH_LIMIT, format_duration, match_speakers, numbered_results
+from .assist_tools import (
+    PLAYLIST_SOURCES,
+    SEARCH_LIMIT,
+    extract_item_id,
+    fold,
+    format_duration,
+    format_playlists,
+    format_queue,
+    is_valid_youtube_playlist,
+    match_playlist,
+    match_queue_item,
+    match_speakers,
+    numbered_results,
+    parse_safe_integer,
+)
 from .const import DOMAIN
 from .hidden_players import STORAGE_KEY, STORAGE_VERSION, normalize_hidden
-from .sessions import active_sessions
+from .playback import async_play_queue
+from .queue_store import get_queue_store
+from .sessions import active_sessions, attach_session_queue
 
 API_ID = DOMAIN
 API_NAME = "TriTue Music"
@@ -32,13 +48,19 @@ PLAY_MEDIA_FEATURE = 512
 SEARCH_TTL = 1800
 
 API_PROMPT = (
-    "TriTue Music plays YouTube / Zing MP3 on the home's speakers and TVs. "
-    "To play music: call tim_nhac and show the user the numbered list (up to 10 songs) to choose from. "
-    "If the user has not said where, call danh_sach_loa and ask which speakers: one, several, or all. "
-    "Then call phat_nhac with the chosen number and speakers. If the user already named the song and "
-    "speakers, do it straight away. Different speakers can play different songs. Use dieu_khien_nhac to "
-    "pause, resume, skip, go back or stop (optionally only some speakers) and dang_phat to say what is "
-    "playing where. Answer in the user's language."
+    "TriTue Music plays YouTube / Zing MP3, household playlists, and queues on the home's speakers and TVs. "
+    "To play songs: call tim_nhac and show the numbered list (up to 10 songs); then call phat_nhac. "
+    "To play playlists: call tim_playlist with nguon_playlist ('kho' for household playlists, 'youtube' for YouTube). "
+    "If the user says 'của tôi' / 'trong kho', use 'kho'; if 'trên YouTube', use 'youtube'. If ambiguous, the model may check 'kho' first "
+    "(if empty, proceed to YouTube) or ask the user to pick: '1. Của bạn (trong kho)  2. Từ YouTube'. "
+    "If the conversation has other music tools/providers (e.g. Music Assistant), list all possible sources as numbered choices for the user "
+    "first before invoking any provider's tool, unless the source is already clear. "
+    "Then call phat_playlist with the chosen playlist and speakers. "
+    "To play queue: call phat_hang_doi to start playback immediately without asking confirmation. If speakers are not specified "
+    "and more than one speaker is available, it returns a numbered list of speakers to ask the user which one to use. "
+    "Use hang_doi to view, remove or jump queued songs. "
+    "Use dieu_khien_nhac to pause, resume, skip, go back, or stop, and dang_phat to say what is playing where. "
+    "Answer in the user's language."
 )
 
 
@@ -163,14 +185,15 @@ class ListSpeakersTool(llm.Tool):
 class PlayMusicTool(llm.Tool):
     name = "phat_nhac"
     description = (
-        "Play a song from the last tim_nhac results (by number) or a YouTube link on speakers. "
+        "Play a song from the last tim_nhac results (by number) or a YouTube link/id on speakers. "
         "Speakers: names or numbers from danh_sach_loa separated by commas, or 'tất cả' for all. "
         "The chosen speakers play this song together; other speakers keep their own songs."
     )
     parameters = vol.Schema(
         {
-            vol.Required("bai", description="Number from tim_nhac, or a YouTube link"): str,
+            vol.Required("bai", description="Number from tim_nhac, or a YouTube video ID / link"): str,
             vol.Required("loa", description="Speaker names/numbers separated by commas, or 'tất cả'"): str,
+            vol.Optional("mode", description="Playback mode: 'audio' or 'video'"): vol.In(["audio", "video"]),
         }
     )
 
@@ -179,7 +202,7 @@ class PlayMusicTool(llm.Tool):
 
         entry = _entry(hass)
         choice = str(tool_input.tool_args["bai"]).strip()
-        remembered = _memory(hass)["results"].get(_user_key(llm_context)) or {}
+        remembered = _memory(hass).get("results", {}).get(_user_key(llm_context)) or {}
         items = remembered.get("items") if time.monotonic() - remembered.get("at", 0) < SEARCH_TTL else []
         if choice.isdigit():
             number = int(choice)
@@ -189,7 +212,9 @@ class PlayMusicTool(llm.Tool):
             source, target = str(item.get("source") or "youtube"), str(item.get("url") or item.get("id"))
             title = str(item.get("title") or target)
         else:
-            source, target, title = "youtube", choice, choice
+            extracted = extract_item_id(choice, "youtube")
+            target = extracted or choice
+            source, title = "youtube", choice
         speakers = await _speakers(hass, entry)
         entity_ids, missing = match_speakers(tool_input.tool_args["loa"], speakers)
         if missing or not entity_ids:
@@ -198,7 +223,14 @@ class PlayMusicTool(llm.Tool):
                 "loa_co_the_chon": [s["name"] for s in speakers],
             }
         try:
-            result = await async_dispatch(hass, entry, source=source, target=target, entity_ids=entity_ids)
+            result = await async_dispatch(
+                hass,
+                entry,
+                source=source,
+                target=target,
+                entity_ids=entity_ids,
+                mode=tool_input.tool_args.get("mode"),
+            )
         except HomeAssistantError as error:
             return {"loi": f"Không phát được: {error}"}
         names = {s["entity_id"]: s["name"] for s in speakers}
@@ -267,6 +299,359 @@ class NowPlayingTool(llm.Tool):
         return {"dang_phat": _describe_sessions(hass, _entry(hass))}
 
 
+class SearchPlaylistTool(llm.Tool):
+    name = "tim_playlist"
+    description = (
+        "Search or list playlists. nguon_playlist is REQUIRED: 'kho' for household playlists, 'youtube' for YouTube. "
+        "The model must decide the source based on user speech ('của tôi'/'trong kho' -> 'kho'; 'trên YouTube' -> 'youtube'; "
+        "if ambiguous, inspect 'kho' first or ask the user with a numbered list: 1. Của bạn (trong kho), 2. Từ YouTube). "
+        "If other music providers like Music Assistant are available, list all possible sources as numbered choices for the user. "
+        "Always returns so_playlist_trong_kho."
+    )
+    parameters = vol.Schema(
+        {
+            vol.Required("nguon_playlist", description="Playlist source: 'kho' (household) or 'youtube'"): vol.In(list(PLAYLIST_SOURCES)),
+            vol.Optional("tu_khoa", description="Playlist name or YouTube playlist link"): str,
+        }
+    )
+
+    async def async_call(self, hass: HomeAssistant, tool_input: llm.ToolInput, llm_context: llm.LLMContext) -> JsonObjectType:
+        entry = _entry(hass)
+        source = tool_input.tool_args.get("nguon_playlist") or "kho"
+        query = str(tool_input.tool_args.get("tu_khoa") or "").strip()
+        user_key = _user_key(llm_context)
+
+        try:
+            playlists_payload = await entry.runtime_data.client.async_playlists()
+        except YouTubePlayerApiError:
+            return {"loi": "Không đọc được danh sách playlist lúc này."}
+        except Exception:
+            return {"loi": "Không kết nối được với máy chủ playlist."}
+
+        kho_playlists = [p for p in playlists_payload.get("playlists") or [] if isinstance(p, dict)]
+        so_kho = len(kho_playlists)
+
+        if source == "kho":
+            mem = _memory(hass)
+            if so_kho == 0:
+                mem.setdefault("playlist_kho", {})[user_key] = {"items": [], "at": time.monotonic()}
+                mem[f"playlist_kho_{user_key}"] = {"items": [], "at": time.monotonic()}
+                return {
+                    "nguon_playlist": "kho",
+                    "so_playlist_trong_kho": 0,
+                    "ket_qua": [],
+                    "ghi_chu": "Kho gia đình chưa có playlist nào.",
+                }
+            items = kho_playlists
+            if query:
+                matched = match_playlist(query, kho_playlists)
+                if isinstance(matched, list):
+                    mem.setdefault("playlist_kho", {})[user_key] = {"items": matched, "at": time.monotonic()}
+                    mem[f"playlist_kho_{user_key}"] = {"items": matched, "at": time.monotonic()}
+                    return {
+                        "nguon_playlist": "kho",
+                        "so_playlist_trong_kho": so_kho,
+                        "can_hoi": "Tìm thấy nhiều playlist phù hợp trong kho, bạn muốn chọn số nào?",
+                        "ket_qua": format_playlists(matched),
+                    }
+                items = [matched] if matched else []
+                if not items:
+                    return {
+                        "nguon_playlist": "kho",
+                        "so_playlist_trong_kho": so_kho,
+                        "ket_qua": [],
+                        "ghi_chu": f"Không tìm thấy playlist nào khớp với '{query}'.",
+                    }
+            mem.setdefault("playlist_kho", {})[user_key] = {"items": items, "at": time.monotonic()}
+            mem[f"playlist_kho_{user_key}"] = {"items": items, "at": time.monotonic()}
+            return {
+                "nguon_playlist": "kho",
+                "so_playlist_trong_kho": so_kho,
+                "ket_qua": format_playlists(items),
+            }
+
+        if source == "youtube":
+            mem = _memory(hass)
+            if query and is_valid_youtube_playlist(query):
+                items = [{"id": query, "name": f"Playlist YouTube ({query})", "source": "youtube", "items": []}]
+                mem.setdefault("playlist_youtube", {})[user_key] = {"items": items, "at": time.monotonic()}
+                mem[f"playlist_youtube_{user_key}"] = {"items": items, "at": time.monotonic()}
+                return {
+                    "nguon_playlist": "youtube",
+                    "so_playlist_trong_kho": so_kho,
+                    "ket_qua": format_playlists(items),
+                }
+            mem.setdefault("playlist_youtube", {})[user_key] = {"items": [], "at": time.monotonic()}
+            mem[f"playlist_youtube_{user_key}"] = {"items": [], "at": time.monotonic()}
+            return {
+                "loi": "Chưa tìm được playlist YouTube bằng từ khoá. Hãy dán link playlist YouTube hoặc nhập vào kho trước.",
+                "nguon_playlist": "youtube",
+                "so_playlist_trong_kho": so_kho,
+                "ket_qua": [],
+                "ghi_chu": "Chưa tìm được playlist YouTube bằng từ khoá. Hãy dán link playlist YouTube hoặc nhập vào kho trước.",
+            }
+
+        return {"loi": f"Nguồn playlist không hợp lệ: {source}"}
+
+
+class PlayPlaylistTool(llm.Tool):
+    name = "phat_playlist"
+    description = (
+        "Play a playlist from the last tim_playlist results (by number) or by 12-char library playlist code on speakers. "
+        "Speakers: names or numbers from danh_sach_loa, or 'tất cả'."
+    )
+    parameters = vol.Schema(
+        {
+            vol.Required("danh_sach", description="Number from tim_playlist, or 12-char library playlist code"): str,
+            vol.Required("loa", description="Speaker names/numbers separated by commas, or 'tất cả'"): str,
+            vol.Required("nguon_playlist", description="'kho' or 'youtube'"): vol.In(list(PLAYLIST_SOURCES)),
+            vol.Optional("mode", description="Playback mode: 'audio' or 'video'"): vol.In(["audio", "video"]),
+        }
+    )
+
+    async def async_call(self, hass: HomeAssistant, tool_input: llm.ToolInput, llm_context: llm.LLMContext) -> JsonObjectType:
+        from .services import async_dispatch
+
+        entry = _entry(hass)
+        choice = str(tool_input.tool_args["danh_sach"]).strip()
+        user_key = _user_key(llm_context)
+        source = tool_input.tool_args["nguon_playlist"]
+
+        if choice.startswith("TTPL1."):
+            return {"loi": "Đây là mã chia sẻ; hãy nhập vào kho bằng nút trên thẻ rồi dùng id trong kho."}
+        if "list=" in choice or choice.startswith("PL") or source == "youtube":
+            return {"loi": "Hãy nhập playlist này vào kho trước."}
+
+        mem = _memory(hass)
+        sub = mem.get(f"playlist_{source}_{user_key}") or mem.get(f"playlist_{source}", {}).get(user_key) or {}
+        items = sub.get("items") or []
+
+        safe_num = parse_safe_integer(choice)
+        if safe_num is not None:
+            if not items or (time.monotonic() - sub.get("at", 0) >= SEARCH_TTL):
+                return {"loi": "Danh sách tìm kiếm đã hết hạn hoặc chưa tìm, vui lòng tìm lại playlist."}
+            if not 1 <= safe_num <= len(items):
+                return {"loi": f"Số thứ tự {safe_num} không hợp lệ trong kết quả tìm kiếm (1-{len(items)})."}
+            selected = items[safe_num - 1]
+            playlist_id = str(selected.get("id"))
+            title = str(selected.get("name") or selected.get("title") or playlist_id)
+        elif re.fullmatch(r"^[a-z0-9]{12}$", choice):
+            playlist_id = choice
+            title = choice
+        else:
+            return {"loi": f"Mã playlist '{choice}' không hợp lệ. Vui lòng nhập số thứ tự từ tìm kiếm hoặc mã 12 ký tự trong kho."}
+
+        try:
+            pl_data = await entry.runtime_data.client.async_playlists()
+            kho_pls = pl_data.get("playlists") or []
+            matched = next((p for p in kho_pls if p.get("id") == playlist_id), None)
+            if not matched:
+                return {"loi": f"Không tìm thấy playlist với mã '{playlist_id}' trong kho."}
+            title = matched.get("name") or title
+            sub_items = matched.get("items") or []
+            if not sub_items:
+                return {"loi": f"Playlist '{title}' đang rỗng, không có bài hát nào."}
+            first = sub_items[0]
+            target = str(first.get("id") or first.get("url"))
+            play_source = str(first.get("source") or "youtube")
+        except Exception:
+            return {"loi": "Lỗi đọc playlist từ máy chủ."}
+
+        speakers = await _speakers(hass, entry)
+        entity_ids, missing = match_speakers(tool_input.tool_args["loa"], speakers)
+        if missing or not entity_ids:
+            return {
+                "loi": f"Không nhận ra loa: {', '.join(missing) or tool_input.tool_args['loa']}.",
+                "loa_co_the_chon": [s["name"] for s in speakers],
+            }
+
+        try:
+            result = await async_dispatch(
+                hass,
+                entry,
+                source=play_source,
+                target=target,
+                entity_ids=entity_ids,
+                playlist_id=playlist_id,
+                mode=tool_input.tool_args.get("mode"),
+            )
+        except HomeAssistantError as error:
+            return {"loi": f"Không phát được: {error}"}
+        except Exception:
+            return {"loi": "Không phát được playlist."}
+
+        names = {s["entity_id"]: s["name"] for s in speakers}
+        skipped = [names.get(e, e) for e in result.get("skipped_targets") or []]
+        return {
+            "da_phat": f"Playlist: {title}",
+            "tren_loa": [names.get(e, e) for e in entity_ids if e not in (result.get("skipped_targets") or [])],
+            **({"bo_qua": skipped} if skipped else {}),
+        }
+
+
+class PlayQueueTool(llm.Tool):
+    name = "phat_hang_doi"
+    description = (
+        "Play the current queue immediately without asking confirmation. "
+        "Speakers: optional speaker names/numbers; default = active speaker or asks if multiple available."
+    )
+    parameters = vol.Schema(
+        {
+            vol.Optional("loa", description="Speaker names/numbers separated by commas, or 'tất cả'"): str,
+            vol.Optional("mode", description="Playback mode: 'audio' or 'video'"): vol.In(["audio", "video"]),
+        }
+    )
+
+    async def async_call(self, hass: HomeAssistant, tool_input: llm.ToolInput, llm_context: llm.LLMContext) -> JsonObjectType:
+        entry = _entry(hass)
+        speakers = await _speakers(hass, entry)
+        speaker_arg = tool_input.tool_args.get("loa")
+        entity_ids = []
+        if speaker_arg:
+            entity_ids, missing = match_speakers(speaker_arg, speakers)
+            if missing or not entity_ids:
+                return {
+                    "loi": f"Không nhận ra loa: {', '.join(missing) or speaker_arg}.",
+                    "loa_co_the_chon": [s["name"] for s in speakers],
+                }
+        else:
+            if not speakers:
+                return {"loi": "Không có loa nào khả dụng."}
+            if len(speakers) > 1:
+                return {
+                    "can_hoi": "Bạn muốn phát hàng đợi ra loa nào?",
+                    "danh_sach": [f"{idx}. {s['name']}" for idx, s in enumerate(speakers, 1)],
+                }
+            entity_ids = [speakers[0]["entity_id"]]
+
+        lead_speaker = entity_ids[0]
+        store = get_queue_store(hass)
+        queue = await store.async_get(lead_speaker)
+        items = queue.get("items") or []
+        if not items:
+            return {"loi": f"Hàng đợi của loa '{lead_speaker}' đang trống. Hãy thêm bài vào hàng đợi trước."}
+
+        try:
+            result = await async_play_queue(
+                hass,
+                entry,
+                queue_code=lead_speaker,
+                entity_ids=entity_ids,
+                mode=tool_input.tool_args.get("mode"),
+            )
+        except (HomeAssistantError, ServiceValidationError) as error:
+            return {"loi": f"Không phát được hàng đợi: {error}"}
+        except ValueError as err:
+            return {"loi": f"Lỗi hàng đợi: {err}"}
+        except Exception:
+            return {"loi": "Không phát được hàng đợi."}
+
+        names = {s["entity_id"]: s["name"] for s in speakers}
+        skipped = [names.get(e, e) for e in result.get("skipped_targets") or []]
+        return {
+            "da_phat_hang_doi": True,
+            "tong_so_bai": len(items),
+            "tren_loa": [names.get(e, e) for e in entity_ids if e not in (result.get("skipped_targets") or [])],
+            **({"bo_qua": skipped} if skipped else {}),
+        }
+
+
+class QueueManageTool(llm.Tool):
+    name = "hang_doi"
+    description = (
+        "Manage queue: xem (view items), xoa (remove song by number), nhay (jump to song number), xoa_het (clear all). "
+        "Optionally specify loa (speaker name/number); default = active speaker or first speaker."
+    )
+    parameters = vol.Schema(
+        {
+            vol.Required("lenh", description="xem, xoa, nhay, xoa_het"): vol.In(["xem", "xoa", "nhay", "xoa_het"]),
+            vol.Optional("loa", description="Speaker name/number"): str,
+            vol.Optional("so", description="Song number (1..N) to remove or jump to"): str,
+        }
+    )
+
+    async def async_call(self, hass: HomeAssistant, tool_input: llm.ToolInput, llm_context: llm.LLMContext) -> JsonObjectType:
+        from .services import async_dispatch
+
+        entry = _entry(hass)
+        speakers = await _speakers(hass, entry)
+        speaker_arg = tool_input.tool_args.get("loa")
+        entity_ids = []
+        if speaker_arg:
+            entity_ids, missing = match_speakers(speaker_arg, speakers)
+            if missing or not entity_ids:
+                return {"loi": f"Không nhận ra loa: {', '.join(missing) or speaker_arg}."}
+        else:
+            sessions = active_sessions(entry.runtime_data.data)
+            if sessions and sessions[0].get("output_entity_ids"):
+                entity_ids = list(sessions[0]["output_entity_ids"])
+            elif speakers:
+                entity_ids = [speakers[0]["entity_id"]]
+            else:
+                return {"loi": "Không có loa nào khả dụng."}
+
+        lead_speaker = entity_ids[0]
+        store = get_queue_store(hass)
+        command = tool_input.tool_args["lenh"]
+
+        if command == "xem":
+            queue = await store.async_get(lead_speaker)
+            return {"loa": lead_speaker, "hang_doi": format_queue(queue)}
+
+        if command == "xoa_het":
+            await store.async_change({"key": lead_speaker, "action": "clear"})
+            return {"da_lam": "xoa_het", "loa": lead_speaker, "ghi_chu": "Đã xoá sạch hàng đợi."}
+
+        so_arg = tool_input.tool_args.get("so")
+        if so_arg is None or not str(so_arg).strip():
+            return {"loi": f"Lệnh {command} cần cung cấp số thứ tự hoặc tên bài hát (tham số 'so')."}
+
+        queue = await store.async_get(lead_speaker)
+        items = queue.get("items") or []
+        if not items:
+            return {"loi": f"Hàng đợi của loa '{lead_speaker}' đang trống."}
+
+        matched = match_queue_item(so_arg, queue)
+        if isinstance(matched, list):
+            return {
+                "can_hoi": f"Có nhiều bài khớp với '{so_arg}', bạn muốn chọn bài nào?",
+                "danh_sach": [f"{idx}. {item.get('title')}" for idx, item in enumerate(matched, 1)],
+            }
+        if matched is None:
+            return {"loi": f"Không tìm thấy bài hát '{so_arg}' trong hàng đợi."}
+
+        target_uid = matched["uid"]
+
+        if command == "xoa":
+            try:
+                queue, _ = await store.async_change({"key": lead_speaker, "action": "remove", "uid": target_uid})
+                return {"da_lam": "xoa", "bai": matched.get("title"), "loa": lead_speaker, "hang_doi": format_queue(queue)}
+            except ValueError:
+                return {"loi": f"Bài hát '{so_arg}' không còn trong hàng đợi."}
+
+        if command == "nhay":
+            try:
+                res = await async_dispatch(
+                    hass,
+                    entry,
+                    source=str(matched.get("source") or "youtube"),
+                    target=str(matched.get("url") or matched.get("id")),
+                    entity_ids=entity_ids,
+                    mode=None,
+                )
+            except (HomeAssistantError, ServiceValidationError) as error:
+                return {"loi": f"Không phát được: {error}"}
+            except Exception:
+                return {"loi": "Không phát được bài hát."}
+
+            await store.async_change({"key": lead_speaker, "action": "select", "uid": target_uid})
+            if isinstance(res, dict) and res.get("session_id"):
+                attach_session_queue(res["session_id"], lead_speaker)
+            return {"da_lam": "nhay", "bai": matched.get("title"), "loa": lead_speaker}
+
+        return {"loi": f"Lệnh không hỗ trợ: {command}"}
+
+
 class TriTueMusicAPI(llm.API):
     """LLM API exposing the music tools."""
 
@@ -278,7 +663,17 @@ class TriTueMusicAPI(llm.API):
             api=self,
             api_prompt=API_PROMPT,
             llm_context=llm_context,
-            tools=[SearchMusicTool(), ListSpeakersTool(), PlayMusicTool(), ControlMusicTool(), NowPlayingTool()],
+            tools=[
+                SearchMusicTool(),
+                ListSpeakersTool(),
+                PlayMusicTool(),
+                ControlMusicTool(),
+                NowPlayingTool(),
+                SearchPlaylistTool(),
+                PlayPlaylistTool(),
+                PlayQueueTool(),
+                QueueManageTool(),
+            ],
         )
 
 

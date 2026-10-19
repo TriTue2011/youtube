@@ -264,3 +264,28 @@ def observe_interruption(
         tracker["luong_minh"] = False
         return tracker.pop("chen_tu")
     return None
+
+
+_SESSION_QUEUES: dict[str, str] = {}
+
+
+def attach_session_queue(session_id: Any, queue_key: Any) -> None:
+    """Attach a queue key to an active playback session."""
+    if session_id and queue_key:
+        _SESSION_QUEUES[str(session_id)] = str(queue_key)
+
+
+def session_queue_key(session: dict[str, Any] | None) -> str | None:
+    """Get the queue key attached to this session."""
+    if not isinstance(session, dict):
+        return None
+    session_id = session.get("session_id")
+    if not session_id:
+        return None
+    return _SESSION_QUEUES.get(str(session_id))
+
+
+def detach_session_queue(session_id: Any) -> None:
+    """Detach queue key when a session ends."""
+    if session_id:
+        _SESSION_QUEUES.pop(str(session_id), None)

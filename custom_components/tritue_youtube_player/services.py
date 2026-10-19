@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
@@ -21,6 +22,8 @@ from .const import (
     CONF_VOLUME_LEVEL,
     DOMAIN,
     SERVICE_PLAY_ON_PLAYERS,
+    SERVICE_PLAY_PLAYLIST,
+    SERVICE_PLAY_QUEUE,
     SERVICE_REMOVE_PLAYERS,
     SERVICE_SKIP,
     SERVICE_STOP_SESSION,
@@ -29,14 +32,19 @@ from .const import (
 from .playback import (
     UnsupportedCastMediaError,
     UnsupportedTargetMediaError,
+    async_play_queue,
     normalize_target_entity_ids,
 )
+from .queue import QUEUE_KEY
 from .sessions import (
     active_sessions,
+    attach_session_queue,
     controller_id,
+    detach_session_queue,
     find_session,
     item_target,
     queue_item,
+    session_queue_key,
 )
 
 CONF_SESSION_ID = "session_id"
@@ -59,6 +67,29 @@ PLAY_ON_PLAYERS_SCHEMA = vol.Schema(
         vol.Optional(CONF_SESSION_ID): cv.string,
         vol.Optional(CONF_JOIN, default=False): cv.boolean,
         vol.Optional(CONF_PLAYLIST_ID): cv.string,
+        vol.Optional("mode"): vol.In(["audio", "video"]),
+    }
+)
+PLAY_PLAYLIST_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ENTRY_ID): cv.string,
+        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required("playlist_code"): cv.string,
+        vol.Optional(CONF_VOLUME_LEVEL): vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=1)
+        ),
+        vol.Optional("mode"): vol.In(["audio", "video"]),
+    }
+)
+PLAY_QUEUE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ENTRY_ID): cv.string,
+        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required("queue_code"): cv.string,
+        vol.Optional(CONF_VOLUME_LEVEL): vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=1)
+        ),
+        vol.Optional("mode"): vol.In(["audio", "video"]),
     }
 )
 SKIP_SCHEMA = vol.Schema(
@@ -119,6 +150,7 @@ async def async_dispatch(
     session_id: str | None = None,
     join_entity_ids: list[str] | None = None,
     playlist_id: str | None = None,
+    mode: str | None = None,
 ) -> dict:
     """Play one item on physical players as one session controlled by ``entry``.
 
@@ -168,6 +200,7 @@ async def async_dispatch(
             controller=controller_id(entry.entry_id),
             join_entity_ids=join_entity_ids,
             playlist_id=playlist_id,
+            mode=mode,
         )
         await entry.runtime_data.async_refresh()
     except InvalidTargetError as error:
@@ -204,7 +237,75 @@ async def _async_handle_play_on_players(
         session_id=session_id,
         join_entity_ids=join,
         playlist_id=call.data.get(CONF_PLAYLIST_ID) or None,
+        mode=call.data.get("mode"),
     )
+
+
+async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Resolve a playlist by code and play it."""
+    entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
+    code = str(call.data["playlist_code"]).strip()
+    if not code:
+        raise _validation_error("invalid_playlist_code")
+
+    # 1. Mã chia sẻ: báo lỗi rõ ràng hướng dẫn người dùng nhập vào kho
+    if code.startswith("TTPL1."):
+        raise _validation_error("playlist_is_share_code")
+
+    # 2. YouTube playlist link/id: báo lỗi nhập vào kho trước
+    if "list=" in code or code.startswith("PL"):
+        raise _validation_error("youtube_playlist_not_imported")
+
+    # 3. Mã playlist gia đình trong kho (12 ký tự a-z0-9)
+    if re.fullmatch(r"^[a-z0-9]{12}$", code):
+        try:
+            data = await entry.runtime_data.client.async_playlists()
+        except Exception as err:
+            raise _validation_error("communication_error") from err
+        playlists = data.get("playlists") or []
+        found = next((p for p in playlists if p.get("id") == code), None)
+        if not found:
+            raise _validation_error("playlist_not_found")
+        items = found.get("items") or []
+        if not items:
+            raise _validation_error("playlist_empty")
+        first = items[0]
+        target = str(first.get("id") or first.get("url") or "")
+        source = str(first.get("source") or "youtube")
+        await async_dispatch(
+            hass,
+            entry,
+            source=source,
+            target=target,
+            entity_ids=call.data[ATTR_ENTITY_ID],
+            volume_level=call.data.get(CONF_VOLUME_LEVEL),
+            playlist_id=code,
+            mode=call.data.get("mode"),
+        )
+        return
+
+    raise _validation_error("invalid_playlist_code")
+
+
+async def _async_handle_play_queue(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Play the queue immediately on requested players."""
+    entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
+    queue_code = str(call.data["queue_code"]).strip()
+    try:
+        await async_play_queue(
+            hass,
+            entry,
+            queue_code=queue_code,
+            entity_ids=call.data[ATTR_ENTITY_ID],
+            volume_level=call.data.get(CONF_VOLUME_LEVEL),
+            mode=call.data.get("mode"),
+            dispatch_fn=async_dispatch,
+        )
+    except ValueError as err:
+        err_msg = str(err)
+        if err_msg in {"invalid_queue_code", "queue_empty"}:
+            raise _validation_error(err_msg) from err
+        raise
 
 
 async def async_skip(hass: HomeAssistant, entry, session_id: str | None, step: int) -> dict:
@@ -220,12 +321,21 @@ async def async_skip(hass: HomeAssistant, entry, session_id: str | None, step: i
 
 
 async def async_play_queue_next(hass: HomeAssistant, entry, session: dict) -> dict:
-    """Play the next song of the Queue of the session's first speaker on its speakers."""
-    outputs = list(session.get("output_entity_ids") or [])
-    item = await get_queue_store(hass).async_advance(outputs[0]) if outputs else None
+    """Play the next song of the Queue on its speakers."""
+    queue_key = session_queue_key(session)
+    if not queue_key:
+        outputs = list(session.get("output_entity_ids") or [])
+        if outputs:
+            queue_key = outputs[0]
+    if not queue_key:
+        raise _validation_error("queue_end")
+    item = await get_queue_store(hass).async_advance(queue_key)
     if item is None:
         raise _validation_error("queue_end")
-    return await _async_play_session_item(hass, entry, session, item)
+    res = await _async_play_session_item(hass, entry, session, item)
+    if res and res.get("session_id"):
+        attach_session_queue(res["session_id"], queue_key)
+    return res
 
 
 async def _async_play_session_item(hass: HomeAssistant, entry, session: dict, item: dict) -> dict:
@@ -276,6 +386,7 @@ async def async_stop_session(hass: HomeAssistant, entry, session_id: str | None)
         if not da_dung:
             raise _validation_error("playback_error") from error
         LOGGER.warning("Stop: đã dừng %s nhưng máy phát không nhận lệnh dừng: %s", ", ".join(da_dung), error)
+    detach_session_queue((session or {}).get("session_id") or session_id)
     await entry.runtime_data.async_refresh()
 
 
@@ -315,6 +426,12 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def handle(call: ServiceCall) -> None:
         await _async_handle_play_on_players(hass, call)
 
+    async def handle_play_playlist(call: ServiceCall) -> None:
+        await _async_handle_play_playlist(hass, call)
+
+    async def handle_play_queue(call: ServiceCall) -> None:
+        await _async_handle_play_queue(hass, call)
+
     async def handle_skip(call: ServiceCall) -> None:
         entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
         await async_skip(hass, entry, call.data.get(CONF_SESSION_ID), call.data[CONF_STEP])
@@ -332,6 +449,18 @@ def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_PLAY_ON_PLAYERS,
         handle,
         schema=PLAY_ON_PLAYERS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PLAY_PLAYLIST,
+        handle_play_playlist,
+        schema=PLAY_PLAYLIST_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PLAY_QUEUE,
+        handle_play_queue,
+        schema=PLAY_QUEUE_SCHEMA,
     )
     hass.services.async_register(DOMAIN, SERVICE_SKIP, handle_skip, schema=SKIP_SCHEMA)
     hass.services.async_register(

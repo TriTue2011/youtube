@@ -206,5 +206,36 @@ class QueuePrevTests(unittest.TestCase):
         self.assertIsNone(item)
 
 
+class QueueIndexTests(unittest.TestCase):
+    """Test thao tac theo chi so (index) trong Queue."""
+
+    def setUp(self):
+        self.q = load_queue_module()
+        self.dem = 0
+
+    def uid(self):
+        self.dem += 1
+        return f"{self.dem:08x}"
+
+    def lam(self, doc, **payload):
+        return self.q.apply_queue_change(doc, payload, self.uid)
+
+    def test_remove_va_select_bang_index(self):
+        doc, _ = self.lam(self.q.normalize_document(None), key=LOA, action="add", items=[bai(0), bai(1), bai(2)])
+        # Select bai index 1
+        doc, item = self.lam(doc, key=LOA, action="select", index=1)
+        self.assertEqual(item["title"], "Bài 1")
+        # Remove bai index 0 (Bai 0)
+        doc, _ = self.lam(doc, key=LOA, action="remove", index=0)
+        items = self.q.get_queue(doc, LOA)["items"]
+        self.assertEqual([i["title"] for i in items], ["Bài 1", "Bài 2"])
+
+    def test_remove_index_am_nem_loi_item_not_found(self):
+        doc, _ = self.lam(self.q.normalize_document(None), key=LOA, action="add", items=[bai(0)])
+        with self.assertRaises(ValueError) as cm:
+            self.lam(doc, key=LOA, action="remove", index=-1)
+        self.assertEqual("item_not_found", str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

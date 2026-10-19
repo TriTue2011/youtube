@@ -1135,6 +1135,28 @@ class QueueContractTests(unittest.TestCase):
         self.assertIn('const ngoaiTimKiem = this._view !== "search";', self.script)
         self.assertIn("results.hidden = ngoaiTimKiem || thuGon;", self.script)
 
+    def test_nut_chep_ma_toan_bo_thong_tin_the(self):
+        # Nút chép mã bài hát trong kết quả tìm kiếm
+        self.assertIn('"icon-button copy-song-code"', self.script)
+        self.assertIn("this._copyItemCode(item, title.textContent)", self.script)
+        # Nút chép mã hàng đợi và bài hát trong hàng đợi
+        self.assertIn('"icon-button queue-copy"', self.script)
+        self.assertIn("this._copyQueueCode(key, this._queueName(key))", self.script)
+        self.assertIn('"icon-button queue-item-copy"', self.script)
+        self.assertIn("this._copyItemCode(entry, entry.title)", self.script)
+        # Nút chép mã bài đang phát
+        self.assertIn('class="ctl copy-current"', self.script)
+        self.assertIn('class="icon-button nghe-copy"', self.script)
+        # Helper chép mã có fallback window.prompt
+        self.assertIn("async _copyText(text, successMsg, promptLabel) {", self.script)
+        self.assertIn("await navigator.clipboard.writeText(String(text));", self.script)
+        self.assertIn("window.prompt(promptLabel || \"Sao chép mã:\", String(text));", self.script)
+        self.assertIn("_copyItemCode(item, title = \"\") {", self.script)
+        self.assertIn("_copyQueueCode(key, name = \"\") {", self.script)
+        # Nút chép mã playlist giữ nguyên
+        self.assertIn("Chép mã chia sẻ", self.script)
+        self.assertIn("this._sharePlaylist(playlist, button)", self.script)
+
 
 if __name__ == "__main__":
     unittest.main()

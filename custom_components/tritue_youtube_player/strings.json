@@ -100,6 +100,27 @@
     },
     "queue_end": {
       "message": "There is no next or previous song in this session's queue."
+    },
+    "invalid_playlist_code": {
+      "message": "The playlist code is not valid."
+    },
+    "playlist_is_share_code": {
+      "message": "This is a share code. Please import it into your library using the button on the card, then use the 12-character library ID."
+    },
+    "youtube_playlist_not_imported": {
+      "message": "Please import this YouTube playlist into your library first."
+    },
+    "playlist_not_found": {
+      "message": "The requested playlist was not found."
+    },
+    "playlist_empty": {
+      "message": "The playlist contains no playable songs."
+    },
+    "invalid_queue_code": {
+      "message": "The queue code is not valid."
+    },
+    "queue_empty": {
+      "message": "The queue contains no playable songs."
     }
   },
   "services": {
@@ -131,6 +152,10 @@
           "name": "Volume",
           "description": "Optional volume applied before playback."
         },
+        "mode": {
+          "name": "Playback mode",
+          "description": "Choose audio stream or video stream (YouTube only)."
+        },
         "session_id": {
           "name": "Session",
           "description": "Keep playing in this session (and its queue)."
@@ -142,6 +167,58 @@
         "playlist_id": {
           "name": "Playlist",
           "description": "Queue the whole saved playlist (its id from the card)."
+        }
+      }
+    },
+    "play_playlist": {
+      "name": "Play playlist by code",
+      "description": "Play a saved playlist by library ID on one or more media players.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "playlist_code": {
+          "name": "Playlist code",
+          "description": "12-character library playlist ID."
+        },
+        "entity_id": {
+          "name": "Speakers and displays",
+          "description": "Physical media players that receive the playlist."
+        },
+        "volume_level": {
+          "name": "Volume",
+          "description": "Optional volume applied before playback."
+        },
+        "mode": {
+          "name": "Playback mode",
+          "description": "Choose audio stream or video stream (YouTube only)."
+        }
+      }
+    },
+    "play_queue": {
+      "name": "Play queue by code",
+      "description": "Play a saved queue by key code directly on media players.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "queue_code": {
+          "name": "Queue code",
+          "description": "Queue key code copied from the card."
+        },
+        "entity_id": {
+          "name": "Speakers and displays",
+          "description": "Physical media players that receive the queue."
+        },
+        "volume_level": {
+          "name": "Volume",
+          "description": "Optional volume applied before playback."
+        },
+        "mode": {
+          "name": "Playback mode",
+          "description": "Choose audio stream or video stream (YouTube only)."
         }
       }
     },

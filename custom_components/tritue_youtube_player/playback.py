@@ -266,3 +266,61 @@ def build_target_call(
             target_device_class=target_device_class,
         ),
     )
+
+
+async def async_play_queue(
+    hass: Any,
+    entry: Any,
+    queue_code: str,
+    entity_ids: list[str],
+    *,
+    volume_level: float | None = None,
+    mode: str | None = None,
+    dispatch_fn: Any = None,
+) -> dict[str, Any]:
+    """Shared implementation to play a queue, select the track, and bind session to queue."""
+    from .queue import QUEUE_KEY
+    from .queue_store import get_queue_store
+    from .sessions import attach_session_queue
+
+    code = str(queue_code or "").strip()
+    if not QUEUE_KEY.fullmatch(code):
+        raise ValueError("invalid_queue_code")
+
+    store = get_queue_store(hass)
+    queue = await store.async_get(code)
+    items = queue.get("items") or []
+    if not items:
+        raise ValueError("queue_empty")
+
+    current_uid = queue.get("current")
+    item = next((it for it in items if it.get("uid") == current_uid), None)
+    if item is None:
+        item = items[0]
+
+    if dispatch_fn is None:
+        from .services import async_dispatch
+        dispatch_fn = async_dispatch
+
+    target = str(item.get("url") or item.get("id") or "")
+    source = str(item.get("source") or "youtube")
+    result = await dispatch_fn(
+        hass,
+        entry,
+        source=source,
+        target=target,
+        entity_ids=entity_ids,
+        volume_level=volume_level,
+        mode=mode,
+    )
+
+    await store.async_change({
+        "key": code,
+        "action": "select",
+        "uid": item["uid"],
+    })
+
+    if isinstance(result, dict) and result.get("session_id"):
+        attach_session_queue(result["session_id"], code)
+
+    return result

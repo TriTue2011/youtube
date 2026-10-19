@@ -202,6 +202,13 @@ def apply_queue_change(
         return _with_queue(document, key, {**queue, "items": [*queue["items"], *added]}), None
     if action == "remove":
         uid = payload.get("uid")
+        if uid is None and "index" in payload:
+            try:
+                idx = int(payload["index"])
+                if 0 <= idx < len(queue["items"]):
+                    uid = queue["items"][idx]["uid"]
+            except (TypeError, ValueError):
+                pass
         uids = [item["uid"] for item in queue["items"]]
         if uid not in uids:
             raise ValueError("item_not_found")
@@ -231,6 +238,13 @@ def apply_queue_change(
         return _with_queue(document, key, changed), None
     if action == "select":
         uid = payload.get("uid")
+        if uid is None and "index" in payload:
+            try:
+                idx = int(payload["index"])
+                if 0 <= idx < len(queue["items"]):
+                    uid = queue["items"][idx]["uid"]
+            except (TypeError, ValueError):
+                pass
         item = next((entry for entry in queue["items"] if entry["uid"] == uid), None)
         if item is None:
             raise ValueError("item_not_found")

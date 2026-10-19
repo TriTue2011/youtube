@@ -20,7 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import LOGGER
 from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
-from .sessions import active_sessions, is_controlled_by, observe_interruption, observe_track, queue_item
+from .sessions import active_sessions, is_controlled_by, observe_interruption, observe_track, queue_item, session_queue_key
 
 
 class SessionAutoAdvance:
@@ -142,11 +142,14 @@ class SessionAutoAdvance:
         self.hass.async_create_task(self._async_advance(session), eager_start=False)
 
     def _next_from(self, session: dict[str, Any]) -> str | None:
-        """Where the next song comes from: the Queue of the session's first speaker
-        (the one ticked first) while it has songs left, then the session's own queue
-        (the search results or saved playlist it was started from)."""
-        outputs = session.get("output_entity_ids") or []
-        if outputs and get_queue_store(self.hass).has_next(outputs[0]):
+        """Where the next song comes from: the bound Queue of the session
+        or first speaker while it has songs left, then the session's own queue."""
+        queue_key = session_queue_key(session)
+        if not queue_key:
+            outputs = session.get("output_entity_ids") or []
+            if outputs:
+                queue_key = outputs[0]
+        if queue_key and get_queue_store(self.hass).has_next(queue_key):
             return "queue"
         if queue_item(session, 1) is not None:
             return "session"

@@ -72,6 +72,7 @@ async def async_play_on_players(
     controller: str | None = None,
     join_entity_ids: list[str] | None = None,
     playlist_id: str | None = None,
+    mode: str | None = None,
 ) -> dict[str, Any]:
     """Resolve one source item and dispatch it to one or more HA players.
 
@@ -85,6 +86,8 @@ async def async_play_on_players(
     target_supported_features = target_supported_features or {}
     if volume_level is not None and not 0 <= float(volume_level) <= 1:
         raise ValueError("invalid_volume_level")
+    if mode is not None and mode not in {"video", "audio"}:
+        raise ValueError("invalid_mode")
 
     def capabilities(entity_id: str) -> dict[str, Any]:
         return build_target_capabilities(
@@ -140,9 +143,8 @@ async def async_play_on_players(
         if source == "youtube":
             item = session.get("item") or {}
             for entity_id in playable_targets:
-                if not is_native_youtube_transport(
-                    capabilities(entity_id)["transport"]
-                ):
+                transport = capabilities(entity_id)["transport"]
+                if mode == "audio" or (mode is None and not is_native_youtube_transport(transport)):
                     youtube_audio_targets.append(entity_id)
                     continue
                 try:
@@ -185,7 +187,9 @@ async def async_play_on_players(
         # nên KHÔNG gửi gì tới loa và cũng KHÔNG báo lỗi — im lặng, khó truy nhất.
         if source in {"zing", "facebook"}:
             stream = await client.async_create_stream(
-                source, target, public_base_url=speaker_base_url(hass, client)
+                source,
+                target,
+                public_base_url=speaker_base_url(hass, client),
             )
             service_data = build_stream_request(stream)
             session_media_content_type = service_data["media_content_type"]
@@ -227,7 +231,9 @@ async def async_play_on_players(
             if youtube_audio_targets:
                 try:
                     stream = await client.async_create_stream(
-                        "youtube", target, public_base_url=speaker_base_url(hass, client)
+                        "youtube",
+                        target,
+                        public_base_url=speaker_base_url(hass, client),
                     )
                     audio_request = build_stream_request(stream)
                 except Exception as error:

@@ -376,6 +376,73 @@ class MultiPlayerActionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(("s9", "ha:abc"), (first.kwargs["session_id"], first.kwargs["controller"]))
         self.assertEqual("s9", result["session_id"])
 
+    async def test_youtube_forces_audio_stream_when_mode_is_audio(self):
+        result = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="youtube",
+            target="dQw4w9WgXcQ",
+            entity_ids=["media_player.cast"],
+            target_platforms={"media_player.cast": "cast"},
+            target_device_classes={"media_player.cast": "tv"},
+            target_supported_features={"media_player.cast": 516},
+            mode="audio",
+        )
+        self.assertEqual(1, result["target_count"])
+        calls = self.hass.services.calls
+        self.assertEqual(1, len(calls))
+        self.assertEqual("play_media", calls[0]["service"])
+        self.assertEqual("audio/mpeg", calls[0]["service_data"]["media_content_type"])
+        self.assertEqual("http://192.0.2.10:8099/api/stream/signed", calls[0]["service_data"]["media_content_id"])
+
+    async def test_invalid_mode_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            await self.actions.async_play_on_players(
+                self.hass,
+                self.client,
+                source="youtube",
+                target="dQw4w9WgXcQ",
+                entity_ids=["media_player.cast"],
+                target_platforms={"media_player.cast": "cast"},
+                mode="invalid_mode",
+            )
+
+    async def test_video_mode_on_audio_only_speaker_raises_error(self):
+        with self.assertRaises(self.actions.UnsupportedTargetMediaError):
+            await self.actions.async_play_on_players(
+                self.hass,
+                self.client,
+                source="youtube",
+                target="dQw4w9WgXcQ",
+                entity_ids=["media_player.speaker"],
+                target_platforms={"media_player.speaker": "sonos"},
+                mode="video",
+            )
+
+    async def test_n2_mode_ignored_for_zing_and_http(self):
+        """N2: mode is intentionally ignored (no error raised) for zing and http sources."""
+        result_zing = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="zing",
+            target="ZWZB96AB",
+            entity_ids=["media_player.speaker"],
+            target_platforms={"media_player.speaker": "sonos"},
+            mode="video",
+        )
+        self.assertEqual(1, result_zing["target_count"])
+
+        result_http = await self.actions.async_play_on_players(
+            self.hass,
+            self.client,
+            source="http",
+            target="https://example.com/audio.mp3",
+            entity_ids=["media_player.speaker"],
+            target_platforms={"media_player.speaker": "sonos"},
+            mode="video",
+        )
+        self.assertEqual(1, result_http["target_count"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,8 @@ play_on_players:
       required: true
       example: 01J00000000000000000000000
       selector:
-        text:
+        config_entry:
+          integration: tritue_youtube_player
     source:
       name: Source
       description: Metadata and playback provider for the selected result.
@@ -19,6 +20,7 @@ play_on_players:
           options:
             - youtube
             - zing
+            - facebook
             - http
     target:
       name: Media target
@@ -53,6 +55,15 @@ play_on_players:
           max: 1
           step: 0.01
           mode: slider
+    mode:
+      name: Playback mode
+      description: Choose audio stream or video stream. Only applies to YouTube source (ignored for zing/facebook/http).
+      required: false
+      selector:
+        select:
+          options:
+            - audio
+            - video
     session_id:
       required: false
       selector:
@@ -66,6 +77,98 @@ play_on_players:
       required: false
       selector:
         text:
+play_playlist:
+  name: Play playlist by code
+  description: Play a saved playlist by library ID on one or more media players.
+  fields:
+    entry_id:
+      name: Config entry
+      description: Config entry ID of the TriTue player server.
+      required: true
+      selector:
+        config_entry:
+          integration: tritue_youtube_player
+    playlist_code:
+      name: Playlist code
+      description: 12-character library playlist ID (e.g. abcdef012345). Share codes must be imported into library first.
+      required: true
+      example: abcdef012345
+      selector:
+        text:
+    entity_id:
+      name: Speakers and displays
+      description: Physical media players that receive the playlist.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+    volume_level:
+      name: Volume
+      description: Optional volume applied before playback.
+      required: false
+      example: 0.35
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+    mode:
+      name: Playback mode
+      description: Choose audio stream or video stream. Only applies to YouTube source.
+      required: false
+      selector:
+        select:
+          options:
+            - audio
+            - video
+play_queue:
+  name: Play queue by code
+  description: Play a saved queue by key code directly on media players.
+  fields:
+    entry_id:
+      name: Config entry
+      description: Config entry ID of the TriTue player server.
+      required: true
+      selector:
+        config_entry:
+          integration: tritue_youtube_player
+    queue_code:
+      name: Queue code
+      description: Queue key code copied from the card (e.g. media_player.living_room).
+      required: true
+      example: media_player.living_room
+      selector:
+        text:
+    entity_id:
+      name: Speakers and displays
+      description: Physical media players that receive the queue.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+    volume_level:
+      name: Volume
+      description: Optional volume applied before playback.
+      required: false
+      example: 0.35
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+    mode:
+      name: Playback mode
+      description: Choose audio stream or video stream. Only applies to YouTube source.
+      required: false
+      selector:
+        select:
+          options:
+            - audio
+            - video
 skip:
   fields:
     entry_id:
