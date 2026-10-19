@@ -77,6 +77,10 @@ playlist, ví dụ `https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID`.
   hứa": trợ lý hiện tối đa 10 bài để chọn, hỏi loa (một, nhiều hay tất cả) rồi
   phát; "bài kế ở bếp", "dừng loa phòng khách", "đang phát gì" cũng được.
 
+### Loa tự dừng giữa bài
+
+Nếu loa tự về `idle` giữa bài mà không ai ra lệnh trong Home Assistant (luồng bị ngắt, thiết bị trục trặc), tích hợp giữ nhạc chạy: loa tua được thì phát tiếp đúng chỗ, loa không tua được (không có SEEK) thì sang bài kế. Stop bấm trong Home Assistant (hoặc do automation) luôn được tôn trọng ngay. Nút Stop trên chính loa/remote không phân biệt được với luồng bị cắt, nên chỉ được cứu MỘT lần: bấm lần nữa trong 90 giây là dừng thật. Mỗi lần xảy ra có một dòng cảnh báo trong log Home Assistant (`went idle early`).
+
 ## Tham chiếu action (6 action)
 
 Tất cả action thuộc domain `tritue_youtube_player`, gọi được từ automation,

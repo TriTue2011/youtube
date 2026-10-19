@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -22,6 +23,11 @@ from .const import LOGGER
 from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
 from .sessions import active_sessions, is_controlled_by, observe_interruption, observe_track, queue_item, session_queue_key
+
+#: Loa về idle SỚM giữa bài mà không do ai ra lệnh trong Home Assistant thì thường là luồng bị cắt (máy phát/Google ngắt kết nối),
+#: không phải Stop: phát tiếp đúng chỗ MỘT lần. Loa lại dừng sớm ở cùng bài trong khoảng này (giây) thì là Stop thật (nút
+#: trên loa/remote) và được tôn trọng.
+CHO_XAC_NHAN_DUNG_THAT_GIAY = 90
 
 #: Chờ giữa các lần thử lại lỗi tạm thời khi tự chuyển bài (giây): 2s, 5s, 10s.
 CHO_GIUA_CAC_LAN_THU_GIAY = (2, 5, 10)
@@ -67,6 +73,9 @@ class SessionAutoAdvance:
         self._watched: frozenset[str] = frozenset()
         self._unsub_states = None
         self._advancing: set[str] = set()
+        # (phiên, loa) → lúc tự cứu gần nhất sau khi loa dừng sớm. Theo PHIÊN chứ không theo bài: sang bài mới thì
+        # tracker đổi, còn Stop thật trên loa vẫn phải được tôn trọng.
+        self._lan_tu_cuu: dict[tuple[str, str], Any] = {}
 
     @callback
     def async_start(self):
@@ -147,10 +156,14 @@ class SessionAutoAdvance:
             return
         for session in self._sessions():
             if self._lead_speaker(session) == new_state.entity_id:
-                self._observe(session, new_state.entity_id, new_state.state, dict(new_state.attributes))
+                self._observe(
+                    session, new_state.entity_id, new_state.state, dict(new_state.attributes), new_state.context
+                )
 
     @callback
-    def _observe(self, session: dict[str, Any], entity_id: str, state: str, attributes: dict[str, Any]) -> None:
+    def _observe(
+        self, session: dict[str, Any], entity_id: str, state: str, attributes: dict[str, Any], context: Any = None
+    ) -> None:
         tracker = self._trackers.setdefault(self._track_key(session, entity_id), {})
         now = dt_util.utcnow()
         # TTS / thông báo chen giữa bài: đọc xong thì phát tiếp đúng chỗ, và KHÔNG coi TTS dứt là hết bài.
@@ -165,6 +178,26 @@ class SessionAutoAdvance:
             return
         if not observe_track(tracker, state, attributes, now, session.get("item")):
             if tracker.pop("dung_som", False):
+                vi_tri = tracker.pop("dung_som_vi_tri", None)
+                session_id = str(session.get("session_id") or "")
+                if self._nen_tu_cuu_sau_dung_som(session_id, entity_id, context, now, vi_tri):
+                    # Luồng bị cắt giữa bài: giữ nhạc chạy thay vì để phiên chết (chủ máy 19/10/2026 23:00).
+                    if session_id in self._advancing:
+                        return
+                    if self._loa_tua_duoc(entity_id, attributes):
+                        # Tua được: phát tiếp đúng chỗ.
+                        self._ghi_tu_cuu(session_id, entity_id, now)
+                        self._advancing.add(session_id)
+                        self.hass.async_create_task(
+                            self._async_resume(session, entity_id, vi_tri), eager_start=False
+                        )
+                        return
+                    if self._next_from(session) is not None:
+                        # Không tua được (loa không có SEEK): phát lại từ giây 0 tệ hơn sang bài kế.
+                        self._ghi_tu_cuu(session_id, entity_id, now)
+                        self._advancing.add(session_id)
+                        self.hass.async_create_task(self._async_advance(session), eager_start=False)
+                        return
                 # Stop pressed on the speaker (idle well before the end): take that speaker out of the session instead
                 # of skipping to the next song (issue #3). A one-speaker session ends.
                 self.hass.async_create_task(self._async_remove_speaker(session, entity_id), eager_start=False)
@@ -174,6 +207,47 @@ class SessionAutoAdvance:
             return
         self._advancing.add(session_id)
         self.hass.async_create_task(self._async_advance(session), eager_start=False)
+
+    def _nen_tu_cuu_sau_dung_som(
+        self, session_id: str, entity_id: str, context: Any, now: Any, vi_tri: float | None
+    ) -> bool:
+        """Loa idle sớm: Stop thật (False → gỡ loa khỏi phiên) hay luồng bị cắt (True → giữ nhạc chạy)?
+
+        Phân biệt bằng NGỮ CẢNH của sự kiện đổi trạng thái, không dò chữ: Stop do người dùng hoặc automation trong Home
+        Assistant mang `user_id` / `parent_id`; loa tự đổi trạng thái (luồng bị cắt, hoặc nút trên loa/remote) thì không.
+        Nút trên loa là chỗ nhập nhằng duy nhất, nên chỉ tự cứu MỘT lần cho mỗi (phiên, loa): dừng sớm lần nữa trong
+        CHO_XAC_NHAN_DUNG_THAT_GIAY giây là Stop thật. Ghi cảnh báo để lần sau có bằng chứng trong log.
+        """
+        da_ra_lenh = bool(getattr(context, "user_id", None) or getattr(context, "parent_id", None))
+        truoc = self._lan_tu_cuu.get((session_id, entity_id))
+        gan_day = truoc is not None and (now - truoc).total_seconds() < CHO_XAC_NHAN_DUNG_THAT_GIAY
+        tu_cuu = vi_tri is not None and not da_ra_lenh and not gan_day
+        LOGGER.warning(
+            "Session %s: %s went idle early at %s s (user_id=%s parent_id=%s, tự cứu lần trước %s s trước) — %s",
+            session_id, entity_id, "?" if vi_tri is None else f"{vi_tri:.0f}",
+            getattr(context, "user_id", None), getattr(context, "parent_id", None),
+            "-" if truoc is None else f"{(now - truoc).total_seconds():.0f}",
+            "luồng bị cắt, giữ nhạc chạy" if tu_cuu else "coi là Stop, gỡ loa khỏi phiên",
+        )
+        return tu_cuu
+
+    def _ghi_tu_cuu(self, session_id: str, entity_id: str, now: Any) -> None:
+        self._lan_tu_cuu[(session_id, entity_id)] = now
+        # Bỏ các ghi nhớ đã quá hạn (khoảng xác nhận × 4) để bản đồ không phình theo số phiên.
+        han = CHO_XAC_NHAN_DUNG_THAT_GIAY * 4
+        for key in [k for k, v in self._lan_tu_cuu.items() if (now - v).total_seconds() > han]:
+            del self._lan_tu_cuu[key]
+
+    @staticmethod
+    def _loa_tua_duoc(entity_id: str, attributes: dict[str, Any]) -> bool:
+        """Loa có khả năng SEEK không. Thiếu thông tin thì coi là tua được (phát tiếp đúng chỗ như trước)."""
+        features = attributes.get("supported_features")
+        if features is None:
+            return True
+        try:
+            return bool(int(features) & MediaPlayerEntityFeature.SEEK)
+        except (TypeError, ValueError):
+            return True
 
     def _next_from(self, session: dict[str, Any]) -> str | None:
         """Where the next song comes from: the bound Queue of the session
