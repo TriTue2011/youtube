@@ -16,13 +16,22 @@ from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import LOGGER
 from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
-from .sessions import active_sessions, is_controlled_by, observe_interruption, observe_track, queue_item, session_queue_key
+from . import lenh_cua_minh
+from .sessions import (
+    FINISHED_STATES,
+    active_sessions,
+    is_controlled_by,
+    observe_interruption,
+    observe_track,
+    queue_item,
+    session_queue_key,
+)
 
 #: Loa về idle SỚM giữa bài mà không do ai ra lệnh trong Home Assistant thì thường là luồng bị cắt (máy phát/Google ngắt kết nối),
 #: không phải Stop: phát tiếp đúng chỗ MỘT lần. Loa lại dừng sớm ở cùng bài trong khoảng này (giây) thì là Stop thật (nút
@@ -76,6 +85,8 @@ class SessionAutoAdvance:
         # (phiên, loa) → lúc tự cứu gần nhất sau khi loa dừng sớm. Theo PHIÊN chứ không theo bài: sang bài mới thì
         # tracker đổi, còn Stop thật trên loa vẫn phải được tôn trọng.
         self._lan_tu_cuu: dict[tuple[str, str], Any] = {}
+        # (phiên, loa) → hàm huỷ hẹn kiểm lại: idle ngay sau lệnh của tích hợp bị bỏ qua, hết khoảng thì kiểm lại MỘT lần.
+        self._hen_lai: dict[tuple[str, str], Any] = {}
 
     @callback
     def async_start(self):
@@ -85,6 +96,9 @@ class SessionAutoAdvance:
         @callback
         def stop() -> None:
             unsub_coordinator()
+            for huy in self._hen_lai.values():
+                huy()
+            self._hen_lai.clear()
             if self._unsub_states:
                 self._unsub_states()
                 self._unsub_states = None
@@ -166,6 +180,11 @@ class SessionAutoAdvance:
     ) -> None:
         tracker = self._trackers.setdefault(self._track_key(session, entity_id), {})
         now = dt_util.utcnow()
+        # Loa vừa nhận lệnh phát do CHÍNH tích hợp gửi (Next, tự chuyển bài, phát lại): `idle` thoáng qua là chuyển bài, không phải
+        # Stop hay luồng cắt (chủ máy 19/10/2026 23:37: Next làm phiên chết). Bỏ qua, hết khoảng thì kiểm lại một lần.
+        if state in FINISHED_STATES and (con_lai := lenh_cua_minh.con_lai_giay(entity_id, now)) > 0:
+            self._hen_kiem_lai(session, entity_id, con_lai)
+            return
         # TTS / thông báo chen giữa bài: đọc xong thì phát tiếp đúng chỗ, và KHÔNG coi TTS dứt là hết bài.
         tiep = observe_interruption(tracker, state, attributes, now, session.get("item"))
         if tiep is not None:
@@ -233,6 +252,35 @@ class SessionAutoAdvance:
             "luồng bị cắt, giữ nhạc chạy" if tu_cuu else "coi là Stop, gỡ loa khỏi phiên",
         )
         return tu_cuu
+
+    def _hen_kiem_lai(self, session: dict[str, Any], entity_id: str, con_lai: float) -> None:
+        """Hẹn kiểm lại loa sau khi khoảng «vừa nhận lệnh phát» kết thúc (mỗi (phiên, loa) chỉ một hẹn)."""
+        session_id = str(session.get("session_id") or "")
+        khoa = (session_id, entity_id)
+        if khoa in self._hen_lai:
+            return
+
+        @callback
+        def _kiem_lai(_now: Any) -> None:
+            self._hen_lai.pop(khoa, None)
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state not in FINISHED_STATES:
+                return                                  # đã phát bài mới (hoặc loa biến mất): không có gì phải làm
+            for current in self._sessions():
+                if str(current.get("session_id") or "") != session_id or self._lead_speaker(current) != entity_id:
+                    continue
+                tracker = self._trackers.setdefault(self._track_key(current, entity_id), {})
+                if tracker.get("seen_playing"):
+                    # Vẫn là bài cũ và loa im: xử lý như một lần idle bình thường (hết bài / dừng sớm / Stop).
+                    self._observe(current, entity_id, state.state, dict(state.attributes), None)
+                else:
+                    # Bài mới chưa từng lên sóng: lệnh phát không có tác dụng → dừng hẳn, không để phiên «đang phát» mà loa im.
+                    LOGGER.warning(
+                        "Session %s: %s vẫn %s %s s sau lệnh phát của tích hợp, bài chưa từng phát — gỡ loa khỏi phiên",
+                        session_id, entity_id, state.state, lenh_cua_minh.KHOANG_GIAY)
+                    self.hass.async_create_task(self._async_remove_speaker(current, entity_id), eager_start=False)
+
+        self._hen_lai[khoa] = async_call_later(self.hass, con_lai + 1.5, _kiem_lai)
 
     @staticmethod
     def _da_ra_lenh(context: Any) -> bool:

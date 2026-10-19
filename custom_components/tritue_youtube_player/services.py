@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntryState
@@ -13,6 +14,7 @@ from homeassistant.helpers import config_validation as cv, entity_registry as er
 from .actions import async_play_on_players
 from .dung_loa import async_dung_loa_luong
 from .api import InvalidTargetError, YouTubePlayerApiError
+from . import lenh_cua_minh
 from .queue_store import get_queue_store
 from .const import (
     CONF_ENTRY_ID,
@@ -185,6 +187,8 @@ async def async_dispatch(
             else 0
         )
 
+    # Ghi TRƯỚC khi gửi lệnh: loa có thể về idle thoáng qua ngay khi nhận lệnh phát mới (xem lenh_cua_minh).
+    lenh_cua_minh.danh_dau(entity_ids)
     try:
         result = await async_play_on_players(
             hass,
@@ -205,6 +209,7 @@ async def async_dispatch(
             mode=mode,
         )
         await entry.runtime_data.async_refresh()
+        lenh_cua_minh.danh_dau(entity_ids)          # tính lại từ lúc lệnh XONG: loa chậm chỉ idle sau khi nhận lệnh
     except InvalidTargetError as error:
         raise _validation_error("invalid_target") from error
     except UnsupportedCastMediaError as error:
@@ -316,34 +321,47 @@ async def _async_handle_play_queue(hass: HomeAssistant, call: ServiceCall) -> No
         raise
 
 
+def _khoa_chuyen_bai(hass: HomeAssistant, entry) -> asyncio.Lock:
+    """Một khoá cho mỗi tích hợp: Next / Previous / tự chuyển bài chạy TUẦN TỰ.
+
+    Chủ máy 19/10/2026: «next thủ công không lỗi kể cả next 3, 4 lần liên tiếp». Hai lần bấm sát nhau mà cùng đọc ảnh chụp phiên cũ
+    thì cùng tính ra «bài kế của bài hiện tại» (một lần bấm thành vô nghĩa), còn hai lệnh phát chạy chồng lên nhau làm loa nhận lệnh
+    lộn xộn. Chờ khoá rồi MỚI đọc phiên: `async_dispatch` đã làm mới coordinator ở cuối mỗi lần phát nên lần sau thấy đúng bài hiện tại.
+    """
+    khoa = hass.data.setdefault(f"{DOMAIN}_khoa_chuyen_bai", {})
+    return khoa.setdefault(entry.entry_id, asyncio.Lock())
+
+
 async def async_skip(hass: HomeAssistant, entry, session_id: str | None, step: int) -> dict:
     """Play the next/previous item of a session's own queue on its speakers."""
-    session = find_session(entry.runtime_data.data, session_id)
-    if session is None:
-        raise _validation_error("session_not_found")
-    found = queue_item(session, step)
-    if found is None:
-        raise _validation_error("queue_end")
-    _, item = found
-    return await _async_play_session_item(hass, entry, session, item)
+    async with _khoa_chuyen_bai(hass, entry):
+        session = find_session(entry.runtime_data.data, session_id)
+        if session is None:
+            raise _validation_error("session_not_found")
+        found = queue_item(session, step)
+        if found is None:
+            raise _validation_error("queue_end")
+        _, item = found
+        return await _async_play_session_item(hass, entry, session, item)
 
 
 async def async_play_queue_next(hass: HomeAssistant, entry, session: dict) -> dict:
     """Play the next song of the Queue on its speakers."""
-    queue_key = session_queue_key(session)
-    if not queue_key:
-        outputs = list(session.get("output_entity_ids") or [])
-        if outputs:
-            queue_key = outputs[0]
-    if not queue_key:
-        raise _validation_error("queue_end")
-    item = await get_queue_store(hass).async_advance(queue_key)
-    if item is None:
-        raise _validation_error("queue_end")
-    res = await _async_play_session_item(hass, entry, session, item)
-    if res and res.get("session_id"):
-        attach_session_queue(res["session_id"], queue_key)
-    return res
+    async with _khoa_chuyen_bai(hass, entry):
+        queue_key = session_queue_key(session)
+        if not queue_key:
+            outputs = list(session.get("output_entity_ids") or [])
+            if outputs:
+                queue_key = outputs[0]
+        if not queue_key:
+            raise _validation_error("queue_end")
+        item = await get_queue_store(hass).async_advance(queue_key)
+        if item is None:
+            raise _validation_error("queue_end")
+        res = await _async_play_session_item(hass, entry, session, item)
+        if res and res.get("session_id"):
+            attach_session_queue(res["session_id"], queue_key)
+        return res
 
 
 async def _async_play_session_item(hass: HomeAssistant, entry, session: dict, item: dict) -> dict:

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.27.12 - 2026-10-19
+
+### Next không làm phiên chết, thanh tua dưới hàng nút, vào lại thẻ giữ loa/bài/giây
+
+- **Next bền (thủ công và tự động).** Đo thật 19/10/2026 23:37 trên `d50s`: bấm Next ở giây 9 của bài đầu playlist → loa thoáng về `idle` rồi mới phát bài mới, tích hợp thấy `idle` sớm và gỡ loa → phiên chết sau 11 giây (cả quy tắc «idle lần hai trong 90 giây là Stop» của 0.27.10 cũng bị đúng khoảnh khắc đó đánh lừa). Nay mọi lệnh phát do CHÍNH tích hợp gửi cho một loa được ghi lại (`lenh_cua_minh.py`); `idle` của loa đó trong 20 giây sau lệnh là chuyển bài nên bị bỏ qua, hết khoảng thì kiểm lại một lần: loa đã phát bài mới → không làm gì; loa vẫn im và bài mới chưa từng phát → gỡ loa (dừng hẳn); vẫn là bài cũ → xử lý như `idle` bình thường.
+- **Các lần Next/Previous/tự chuyển bài của một tích hợp chạy TUẦN TỰ** (khoá theo tích hợp), mỗi lần đọc phiên SAU khi chờ khoá. Trước đây bấm sát nhau thì các lần cùng đọc ảnh chụp cũ nên cùng tính ra «bài kế của bài hiện tại» (một lần bấm thành vô nghĩa), và hai lệnh phát chạy chồng lên nhau.
+- **Thanh tua nằm ngay dưới hàng nút điều khiển và luôn hiện khi đang phát.** Loa không báo vị trí (như `d50s`) trước đây làm thẻ ẩn cả thanh; nay thẻ ƯỚC giây đang phát bằng đồng hồ từ lúc bài bắt đầu (và hiện tổng nếu biết thời lượng). Tua thật khi loa có SEEK (gửi `media_seek`, đồng hồ ước theo lệnh tua); loa không có SEEK thì báo rõ «Loa đang phát không hỗ trợ tua» thay vì im. Giới hạn: đồng hồ ước chỉ dùng cho phiên mà thực thể YouTube đang mô tả (phiên mới nhất); hai bài trên hai loa không báo vị trí thì phiên còn lại chưa có thanh.
+- **Thoát rồi vào lại thẻ: giữ loa, bài và giây.** Thẻ nhớ (localStorage của chính người xem) loa đang chọn, loa cuối cùng và mốc bắt đầu bài; vào lại thì chọn đúng loa đó. Nhiều phiên trên nhiều loa thì giữ phiên của loa CUỐI CÙNG thoát app (không có thì phiên mới nhất); không phát gì thì vẫn giữ loa đã chọn. Dữ liệu đọc từ kho cục bộ chỉ được nhận khi đúng khuôn (id `media_player.*`, số hữu hạn); kho hỏng hay trống thì thẻ vẫn chạy như cũ.
+- Test: `test_lenh_cua_minh.py` (Next/idle thoáng qua/khoá tuần tự), `test-card-progress.js` (hàm thuần), `test_card_chrome.py` (thẻ THẬT trong Chrome với Home Assistant giả: thanh tua, tua, khôi phục loa, giữ giây). CHƯA kiểm trên loa và Home Assistant thật.
+- Tăng phiên bản vì tệp thẻ được nạp kèm `?v=<phiên bản>`.
+
 ## 0.27.11 - 2026-10-19
 
 ### Bài không có thời lượng không còn làm phiên «đang phát» khi loa đã im

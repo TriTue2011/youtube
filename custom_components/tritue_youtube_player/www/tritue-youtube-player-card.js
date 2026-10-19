@@ -75,6 +75,83 @@ function cardCopyQueueText(key) {
   return k ? `queue_code: ${k}` : "";
 }
 /* === END CARD-COPY-HELPERS === */
+
+/* === BEGIN CARD-PROGRESS-HELPERS === */
+/* Thanh tua + khôi phục loa khi vào lại thẻ — hàm thuần, không chạm DOM. Test bởi
+   youtube_player_integration/tests/test-card-progress.js (trích đoạn giữa hai mốc rồi chạy bằng node).
+
+   Chủ máy 19/10/2026: (1) «có chỗ tua nhạc ngay trong hộp dưới các nút điều khiển»: loa như d50s không báo media_position nên thẻ
+   ẩn thanh tua; nay thẻ ƯỚC giây đang phát bằng đồng hồ tính từ lúc bài bắt đầu. (2) «thoát vào lại HA thì phải giữ trình phát ở loa
+   nào, đang phát bài nào đến đâu; nhiều bài trên nhiều loa thì giữ ở loa cuối cùng thoát app»: nhớ loa cuối + mốc bắt đầu bài
+   trong localStorage (chỉ là tiện lợi của riêng người xem; hỏng hay trống thì thẻ vẫn chạy). */
+const CARD_LUU_KEY = "tritue_youtube_player_card:trang_thai:";
+const CARD_MEDIA_PLAYER = /^media_player\.[a-z0-9_]+$/;
+const CARD_LUU_TOI_DA_LOA = 8;
+const CARD_LUU_TOI_DA_KY_TU = 4096;
+
+/** Khoá nhận ra «cùng một bài của cùng một phiên»: đổi bài hoặc phiên mới thì đồng hồ ước phải tính lại. */
+function cardKhoaPhien(session) {
+  if (!session) return "";
+  return `${session.session_id ?? ""}|${session.id ?? ""}|${session.queue_index ?? ""}`;
+}
+
+/** Lúc bài bắt đầu (ms). Lấy mốc SỚM NHẤT đã thấy cho cùng một khoá: máy phát làm mới bản ghi giữa bài (vị trí 0 lúc cập nhật) không
+ *  được kéo đồng hồ về 0. Thiếu thông tin thì coi như vừa bắt đầu. */
+function cardUocBatDau(truoc, key, viTriGiay, capNhatMs, nowMs) {
+  const viTri = Number.isFinite(viTriGiay) ? Math.max(0, viTriGiay) : 0;
+  const theoMayPhat = Number.isFinite(capNhatMs) ? capNhatMs - viTri * 1000 : nowMs;
+  const batDau = Math.min(theoMayPhat, nowMs);
+  if (truoc && truoc.key === key && Number.isFinite(truoc.batDauMs)) {
+    return { key, batDauMs: Math.min(truoc.batDauMs, batDau) };
+  }
+  return { key, batDauMs: batDau };
+}
+
+/** Giây đang phát ước từ lúc bắt đầu. `tong` = 0 nghĩa là KHÔNG rõ thời lượng (có giây để hiện, không có tỉ lệ để tua). */
+function cardUocTienDo(batDauMs, nowMs, tongGiay) {
+  if (!Number.isFinite(batDauMs)) return null;
+  const tong = Number.isFinite(tongGiay) && tongGiay > 0 ? tongGiay : 0;
+  const giay = Math.max(0, (nowMs - batDauMs) / 1000);
+  return { viTri: tong ? Math.min(giay, tong) : giay, tong };
+}
+
+/** Đọc bản đã lưu: chỉ nhận đúng khuôn (id media_player hợp lệ, số hữu hạn); rác thì bỏ — dữ liệu từ kho cục bộ không được tin. */
+function cardLuuHopLe(raw) {
+  const trong = { chon: [], cuoi: "", uoc: null };
+  if (typeof raw !== "string" || !raw || raw.length > CARD_LUU_TOI_DA_KY_TU) return trong;
+  let data;
+  try { data = JSON.parse(raw); } catch (_error) { return trong; }
+  if (!data || typeof data !== "object") return trong;
+  const chon = [];
+  for (const id of Array.isArray(data.chon) ? data.chon : []) {
+    if (typeof id === "string" && CARD_MEDIA_PLAYER.test(id) && !chon.includes(id)) chon.push(id);
+    if (chon.length >= CARD_LUU_TOI_DA_LOA) break;
+  }
+  const cuoi = typeof data.cuoi === "string" && CARD_MEDIA_PLAYER.test(data.cuoi) ? data.cuoi : "";
+  const u = data.uoc;
+  const uoc = u && typeof u.key === "string" && u.key.length <= 300 && Number.isFinite(u.batDauMs)
+    ? { key: u.key, batDauMs: u.batDauMs } : null;
+  return { chon, cuoi, uoc };
+}
+
+/** Loa + phiên cần hiện khi vào lại thẻ: nhiều phiên thì phiên của loa cuối cùng thoát app; không có thì phiên mới nhất
+ *  (revision cao nhất); không phiên nào đang chạy thì giữ loa đã chọn lần trước. Trả null nếu không có gì để khôi phục. */
+function cardChonKhoiPhuc(luu, phien, coSan) {
+  const co = new Set(Array.isArray(coSan) ? coSan : []);
+  const cuoi = luu && co.has(luu.cuoi) ? luu.cuoi : "";
+  const dangChay = (Array.isArray(phien) ? phien : []).filter(
+    (p) => p && Array.isArray(p.output_entity_ids) && p.output_entity_ids.some((id) => co.has(id)));
+  if (dangChay.length) {
+    let chon = cuoi ? dangChay.find((p) => p.output_entity_ids.includes(cuoi)) : null;
+    if (!chon) chon = dangChay.reduce((a, b) => ((Number(b.revision) || 0) > (Number(a.revision) || 0) ? b : a));
+    const loa = chon.output_entity_ids.filter((id) => co.has(id));
+    return { chon: loa, cuoi: cuoi && loa.includes(cuoi) ? cuoi : loa[0], phienId: chon.session_id };
+  }
+  const daChon = luu && Array.isArray(luu.chon) ? luu.chon.filter((id) => co.has(id)) : [];
+  if (daChon.length) return { chon: daChon, cuoi: cuoi && daChon.includes(cuoi) ? cuoi : daChon[0], phienId: "" };
+  return null;
+}
+/* === END CARD-PROGRESS-HELPERS === */
 const SILENCE = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
 /** Máy này có phải iOS / iPadOS không.
@@ -1369,7 +1446,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._progressTimer = setInterval(() => {
         this._updateProgress();
         this._syncAlong();
+        this._luuTrangThai();
       }, 1000);
+    }
+    if (!this._luuKhiAn) {
+      // Thoát app / đổi tab: ghi ngay thay vì chờ nhịp kế (chủ máy cần vào lại thấy đúng loa, bài, giây).
+      this._luuKhiAn = () => { if (document.visibilityState !== "visible") this._luuTrangThai(); };
+      document.addEventListener("visibilitychange", this._luuKhiAn);
+      window.addEventListener("pagehide", this._luuKhiAn);
     }
     deviceAudio.listeners.add(this._onDeviceAudio);
     this._theoDoiTatMan();
@@ -1454,6 +1538,12 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._onFullscreenChange = null;
     }
     deviceAudio.listeners.delete(this._onDeviceAudio);
+    this._luuTrangThai();
+    if (this._luuKhiAn) {
+      document.removeEventListener("visibilitychange", this._luuKhiAn);
+      window.removeEventListener("pagehide", this._luuKhiAn);
+      this._luuKhiAn = null;
+    }
     this._remember();
     this._closeVideo();
   }
@@ -3580,10 +3670,52 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     );
   }
 
+  _luuNap() {
+    if (this._luuDaNap || !this._config?.entity) return;
+    this._luuDaNap = true;
+    let raw = null;
+    try { raw = localStorage.getItem(CARD_LUU_KEY + this._config.entity); } catch (_error) { /* không có kho: không khôi phục */ }
+    this._luu = cardLuuHopLe(raw);
+    this._uoc = this._luu.uoc;
+  }
+
+  /** Vào lại thẻ (thoát app rồi mở lại): giữ loa cuối cùng, phiên đang phát và giây của nó. Chạy MỘT lần mỗi lần tải thẻ, khi
+   *  danh sách media_player đã về. Trả true nếu đã chọn loa từ bản lưu/phiên; false thì để logic cũ (bám phiên chung) chạy. */
+  _khoiPhucLoaLanDau() {
+    if (this._daKhoiPhucLoa || !this._hass) return false;
+    this._luuNap();
+    const coSan = Object.keys(this._hass.states).filter((id) => id.startsWith("media_player.")
+      && id !== this._config.entity && this._hass.states[id].state !== "unavailable"
+      && this._hass.entities?.[id]?.platform !== "tritue_youtube_player" && !this._hiddenPlayers?.has(id));
+    if (!coSan.length) return false;                         // Home Assistant chưa nạp xong: thử lại lần sau
+    this._daKhoiPhucLoa = true;
+    const kq = cardChonKhoiPhuc(this._luu, this._sessions(), coSan);
+    if (!kq) return false;
+    this._selectedPlayers = new Set(kq.chon);
+    this._lastTicked = kq.cuoi;
+    this._defaultsApplied = true;
+    // Lựa chọn lần trước được coi là lựa chọn của người dùng: đừng để phiên khác (ở loa khác) kéo thẻ đi chỗ khác.
+    this._manualSelection = true;
+    return true;
+  }
+
+  /** Lưu loa đang chọn + loa cuối + mốc bắt đầu bài (chỉ ghi khi đổi). Gọi mỗi giây, khi ẩn trang và khi rời thẻ. */
+  _luuTrangThai() {
+    if (!this._config?.entity || !this._daKhoiPhucLoa) return;      // chưa khôi phục thì đừng ghi đè bản cũ bằng trạng thái trống
+    const phien = this._focusedSession();
+    const cuoi = this._lastTicked && this._selectedPlayers.has(this._lastTicked)
+      ? this._lastTicked : (phien?.output_entity_ids?.[0] || [...this._selectedPlayers][0] || "");
+    const json = JSON.stringify({ chon: [...this._selectedPlayers].slice(0, CARD_LUU_TOI_DA_LOA), cuoi, uoc: this._uoc || null });
+    if (json === this._luuCuoi) return;
+    this._luuCuoi = json;
+    try { localStorage.setItem(CARD_LUU_KEY + this._config.entity, json); } catch (_error) { /* kho đầy: chỉ mất khả năng khôi phục */ }
+  }
+
   _applySharedOutputs() {
     // Once the user hand-picks speakers on this card, stop mirroring the shared
     // session's outputs so their selection (and joins/leaves) stays put.
     if (this._manualSelection) return;
+    if (this._khoiPhucLoaLanDau()) return;
     const attributes = this._hass?.states?.[this._config.entity]?.attributes || {};
     const sharedOutputs = Array.isArray(attributes.output_entity_ids)
       ? attributes.output_entity_ids.filter((entityId) => this._hass.states[entityId])
@@ -4141,7 +4273,26 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         session,
       };
     }
+    // Loa không báo vị trí (như d50s): ƯỚC giây bằng đồng hồ để thanh tua vẫn nằm dưới hàng nút.
+    const uoc = this._uocTienDo(session);
+    if (uoc) return { kieu: "uoc", viTri: uoc.viTri, tong: uoc.tong, session };
     return { kieu: "", viTri: null, tong: 0 };
+  }
+
+  /** Giây đang phát ước từ lúc bài bắt đầu, khi loa không báo vị trí. Thực thể YouTube chỉ mô tả MỘT phiên (mới nhất) nên chỉ
+   *  ước cho phiên có đúng nhóm loa đó. null = không ước được (thanh ẩn như trước). */
+  _uocTienDo(session) {
+    this._luuNap();
+    const entity = this._hass?.states?.[this._config.entity];
+    if (!session || !entity || entity.state !== "playing") return null;
+    const a = entity.attributes || {};
+    const loaThucThe = Array.isArray(a.output_entity_ids) ? a.output_entity_ids : [];
+    const loaPhien = session.output_entity_ids || [];
+    if (loaThucThe.length !== loaPhien.length || !loaThucThe.every((id) => loaPhien.includes(id))) return null;
+    const now = Date.now();
+    this._uoc = cardUocBatDau(this._uoc, cardKhoaPhien(session), Number(a.media_position),
+      Date.parse(a.media_position_updated_at || ""), now);
+    return cardUocTienDo(this._uoc.batDauMs, now, Number(a.media_duration || session.duration || 0));
   }
 
   /** Tua tới tỉ lệ 0..1 trên thanh, gửi đúng lệnh cho đúng nguồn đang phát. */
@@ -4163,13 +4314,15 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       this._seekPicture(giay);
       return;
     }
-    if (trang.kieu !== "loa") return;
+    if (trang.kieu !== "loa" && trang.kieu !== "uoc") return;
     // Bit 2 của supported_features là SEEK; loa không có thì nói thẳng, đừng gửi rồi im.
     const dich = (trang.session.output_entity_ids || []).filter((id) => this._supportsFeature(id, 2));
     if (!dich.length) {
       this._setStatus("Loa đang phát không hỗ trợ tua.", true);
       return;
     }
+    // Loa không báo vị trí nên đồng hồ ước phải theo lệnh tua: bài coi như bắt đầu cách đây `giay` giây.
+    if (trang.kieu === "uoc") this._uoc = { key: cardKhoaPhien(trang.session), batDauMs: Date.now() - giay * 1000 };
     /* Ngưng nhịp đồng bộ một lúc: Home Assistant còn đẩy vài bản trạng thái mang vị
        trí CŨ trước khi loa kịp báo lại, mà nhịp đó sẽ lôi hình về chỗ cũ. */
     this._mirrorHoldUntil = Date.now() + 6000;

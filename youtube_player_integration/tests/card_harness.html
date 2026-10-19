@@ -1,0 +1,80 @@
+<!doctype html><meta charset="utf-8">
+<!-- Trang thử: nạp thẻ THẬT vào Chrome với Home Assistant giả (states/callService), chạy các kịch bản thanh tua + khôi phục loa khi vào lại.
+     Chạy bởi test_card_chrome.py; kết quả nằm trong #out (JSON). -->
+<body><pre id="out">chưa chạy</pre>
+<script src="../../custom_components/tritue_youtube_player/www/tritue-youtube-player-card.js"></script>
+<script>
+const ENT = "media_player.tritue_youtube_player_x";
+const SEEK = 2, base = 4 | 512 | 4096 | 8;
+const loi = [];
+window.addEventListener("error", (e) => loi.push("error: " + e.message));
+window.addEventListener("unhandledrejection", (e) => loi.push("reject: " + (e.reason && e.reason.message || e.reason)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function mkHass(phien, calls, extra = {}) {
+  const outs = phien.length ? phien[0].output_entity_ids : [];
+  const states = {
+    [ENT]: { entity_id: ENT, state: phien.length ? "playing" : "idle", attributes: {
+      friendly_name: "YT", supported_features: 4346625, media_title: phien.length ? phien[0].title : null,
+      media_duration: phien.length ? phien[0].duration : null, media_position: 0,
+      media_position_updated_at: new Date(Date.now() - 75000).toISOString(), output_entity_ids: outs,
+      sessions: phien, session_revision: 5, config_entry_id: "E1" } },
+    "media_player.d50s": { entity_id: "media_player.d50s", state: phien.some(p => p.output_entity_ids.includes("media_player.d50s")) ? "playing" : "idle",
+      attributes: { friendly_name: "D50s", supported_features: base, volume_level: 0 } },
+    "media_player.cam": { entity_id: "media_player.cam", state: phien.some(p => p.output_entity_ids.includes("media_player.cam")) ? "playing" : "idle",
+      attributes: { friendly_name: "Cam", supported_features: base | SEEK | 1, volume_level: 0.1 } },
+  };
+  return { states, entities: {}, config: { language: "vi" }, user: { is_admin: true }, language: "vi",
+    callService: async (d, s, data) => { calls.push([d, s, data]); return {}; },
+    callApi: async () => ({}), callWS: async () => ({}), connection: { subscribeEvents: async () => () => {} }, ...extra };
+}
+const P = (id, rev, loa, title = "M2M") => ({ session_id: id, revision: rev, source: "youtube", id: "vid_" + id, title, duration: 217,
+  output_entity_ids: loa, queue_index: 0, queue_size: 44, auto_advance: true });
+async function chay(ten, luu, phien, buoc) {
+  localStorage.clear();
+  if (luu) localStorage.setItem("tritue_youtube_player_card:trang_thai:" + ENT, JSON.stringify(luu));
+  const calls = [];
+  const el = document.createElement("tritue-youtube-player-card");
+  el.setConfig({ entity: ENT });
+  document.body.append(el);
+  el.hass = mkHass(phien, calls);
+  await sleep(1800);
+  const r = { ten, chon: [...el._selectedPlayers], cuoi: el._lastTicked };
+  const bar = el.shadowRoot.querySelector(".progress");
+  r.thanhAn = bar.hidden; r.troi = bar.querySelector(".elapsed").textContent; r.tong = bar.querySelector(".total").textContent;
+  if (buoc) await buoc(el, r, calls);
+  r.luu = localStorage.getItem("tritue_youtube_player_card:trang_thai:" + ENT);
+  el.remove();
+  return r;
+}
+async function bam(el, ti) {
+  const bar = el.shadowRoot.querySelector(".progress .bar"); const o = bar.getBoundingClientRect();
+  const x = o.left + o.width * ti;
+  const ev = (t) => new PointerEvent(t, { clientX: x, clientY: o.top + 2, pointerId: 1, bubbles: true });
+  bar.dispatchEvent(ev("pointerdown")); bar.dispatchEvent(ev("pointerup"));
+  await sleep(150);
+}
+(async () => {
+  const kq = [];
+  try {
+    kq.push(await chay("A_d50s_khong_bao_vi_tri", null, [P("s1", 5, ["media_player.d50s"])], async (el, r) => {
+      await bam(el, 0.5); r.trangThai = el.shadowRoot.querySelector(".status").textContent;
+    }));
+    kq.push(await chay("B_cam_co_SEEK", null, [P("s2", 5, ["media_player.cam"])], async (el, r, calls) => {
+      await bam(el, 0.5); r.goi = calls.filter(c => c[1] === "media_seek").map(c => c[2]);
+      await sleep(1300); r.troiSauTua = el.shadowRoot.querySelector(".progress .elapsed").textContent;
+    }));
+    kq.push(await chay("C_nhieu_phien_giu_loa_cuoi", { chon: ["media_player.cam"], cuoi: "media_player.cam", uoc: null },
+      [P("s1", 10, ["media_player.d50s"]), P("s2", 7, ["media_player.cam"])]));
+    kq.push(await chay("D_nhieu_phien_khong_luu_thi_moi_nhat", null,
+      [P("s2", 7, ["media_player.cam"]), P("s1", 10, ["media_player.d50s"])]));
+    kq.push(await chay("E_khong_phat_giu_loa_da_chon", { chon: ["media_player.cam"], cuoi: "media_player.cam", uoc: null }, []));
+    kq.push(await chay("G_vao_lai_giu_giay_da_luu", { chon: ["media_player.d50s"], cuoi: "media_player.d50s",
+      uoc: { key: "s1|vid_s1|0", batDauMs: Date.now() - 100000 } }, [P("s1", 5, ["media_player.d50s"])]));
+    kq.push(await chay("H_vao_lai_bai_khac_tinh_lai_giay", { chon: ["media_player.d50s"], cuoi: "media_player.d50s",
+      uoc: { key: "s0|bai_cu|7", batDauMs: Date.now() - 100000 } }, [P("s1", 5, ["media_player.d50s"])]));
+    kq.push(await chay("F_luu_dinh_ky", null, [P("s1", 5, ["media_player.d50s"])], async (el) => { await sleep(1300); }));
+  } catch (e) { loi.push("ngoại lệ chạy: " + e.message + " " + (e.stack || "").split("\n").slice(0, 3).join(" | ")); }
+  document.getElementById("out").textContent = JSON.stringify({ kq, loi }, null, 1);
+  document.title = "xong";
+})();
+</script>

@@ -77,6 +77,12 @@ playlist, ví dụ `https://www.youtube.com/watch?v=VIDEO_ID&list=PLAYLIST_ID`.
   hứa": trợ lý hiện tối đa 10 bài để chọn, hỏi loa (một, nhiều hay tất cả) rồi
   phát; "bài kế ở bếp", "dừng loa phòng khách", "đang phát gì" cũng được.
 
+### Next, thanh tua và vào lại thẻ
+
+- **Next / Previous / tự chuyển bài** bền: bấm liên tiếp hoặc cách nhau đều tiến đúng từng bài; loa về `idle` thoáng qua ngay sau lệnh phát của tích hợp (chuyển bài) không bị coi là Stop.
+- **Thanh tua** nằm dưới hàng nút và luôn hiện khi đang phát. Loa không báo vị trí thì thẻ ước giây bằng đồng hồ; loa có SEEK tua được, loa không có SEEK thì thẻ báo rõ lý do.
+- **Vào lại thẻ** thì thẻ chọn lại đúng loa đã dùng lần cuối (nhiều bài trên nhiều loa: loa cuối cùng thoát app), hiện bài đang phát và giây ước. Thông tin này lưu trong trình duyệt của bạn (localStorage), không gửi đi đâu.
+
 ### Loa tự dừng giữa bài
 
 Bài không có thời lượng (nguồn không khai): loa về `idle` thì luôn sang bài kế (hết bài kế hoặc Stop trong Home Assistant thì dừng hẳn); tích hợp không phân biệt được hết bài với luồng cắt nên không phát lại bài.
