@@ -273,7 +273,7 @@ Mọi thông tin trên thẻ đều có thể lấy mã bằng nút **Chép mã*
 |---|---|
 | `tritue_youtube_player.play_on_players` | Phát một bài YouTube, Zing công khai hoặc link HTTP theo mã/URL; tuỳ chọn `mode` (audio/video, chỉ áp dụng cho YouTube), âm lượng |
 | `tritue_youtube_player.play_playlist` | Phát playlist theo id 12 ký tự trong kho (chép từ nút «Chép id playlist» trên thẻ) ra các loa |
-| `tritue_youtube_player.play_queue` | Phát toàn bộ hàng đợi theo mã khoá (`queue_code`) ra các loa (`entity_id` bắt buộc) |
+| `tritue_youtube_player.play_queue` | Phát hàng đợi (MỘT hàng đợi chung của nhà, mã 12 ký tự `queue_code`, bỏ trống cũng được) ra các loa (`entity_id` bắt buộc, tích nhiều loa) |
 | `tritue_youtube_player.skip` | Sang bài kế (hoặc lùi bài) của một phiên phát |
 | `tritue_youtube_player.stop_session` | Dừng hẳn phiên phát trên các loa |
 | `tritue_youtube_player.remove_players` | Rút một số loa khỏi phiên, các loa còn lại tiếp tục |
@@ -314,7 +314,7 @@ data:
 action: tritue_youtube_player.play_queue
 data:
   entry_id: 01J00000000000000000000000
-  queue_code: media_player.loa_phong_khach   # mã hàng đợi chép từ nút sao chép ở header Queue
+  queue_code: abcd1234efgh   # mã hàng đợi (12 ký tự) — chọn trong danh sách hoặc chép từ nút ở tiêu đề «Hàng đợi»; bỏ trống cũng được
   entity_id:
     - media_player.loa_phong_khach
 ```

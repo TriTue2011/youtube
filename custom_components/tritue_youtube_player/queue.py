@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import random
 import re
+import secrets
 from typing import Any, Callable
 
 from .suggestions import FACEBOOK_ID, MAX_URL, VIDEO_ID, _text, _thumbnail
@@ -25,7 +26,10 @@ STORAGE_KEY = "tritue_youtube_player.queue"
 MAX_ITEMS = 200
 MAX_QUEUES = 300
 
-QUEUE_KEY = re.compile(r"^(media_player\.[a-z0-9_]+|device:[a-z0-9-]{8,64})$")
+#: Hàng đợi DUY NHẤT của nhà, mã ngẫu nhiên 12 ký tự (giống mã playlist). Khoá cũ theo loa/máy (`media_player.x`, `device:<mã>`) vẫn được nhận
+#: nhưng đều trỏ về hàng đợi duy nhất này — loa PHÁT chọn riêng, không còn «hàng đợi của loa».
+QUEUE_ID = re.compile(r"^[a-z0-9]{12}$")
+QUEUE_KEY = re.compile(r"^([a-z0-9]{12}|media_player\.[a-z0-9_]+|device:[a-z0-9-]{8,64})$")
 # Mã Zing theo khuôn rộng của máy phát (streaming.py): chữ hoa lẫn thường, 8–16 ký tự.
 ZING_ID = re.compile(r"^[A-Za-z0-9]{8,16}$")
 ITEM_ID = {"youtube": VIDEO_ID, "facebook": FACEBOOK_ID, "zing": ZING_ID}
@@ -95,13 +99,55 @@ def normalize_queue(value: Any) -> dict[str, Any]:
     return queue
 
 
+def new_queue_id() -> str:
+    return secrets.token_hex(6)
+
+
+def _merge_queues(queues: list[dict[str, Any]]) -> dict[str, Any]:
+    """Gộp các hàng đợi cũ (mỗi loa/máy một cái) thành MỘT: bài nối tiếp nhau, bỏ bài trùng (nguồn + id); chế độ/thứ tự/bài hiện tại lấy từ
+    hàng đợi có bài đầu tiên (ưu tiên cái đang có «bài hiện tại»)."""
+    co_bai = [q for q in queues if q["items"]]
+    if not co_bai:
+        return queues[0] if queues else empty_queue()
+    chinh = next((q for q in co_bai if q["current"]), co_bai[0])
+    items: list[dict[str, Any]] = []
+    seen_item: set[tuple[str, str]] = set()
+    seen_uid: set[str] = set()
+    for q in [chinh, *[x for x in co_bai if x is not chinh]]:
+        for it in q["items"]:
+            khoa = (it["source"], it["id"])
+            if khoa in seen_item or it["uid"] in seen_uid or len(items) >= MAX_ITEMS:
+                continue
+            seen_item.add(khoa)
+            seen_uid.add(it["uid"])
+            items.append(it)
+    uids = {it["uid"] for it in items}
+    return {
+        "items": items,
+        "current": chinh["current"] if chinh["current"] in uids else None,
+        "mode": chinh["mode"],
+        "order": chinh["order"],
+        "played": [u for u in chinh["played"] if u in uids],
+    }
+
+
 def normalize_document(value: Any) -> dict[str, Any]:
+    """Tài liệu lưu: `{"id": <12 ký tự>, "queues": {<id>: hàng đợi}}`. Tài liệu cũ (khoá theo loa/máy) được gộp vào hàng đợi duy nhất."""
     queues = value.get("queues") if isinstance(value, dict) else None
-    out: dict[str, Any] = {}
+    luu_id = value.get("id") if isinstance(value, dict) else None
+    qid = luu_id if isinstance(luu_id, str) and QUEUE_ID.fullmatch(luu_id) else new_queue_id()
+    chinh: dict[str, Any] | None = None
+    cu: list[dict[str, Any]] = []
     for key, queue in (queues or {}).items() if isinstance(queues, dict) else []:
-        if isinstance(key, str) and QUEUE_KEY.fullmatch(key) and len(out) < MAX_QUEUES:
-            out[key] = normalize_queue(queue)
-    return {"queues": out}
+        if isinstance(key, str) and QUEUE_KEY.fullmatch(key) and len(cu) < MAX_QUEUES:
+            q = normalize_queue(queue)
+            if key == qid:
+                chinh = q                      # hàng đợi mang mã chính làm gốc gộp
+            else:
+                cu.append(q)
+    gop = _merge_queues(([chinh] if chinh else []) + cu)
+    out: dict[str, Any] = {qid: gop} if (gop["items"] or gop != empty_queue()) else {}
+    return {"id": qid, "queues": out}
 
 
 def queue_key(value: Any) -> str:
@@ -111,11 +157,17 @@ def queue_key(value: Any) -> str:
     return key
 
 
+def _chinh(document: dict[str, Any], key: str) -> str:
+    """Mọi khoá hợp lệ đều trỏ về hàng đợi duy nhất của tài liệu (tài liệu thuần không có `id` thì giữ nguyên khoá — dùng cho test đơn vị)."""
+    return document.get("id") or key
+
+
 def get_queue(document: dict[str, Any], key: str) -> dict[str, Any]:
-    return document["queues"].get(key) or empty_queue()
+    return document["queues"].get(_chinh(document, key)) or empty_queue()
 
 
 def _with_queue(document: dict[str, Any], key: str, queue: dict[str, Any]) -> dict[str, Any]:
+    key = _chinh(document, key)
     queues = dict(document["queues"])
     if queue["items"]:
         queues[key] = queue

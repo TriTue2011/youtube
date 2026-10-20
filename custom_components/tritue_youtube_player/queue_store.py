@@ -38,7 +38,16 @@ class QueueStore:
     async def async_load(self) -> None:
         async with self._lock:
             if self._doc is None:
-                self._doc = normalize_document(await self._store.async_load())
+                raw = await self._store.async_load()
+                self._doc = normalize_document(raw)
+                # Tài liệu cũ (khoá theo loa/máy, chưa có mã) được gộp thành MỘT hàng đợi: lưu lại ngay để lần sau không gộp nữa.
+                if not isinstance(raw, dict) or raw.get("id") != self._doc["id"] or set(raw.get("queues") or {}) - {self._doc["id"]}:
+                    await self._store.async_save(self._doc)
+
+    @property
+    def code(self) -> str:
+        """Mã 12 ký tự của hàng đợi DUY NHẤT (có sau `async_load`)."""
+        return (self._doc or {}).get("id", "")
 
     def has_next(self, key: str) -> bool:
         """Sync check for auto-advance; False before the store is loaded."""
@@ -62,11 +71,6 @@ class QueueStore:
                 await self._store.async_save(document)
                 self._doc = document
             return get_queue(document, queue_key(payload.get("key"))), item
-
-    async def async_list(self) -> dict[str, dict[str, Any]]:
-        """Mọi hàng đợi đang có bài (khoá → hàng đợi) — cho danh sách chọn của action."""
-        await self.async_load()
-        return {k: q for k, q in (self._doc or {}).get("queues", {}).items() if q.get("items")}
 
     async def async_advance(self, key: str) -> dict[str, Any] | None:
         """Move ``key``'s queue to its next song and return it (None = done)."""

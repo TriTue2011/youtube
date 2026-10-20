@@ -293,5 +293,36 @@ class BaiKhongRoThoiLuongTests(unittest.TestCase):
         self.adv._async_remove_speaker.assert_not_called()
 
 
+
+class NextFromTests(unittest.TestCase):
+    """«action queue lại ra bài chả có trong queue» (chủ máy 20/10/2026): phiên gắn hàng đợi mà hết bài thì không được lấy bài của phiên."""
+
+    def _adv(self, has_next, bound):
+        hass = MagicMock()
+        adv = advance_mod.SessionAutoAdvance(hass, MagicMock())
+        store = MagicMock()
+        store.has_next = MagicMock(return_value=has_next)
+        return adv, patch.object(advance_mod, "get_queue_store", return_value=store), patch.object(
+            advance_mod, "session_queue_key", return_value=bound)
+
+    SESSION = {"session_id": "s1", "output_entity_ids": ["media_player.loa"]}
+
+    def test_gan_hang_doi_het_bai_thi_dung_du_phien_con_bai_rieng(self):
+        adv, p1, p2 = self._adv(False, "abcdef012345")
+        with p1, p2, patch.object(advance_mod, "queue_item", return_value={"id": "BaiCuCuaPlaylist"}) as qi:
+            self.assertIsNone(adv._next_from(self.SESSION))
+        qi.assert_not_called()
+
+    def test_gan_hang_doi_con_bai_thi_qua_hang_doi(self):
+        adv, p1, p2 = self._adv(True, "abcdef012345")
+        with p1, p2:
+            self.assertEqual("queue", adv._next_from(self.SESSION))
+
+    def test_khong_gan_hang_doi_van_roi_xuong_hang_doi_cua_phien(self):
+        adv, p1, p2 = self._adv(False, None)
+        with p1, p2, patch.object(advance_mod, "queue_item", return_value={"id": "x"}):
+            self.assertEqual("session", adv._next_from(self.SESSION))
+
+
 if __name__ == "__main__":
     unittest.main()

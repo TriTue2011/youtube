@@ -338,11 +338,13 @@ class SessionAutoAdvance:
         """Where the next song comes from: the bound Queue of the session
         or first speaker while it has songs left, then the session's own queue."""
         queue_key = session_queue_key(session)
-        if not queue_key:
-            outputs = session.get("output_entity_ids") or []
-            if outputs:
-                queue_key = outputs[0]
-        if queue_key and get_queue_store(self.hass).has_next(queue_key):
+        if queue_key:
+            # Phiên do `play_queue` / «Phát hàng đợi» chủ động gắn với hàng đợi: hết bài của hàng đợi thì DỪNG. Trước đây rơi xuống
+            # hàng đợi riêng của phiên (bài còn sót của playlist phát trước đó trên cùng loa) → phát «bài không có trong queue»
+            # (chủ máy báo 20/10/2026).
+            return "queue" if get_queue_store(self.hass).has_next(queue_key) else None
+        outputs = session.get("output_entity_ids") or []
+        if outputs and get_queue_store(self.hass).has_next(outputs[0]):
             return "queue"
         if queue_item(session, 1) is not None:
             return "session"

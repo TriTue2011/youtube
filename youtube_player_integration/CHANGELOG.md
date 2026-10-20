@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.27.18 - 2026-10-20
+
+### Hàng đợi DUY NHẤT (mã 12 ký tự); action queue không phát bài ngoài hàng đợi
+
+Chủ máy báo 20/10/2026 (ảnh): «Có duy nhất queue mà ra lắm thế» (danh sách chọn có «Máy 12b83e», «Máy 97a095», «Phòng khách») và «action queue lại ra bài chả có trong queue»; «queue chỉ cần mã hoá theo mã random 12 ký tự».
+
+- **Một hàng đợi cho cả nhà.** Trước đây hàng đợi lưu riêng cho từng loa và từng trình duyệt/điện thoại (`media_player.x`, `device:<mã>`) nên danh sách chọn ra nhiều mục và chọn nhầm mục là phát bài của mục khác. Nay có MỘT hàng đợi, mã ngẫu nhiên 12 ký tự (sinh một lần, lưu cùng dữ liệu hàng đợi). Loa PHÁT chọn riêng (ô loa của action / ô tích trên thẻ) — hàng đợi nào cũng phát được ra loa nào. Khoá cũ (`media_player.x`, `device:…`) vẫn được nhận và đều trỏ về hàng đợi duy nhất, nên automation đang chạy không phải sửa.
+- **Nâng cấp tự gộp.** Lần nạp đầu, các hàng đợi cũ được gộp thành một: nối bài (bỏ bài trùng cùng nguồn + id), lấy chế độ/thứ tự/bài hiện tại của hàng đợi đang có «bài hiện tại», rồi lưu lại. Không mất bài nào khác.
+- **Giao diện:** thẻ chỉ còn khối «Hàng đợi» (không «Queue · Phòng khách», không «Máy này»); nút chép ra `queue_code: <12 ký tự>`; danh sách chọn trong action `play_queue` chỉ còn một mục «Hàng đợi (N bài)» (kể cả trống). API `queue` trả thêm `code`.
+- **Sửa: «action queue ra bài không có trong queue».** Phiên phát bởi `play_queue` được gắn với hàng đợi; hết bài của hàng đợi thì trước đây tự chuyển sang hàng đợi RIÊNG của phiên (bài còn sót của playlist phát trước đó trên cùng loa). Nay phiên gắn hàng đợi mà hết bài thì DỪNG. Phiên không gắn (phát từ kết quả tìm kiếm / playlist) giữ hành vi cũ.
+- **Giới hạn:** nhiều loa phát cùng lúc từ hàng đợi chung dùng chung MỘT con trỏ «bài hiện tại/đã phát» — hai phiên chuyển bài độc lập trên hai loa sẽ làm nhau nhảy bài. Muốn hai loa phát hai danh sách khác nhau thì dùng playlist.
+- Test: `test_queue.py` (khoá cũ cùng một hàng đợi, mã 12 ký tự ổn định, gộp tài liệu cũ idempotent), `test_dung_som_phat_lai.py` (`_next_from`), `tests_ha` (thêm bài qua khoá loa A và B vào cùng hàng đợi; chuyển bài tuần tự qua Home Assistant thật), `test-card-copy.js`. CHƯA thử trên Home Assistant thật của chủ máy.
+
 ## 0.27.17 - 2026-10-20
 
 ### Chọn loa trong action bằng danh sách TÍCH CHỌN nhiều loa như thẻ

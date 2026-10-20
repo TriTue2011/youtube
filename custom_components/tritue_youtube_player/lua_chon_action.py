@@ -48,16 +48,11 @@ def dung_lua_chon_playlist(playlists: list[Any]) -> list[dict[str, str]]:
     return out
 
 
-def dung_lua_chon_queue(queues: dict[str, Any], ten_loa: dict[str, str]) -> list[dict[str, str]]:
-    """[{value: khoá hàng đợi, label: «Hàng đợi «tên» (N bài)»}] cho các hàng đợi đang có bài. Tên chỉ cho biết danh sách NÀY nằm ở loa nào; loa PHÁT chọn riêng ở ô `entity_id`."""
-    out = []
-    for key, queue in list(queues.items())[:TOI_DA_LUA_CHON]:
-        so_bai = len((queue or {}).get("items") or [])
-        if not so_bai:
-            continue
-        ten = ten_loa.get(key) or ("Máy " + key.split(":", 1)[1][:6] if key.startswith("device:") else key)
-        out.append({"value": key, "label": f"Hàng đợi «{ten}» ({so_bai} bài)"})
-    return out
+def dung_lua_chon_queue(code: str, so_bai: int) -> list[dict[str, str]]:
+    """Hàng đợi DUY NHẤT của nhà: một mục `{value: mã 12 ký tự, label: «Hàng đợi (N bài)»}` (kể cả khi trống). Loa PHÁT chọn riêng ở ô loa."""
+    if not code:
+        return []
+    return [{"value": code, "label": f"Hàng đợi ({so_bai} bài)" if so_bai else "Hàng đợi (trống)"}]
 
 
 def dung_lua_chon_loa(players: list[tuple[str, str]], an: set[str]) -> list[dict[str, str]]:
@@ -139,13 +134,7 @@ async def async_cap_nhat_lua_chon(hass: HomeAssistant, *, reset: bool = False, e
                 playlist_opts = dung_lua_chon_playlist(data.get("playlists") or [])
             store = get_queue_store(hass)
             await store.async_load()
-            ten_loa = {}
-            queues = await store.async_list()
-            for key in queues:
-                state = hass.states.get(key)
-                if state is not None and state.name:
-                    ten_loa[key] = state.name
-            queue_opts = dung_lua_chon_queue(queues, ten_loa)
+            queue_opts = dung_lua_chon_queue(store.code, len((await store.async_get(store.code)).get("items") or []))
         for service, desc in ap_lua_chon(base, playlist_opts, queue_opts, loa_opts).items():
             async_set_service_schema(hass, DOMAIN, service, desc)
     except Exception as err:  # noqa: BLE001 — danh sách chọn chỉ là tiện lợi, lỗi gì cũng không được kéo theo tích hợp

@@ -1319,6 +1319,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     this._view = "search";
     // Queue theo khoá («media_player.x» hoặc «device:<mã>») — xem «_queueKey».
     this._queueLists = {};
+    this._queueCode = "";   // mã 12 ký tự của hàng đợi duy nhất (biết sau lần tải đầu)
     this._queueChuKy = "";
     this._queueTheoDoi = "";
     this._queueXoaHet = false;
@@ -8284,34 +8285,42 @@ class TriTueYouTubePlayerCard extends HTMLElement {
 
   /* ===== QUEUE ===== */
 
-  /** Khoá Queue: loa tích ĐẦU TIÊN (Set giữ thứ tự tích), không tích loa thì máy này. */
+  /** Khoá Queue: chỉ có MỘT hàng đợi cho cả nhà, mã 12 ký tự do tích hợp cấp (`_queueCode`, biết sau lần tải đầu). Trước lần tải đầu gửi
+   *  khoá cũ (loa tích đầu tiên / máy này) — tích hợp nhận và trỏ về đúng hàng đợi duy nhất đó. Loa PHÁT chọn riêng, không ảnh hưởng hàng đợi. */
   _queueKey() {
+    if (this._queueCode) return this._queueCode;
     const loa = [...this._selectedPlayers][0];
     return loa || `device:${queueDeviceId()}`;
   }
 
-  _queueName(key) {
-    if (key.startsWith("device:")) return "Máy này";
-    return this._hass?.states?.[key]?.attributes?.friendly_name || key;
+  _queueName(_key) {
+    return "Hàng đợi chung";
+  }
+
+  /** Ghi nhận trả lời của máy chủ: nhớ mã duy nhất và giữ danh sách dưới ĐÚNG mã đó (mọi khoá cũ dùng chung một danh sách). */
+  _queueNhan(key, payload) {
+    if (!payload?.queue) return;
+    if (/^[a-z0-9]{12}$/.test(String(payload.code || ""))) this._queueCode = payload.code;
+    this._queueLists[this._queueCode || key] = payload.queue;
   }
 
   async _loadQueueList(key = this._queueKey()) {
     if (!this._hass) return null;
     try {
       const payload = await this._hass.callApi("GET", `tritue_youtube_player/queue?key=${encodeURIComponent(key)}`);
-      if (payload?.queue) this._queueLists[key] = payload.queue;
+      this._queueNhan(key, payload);
     } catch (_error) {
       // Tích hợp bản cũ chưa có Queue: tab hiện trống, không báo lỗi mỗi lần đổi loa.
     }
     this._renderQueue();
-    return this._queueLists[key] || null;
+    return this._queueLists[this._queueCode || key] || null;
   }
 
   /** Gửi một lệnh Queue; trả về câu trả lời của máy chủ, hỏng thì null (đã báo lỗi). */
   async _queueCall(key, body) {
     try {
       const payload = await this._hass.callApi("POST", "tritue_youtube_player/queue", { key, ...body });
-      if (payload?.queue) this._queueLists[key] = payload.queue;
+      this._queueNhan(key, payload);
       this._renderQueue();
       return payload || {};
     } catch (error) {
@@ -8330,10 +8339,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const dau = `${key}|${phien?.id || ""}|${phien?.queue_index ?? ""}`;
     if (dau === this._queueTheoDoi) return;
     this._queueTheoDoi = dau;
-    this._loadQueueList(key);
-    // Queue của máy này cần sẵn trong bộ nhớ để sự kiện hết bài hỏi được ngay.
-    const may = `device:${queueDeviceId()}`;
-    if (key !== may && !(may in this._queueLists)) this._loadQueueList(may);
+    this._loadQueueList(key);   // hàng đợi duy nhất — cũng là hàng đợi mà sự kiện hết bài trên máy này hỏi tới
   }
 
   async _addToQueue(item, button) {
@@ -8359,7 +8365,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     icon?.setAttribute("icon", "mdi:check");
     setTimeout(() => icon?.setAttribute("icon", "mdi:tray-plus"), 1500);
     const n = payload.queue?.items?.length || 0;
-    this._setStatus(`Đã thêm “${item.title || item.id}” vào Queue · ${this._queueName(key)} (${n} bài).`);
+    this._setStatus(`Đã thêm “${item.title || item.id}” vào hàng đợi (${n} bài).`);
   }
 
   /** Bài đang phát (máy này, khung video, hay loa đang xem) có phải bài hiện tại
@@ -8395,7 +8401,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
    *  Đang tích loa thì không đụng — phát tiếp sẽ ra loa, không phải máy này. */
   _queueTiepTheo() {
     if (this._selectedPlayers.size) return false;
-    const key = `device:${queueDeviceId()}`;
+    const key = this._queueCode || `device:${queueDeviceId()}`;
     if (!queueHasNext(this._queueLists[key])) return false;
     this._queueCall(key, { action: "next" }).then((payload) => {
       if (payload?.item) this._playQueueItem(payload.item, key);
@@ -8449,11 +8455,11 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     const head = el("div", "queue-head");
     const copyQueue = el("button", "icon-button queue-copy");
     copyQueue.type = "button";
-    copyQueue.title = `Chép mã hàng đợi “${this._queueName(key)}” (${key})`;
+    copyQueue.title = `Chép mã hàng đợi (${key})`;
     copyQueue.setAttribute("aria-label", copyQueue.title);
     copyQueue.append(icon("mdi:content-copy"));
     copyQueue.addEventListener("click", () => this._copyQueueCode(key, this._queueName(key)));
-    head.append(el("span", "queue-title", `Queue · ${this._queueName(key)}`),
+    head.append(el("span", "queue-title", "Hàng đợi"),
       copyQueue,
       el("span", "queue-count", `${list.items.length} bài`));
     const controls = el("div", "queue-controls");
@@ -8990,8 +8996,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
   _copyQueueCode(key, name = "") {
     const yaml = cardCopyQueueText(key);
     if (!yaml) return;
-    const ten = name || this._queueName(key) || key;
-    this._copyText(yaml, `Đã chép mã hàng đợi “${ten}” (${key})`, `Cấu hình automation cho hàng đợi “${ten}”:`);
+    this._copyText(yaml, `Đã chép mã hàng đợi (${key})`, "Cấu hình automation cho hàng đợi:");
   }
 
   _copyPlaylistCode(playlist) {

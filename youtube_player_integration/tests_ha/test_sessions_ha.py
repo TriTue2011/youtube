@@ -519,10 +519,10 @@ async def _het_bai(hass, entry, loa, ten):
     await hass.async_block_till_done()
 
 
-async def test_queue_cua_loa_di_truoc_hang_doi_cua_phien(hass, addon_server):
-    """Chủ máy 23/09/2026: tìm thêm bài, gán vào Queue; hết bài đang phát thì sang
-    bài kế trong Queue — kể cả khi mọi trình duyệt đã đóng. Phiên phát từ kết quả
-    tìm kiếm tự có hàng đợi (Bai 1 → Bai 2), nên Queue phải thắng hàng đợi ấy."""
+async def test_queue_duy_nhat_di_truoc_hang_doi_cua_phien(hass, addon_server):
+    """Chủ máy 23/09/2026: tìm thêm bài, gán vào Queue; hết bài đang phát thì sang bài kế trong Queue — kể cả khi mọi trình duyệt đã đóng.
+    Phiên phát từ kết quả tìm kiếm tự có hàng đợi (Bai 1 → Bai 2), nên Queue phải thắng hàng đợi ấy.
+    Chủ máy 20/10/2026: «Queue trên card chỉ có một ... chọn được loa để phát» — thêm bài qua khoá loa nào cũng vào CÙNG một hàng đợi."""
     from custom_components.tritue_youtube_player.queue_store import get_queue_store
 
     entry, calls = await _setup(hass, addon_server)
@@ -530,8 +530,10 @@ async def test_queue_cua_loa_di_truoc_hang_doi_cua_phien(hass, addon_server):
     await _choi(hass, entry, KET_QUA[0]["url"], [LOA_A])
     store = get_queue_store(hass)
     await store.async_change({"key": LOA_A, "action": "add", "items": [KET_QUA[2]]})
-    # Queue của loa khác không được chen vào loa A.
     await store.async_change({"key": LOA_B, "action": "add", "items": [KET_QUA[1]]})
+    # MỘT hàng đợi: khoá loa nào cũng thấy cả hai bài, và mã 12 ký tự trỏ về cùng danh sách.
+    assert [i["title"] for i in (await store.async_get(LOA_A))["items"]] == ["Bai 3", "Bai 2"]
+    assert (await store.async_get(LOA_B))["items"] == (await store.async_get(store.code))["items"]
 
     calls.clear()
     await _het_bai(hass, entry, LOA_A, "Phòng khách")
@@ -540,11 +542,14 @@ async def test_queue_cua_loa_di_truoc_hang_doi_cua_phien(hass, addon_server):
     queue = await store.async_get(LOA_A)
     assert queue["current"] == queue["items"][0]["uid"]
 
-    # Queue đã hết, và Bai 3 là bài cuối của hàng đợi phiên: không phát gì thêm.
+    calls.clear()
+    await _het_bai(hass, entry, LOA_A, "Phòng khách")
+    assert {tuple(p["output_entity_ids"]): p["title"] for p in _phien(hass)}[(LOA_A,)] == "Bai 2"
+
+    # Hàng đợi đã hết: không phát gì thêm.
     calls.clear()
     await _het_bai(hass, entry, LOA_A, "Phòng khách")
     assert [s for s, _ in calls if s == "play_media"] == []
-    assert len((await store.async_get(LOA_B))["items"]) == 1
 
 
 async def test_queue_qua_the_moi_nguoi_dang_nhap_deu_dung_duoc(hass, hass_client, hass_admin_user):

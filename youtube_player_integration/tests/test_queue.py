@@ -80,12 +80,41 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(len(items), 2)
         self.assertNotEqual(items[0]["uid"], items[1]["uid"])
 
-    def test_moi_may_moi_loa_mot_danh_sach(self):
+    def test_moi_khoa_deu_tro_ve_mot_hang_doi_duy_nhat(self):
+        """Chủ máy 20/10/2026: «queue trên card chỉ có một ... chọn được loa để phát nên queue chỉ cần mã random 12 ký tự»."""
         doc = self.them(self.q.normalize_document(None), LOA, 3)
         doc = self.them(doc, MAY, 1)
-        self.assertEqual(len(self.q.get_queue(doc, LOA)["items"]), 3)
-        self.assertEqual(len(self.q.get_queue(doc, MAY)["items"]), 1)
-        self.assertEqual(self.q.get_queue(doc, "media_player.bep")["items"], [])
+        self.assertEqual(len(doc["queues"]), 1)
+        self.assertEqual(list(doc["queues"]), [doc["id"]])
+        for khoa in (LOA, MAY, "media_player.bep", doc["id"]):
+            self.assertEqual(len(self.q.get_queue(doc, khoa)["items"]), 4, khoa)
+
+    def test_ma_hang_doi_la_12_ky_tu_ngau_nhien_va_on_dinh(self):
+        a = self.q.normalize_document(None)
+        b = self.q.normalize_document(None)
+        self.assertRegex(a["id"], r"^[a-z0-9]{12}$")
+        self.assertNotEqual(a["id"], b["id"])                       # ngẫu nhiên giữa các nhà
+        self.assertEqual(self.q.normalize_document(a)["id"], a["id"])   # nạp lại không đổi mã
+        doc = self.them(a, LOA, 1)
+        self.assertEqual(self.q.normalize_document(doc)["id"], a["id"])
+        self.assertEqual(self.q.queue_key(a["id"]), a["id"])         # mã 12 ký tự là khoá hợp lệ
+
+    def test_tai_lieu_cu_theo_loa_duoc_gop_thanh_mot(self):
+        cu = {"queues": {
+            LOA: {"items": [{**bai(0), "uid": "0000000a"}, {**bai(1), "uid": "0000000b"}], "current": "0000000b",
+                  "mode": "audio", "order": "shuffle", "played": ["0000000b"]},
+            MAY: {"items": [{**bai(1), "uid": "0000000c"}, {**bai(2), "uid": "0000000d"}], "current": None,
+                  "mode": "video", "order": "sequential", "played": []},
+            "media_player.rong": {"items": []},
+        }}
+        doc = self.q.normalize_document(cu)
+        self.assertEqual(list(doc["queues"]), [doc["id"]])
+        queue = doc["queues"][doc["id"]]
+        # bài có «bài hiện tại» làm gốc; bài trùng (cùng nguồn + id) bỏ; không mất bài nào khác
+        self.assertEqual([it["uid"] for it in queue["items"]], ["0000000a", "0000000b", "0000000d"])
+        self.assertEqual((queue["current"], queue["mode"], queue["order"], queue["played"]), ("0000000b", "audio", "shuffle", ["0000000b"]))
+        # gộp là idempotent
+        self.assertEqual(self.q.normalize_document(doc), doc)
 
     def test_lan_luot_tu_dau_toi_het_roi_dung(self):
         doc = self.them(self.q.normalize_document(None), LOA, 3)
@@ -139,7 +168,7 @@ class QueueTests(unittest.TestCase):
     def test_danh_sach_rong_mac_dinh_khong_de_lai_ban_ghi(self):
         doc = self.them(self.q.normalize_document(None), LOA, 1)
         doc, _ = self.lam(doc, key=LOA, action="clear")
-        self.assertNotIn(LOA, doc["queues"])
+        self.assertEqual(doc["queues"], {})
 
     def test_kho_hong_duoc_lam_sach(self):
         doc = self.q.normalize_document({"queues": {
@@ -147,8 +176,8 @@ class QueueTests(unittest.TestCase):
                   "mode": "tivi", "order": "shuffle", "played": ["0000000a", "zz"]},
             "light.den": {"items": []},
         }})
-        self.assertEqual(list(doc["queues"]), [LOA])
-        queue = doc["queues"][LOA]
+        self.assertEqual(list(doc["queues"]), [doc["id"]])
+        queue = doc["queues"][doc["id"]]
         self.assertEqual(len(queue["items"]), 1)
         self.assertIsNone(queue["current"])
         self.assertEqual((queue["mode"], queue["order"], queue["played"]), ("video", "shuffle", ["0000000a"]))

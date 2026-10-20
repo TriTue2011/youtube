@@ -628,11 +628,14 @@ class TriTueQueueView(HomeAssistantView):
     requires_auth = True
 
     async def get(self, request: web.Request) -> web.Response:
+        store = get_queue_store(request.app["hass"])
+        await store.async_load()
         try:
-            queue = await get_queue_store(request.app["hass"]).async_get(request.query.get("key"))
+            # Không gửi khoá = hàng đợi duy nhất; khoá cũ (theo loa/máy) vẫn nhận và trỏ về cùng hàng đợi đó.
+            queue = await store.async_get(request.query.get("key") or store.code)
         except ValueError as error:
             return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
-        return self.json({"queue": queue})
+        return self.json({"queue": queue, "code": store.code})
 
     async def post(self, request: web.Request) -> web.Response:
         try:
@@ -640,8 +643,9 @@ class TriTueQueueView(HomeAssistantView):
         except ValueError:
             return self.json({"error": "invalid_request"}, HTTPStatus.BAD_REQUEST)
         try:
-            queue, item = await get_queue_store(request.app["hass"]).async_change(payload)
+            store = get_queue_store(request.app["hass"])
+            queue, item = await store.async_change(payload)
         except ValueError as error:
             return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
         lam_moi_lua_chon_sau(request.app["hass"])
-        return self.json({"queue": queue, "item": item})
+        return self.json({"queue": queue, "item": item, "code": store.code})

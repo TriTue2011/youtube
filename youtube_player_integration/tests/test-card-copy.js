@@ -87,6 +87,11 @@ assert.equal(
   "queue_code: media_player.loa_phong_khach",
   "queue key -> queue_code dung",
 );
+assert.equal(
+  cardCopyQueueText("abcd1234efgh"),
+  "queue_code: abcd1234efgh",
+  "ma hang doi duy nhat 12 ky tu -> queue_code dung",
+);
 assert.equal(cardCopyQueueText(""), "", "queue key rong -> rong");
 
 console.log("OK: test-card-copy.js — tat ca assert xanh");

@@ -35,16 +35,10 @@ class DungLuaChonTests(unittest.TestCase):
         self.assertEqual(lc.TOI_DA_LUA_CHON, len(got))
         self.assertEqual("cccccccccccc", got[0]["value"])
 
-    def test_queue_chi_liet_ke_hang_doi_co_bai_va_dung_ten_loa(self):
-        queues = {
-            "media_player.googlehome5802": {"items": [{}, {}]},
-            "media_player.rong": {"items": []},
-            "device:b612ec534541f383": {"items": [{}]},
-        }
-        got = lc.dung_lua_chon_queue(queues, {"media_player.googlehome5802": "Phòng khách"})
-        self.assertEqual(
-            [{"value": "media_player.googlehome5802", "label": "Hàng đợi «Phòng khách» (2 bài)"},
-             {"value": "device:b612ec534541f383", "label": "Hàng đợi «Máy b612ec» (1 bài)"}], got)
+    def test_queue_chi_co_mot_muc_hang_doi_duy_nhat(self):
+        self.assertEqual([{"value": "abcdef012345", "label": "Hàng đợi (2 bài)"}], lc.dung_lua_chon_queue("abcdef012345", 2))
+        self.assertEqual("Hàng đợi (trống)", lc.dung_lua_chon_queue("abcdef012345", 0)[0]["label"])   # trống vẫn hiện: chọn trước khi thêm bài
+        self.assertEqual([], lc.dung_lua_chon_queue("", 3))
 
 
 class ApLuaChonTests(unittest.TestCase):
@@ -53,11 +47,11 @@ class ApLuaChonTests(unittest.TestCase):
 
     def test_chi_thay_bo_chon_hai_o_va_giu_cho_dan_ma(self):
         base = self._base()
-        out = lc.ap_lua_chon(base, [{"value": "aaaaaaaaaaaa", "label": "home (1 bài)"}], [{"value": "media_player.x", "label": "Hàng đợi «x» (1 bài)"}])
+        out = lc.ap_lua_chon(base, [{"value": "aaaaaaaaaaaa", "label": "home (1 bài)"}], [{"value": "abcdef012345", "label": "Hàng đợi (1 bài)"}])
         sel = out["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]
         self.assertTrue(sel["custom_value"])           # vẫn dán được mã TTPL1 / mã 12 ký tự / tên
         self.assertEqual("aaaaaaaaaaaa", sel["options"][0]["value"])
-        self.assertEqual("media_player.x", out["play_queue"]["fields"]["queue_code"]["selector"]["select"]["options"][0]["value"])
+        self.assertEqual("abcdef012345", out["play_queue"]["fields"]["queue_code"]["selector"]["select"]["options"][0]["value"])
         # các ô khác và bản gốc không bị đổi
         self.assertEqual(base["play_playlist"]["fields"]["entry_id"], out["play_playlist"]["fields"]["entry_id"])
         self.assertEqual({"text": None}, base["play_playlist"]["fields"]["playlist_code"]["selector"])
@@ -121,17 +115,18 @@ class CapNhatTests(unittest.IsolatedAsyncioTestCase):
         hass.states.async_all.return_value = loa or []
         store = MagicMock()
         store.async_load = AsyncMock()
-        store.async_list = AsyncMock(return_value=queues or {})
+        store.code = "abcdef012345"
+        store.async_get = AsyncMock(return_value={"items": [{}] * (queues or 0)})
         return hass, store
 
     async def test_dat_lai_mo_ta_hai_action(self):
-        hass, store = self._hass([_pl("aaaaaaaaaaaa", "home", 3)], queues={"media_player.x": {"items": [{}]}})
+        hass, store = self._hass([_pl("aaaaaaaaaaaa", "home", 3)], queues=1)
         with patch.object(lc, "get_queue_store", return_value=store), patch.object(lc, "async_set_service_schema") as dat:
             await lc.async_cap_nhat_lua_chon(hass)
         dat_theo = {c.args[2]: c.args[3] for c in dat.call_args_list}
         self.assertEqual({"play_playlist", "play_queue", "play_on_players"}, set(dat_theo))
         self.assertEqual("aaaaaaaaaaaa", dat_theo["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]["options"][0]["value"])
-        self.assertEqual("media_player.x", dat_theo["play_queue"]["fields"]["queue_code"]["selector"]["select"]["options"][0]["value"])
+        self.assertEqual("abcdef012345", dat_theo["play_queue"]["fields"]["queue_code"]["selector"]["select"]["options"][0]["value"])
         self.assertTrue(all(c.args[1] == DOMAIN for c in dat.call_args_list))
 
     async def test_entry_dang_nap_chua_la_loaded_van_co_danh_sach_playlist(self):
