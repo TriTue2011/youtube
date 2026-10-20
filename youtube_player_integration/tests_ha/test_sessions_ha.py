@@ -21,11 +21,24 @@ sys.path.insert(0, str(REPO / "youtube_player" / "app"))
 
 import server as addon  # noqa: E402
 import custom_components.tritue_youtube_player as comp  # noqa: E402
+from custom_components.tritue_youtube_player import lenh_cua_minh  # noqa: E402
 from homeassistant.core import ServiceCall  # noqa: E402
 from homeassistant.util import dt as dt_util  # noqa: E402
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
 
 DOMAIN = "tritue_youtube_player"
+
+
+@pytest.fixture(autouse=True)
+def _khong_khoang_im_lang_sau_lenh_phat(monkeypatch):
+    """Các test đầu-cuối mô phỏng loa HẾT BÀI ngay sau lệnh phát (mili-giây thật), nên rơi vào khoảng `lenh_cua_minh.KHOANG_GIAY`
+    (20 s) mà bộ theo dõi cố ý bỏ qua `idle` (sửa lỗi Next làm phiên chết, 19/10/2026) → không tự chuyển bài như test mong đợi.
+    Cơ chế chống `idle` thoáng qua có test đơn vị riêng (tests/test_lenh_cua_minh.py); ở đây đặt khoảng về 0 và dọn bảng nhớ
+    toàn cục giữa các test để không rò trạng thái từ test này sang test khác."""
+    monkeypatch.setattr(lenh_cua_minh, "KHOANG_GIAY", 0)
+    lenh_cua_minh.xoa()
+    yield
+    lenh_cua_minh.xoa()
 TOKEN = "token-thu-dau-cuoi"
 IDS = ["dQw4w9WgXcQ", "M7lc1UVf-VE", "llPioQNSBLY"]
 KET_QUA = [
