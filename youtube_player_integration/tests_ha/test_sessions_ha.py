@@ -22,7 +22,7 @@ sys.path.insert(0, str(REPO / "youtube_player" / "app"))
 import server as addon  # noqa: E402
 import custom_components.tritue_youtube_player as comp  # noqa: E402
 from custom_components.tritue_youtube_player import lenh_cua_minh  # noqa: E402
-from homeassistant.core import ServiceCall  # noqa: E402
+from homeassistant.core import Context, ServiceCall  # noqa: E402
 from homeassistant.util import dt as dt_util  # noqa: E402
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # noqa: E402
 
@@ -151,7 +151,10 @@ async def test_moi_loa_mot_bai_tu_chuyen_bai_va_dieu_khien_theo_phien(hass, addo
     calls.clear()
     _loa_phat(hass, LOA_A, 50)
     await hass.async_block_till_done()
-    hass.states.async_set(LOA_A, "idle", {"friendly_name": "Phòng khách", "device_class": "speaker", "supported_features": LOA_FEATURES})
+    # Stop của NGƯỜI DÙNG trong Home Assistant mang user_id → gỡ loa, không phát gì. Không có ngữ cảnh = loa tự đổi trạng thái
+    # (luồng bị cắt / nút trên loa) → tích hợp tự cứu một lần (advance._nen_tu_cuu_sau_dung_som), nên phải khai ngữ cảnh ở đây.
+    hass.states.async_set(LOA_A, "idle", {"friendly_name": "Phòng khách", "device_class": "speaker", "supported_features": LOA_FEATURES},
+                          context=Context(user_id="nguoi-dung-bam-stop"))
     await hass.async_block_till_done()
     assert [s for s, _ in calls if s == "play_media"] == []
 
@@ -636,19 +639,21 @@ async def test_issue3_tts_tren_loa_nghi_va_stop_tren_loa_khong_chuyen_bai(hass, 
     await _choi(hass, entry, KET_QUA[0]["url"], [LOA_A])
     luong = [d for s, d in calls if s == "play_media" and d["entity_id"] == [LOA_A]][-1]["media_content_id"]
 
-    def loa(trang_thai, mcid=None, vi_tri=None):
+    def loa(trang_thai, mcid=None, vi_tri=None, ngu_canh=None):
         attrs = {"friendly_name": "Phòng khách", "device_class": "speaker", "supported_features": LOA_FEATURES}
         if mcid:
             attrs["media_content_id"] = mcid
         if vi_tri is not None:
             attrs.update(media_position=vi_tri, media_position_updated_at=dt_util.utcnow().isoformat())
-        hass.states.async_set(LOA_A, trang_thai, attrs)
+        hass.states.async_set(LOA_A, trang_thai, attrs, context=ngu_canh)
 
     # Bài đang phát (không media_duration) rồi một câu TTS chen vào lúc loa đang phát luồng của mình → không nhảy bài.
     calls.clear()
     loa("playing", luong, 30)
     await hass.async_block_till_done()
-    loa("idle", luong)                       # loa nghỉ giữa chừng (vd TTS của hệ thống khác dừng nó)
+    # loa nghỉ giữa chừng do lệnh TRONG Home Assistant (vd TTS/automation của hệ thống khác dừng nó) → có parent_id.
+    # (Loa tự đổi trạng thái không kèm ngữ cảnh là luồng bị cắt → tích hợp tự cứu, có test riêng ở tests/test_dung_som_phat_lai.py.)
+    loa("idle", luong, ngu_canh=Context(parent_id="tts-he-thong-khac"))
     await hass.async_block_till_done()
     loa("playing", None)                     # TTS announce trên loa nghỉ: không media_content_id
     await hass.async_block_till_done()
