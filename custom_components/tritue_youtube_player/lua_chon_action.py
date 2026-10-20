@@ -1,4 +1,4 @@
-"""Danh sách CHỌN (thả xuống) cho ô `playlist_code` của `play_playlist` và ô `queue_code` của `play_queue`.
+"""Danh sách CHỌN cho giao diện action: ô `playlist_code` (`play_playlist`), ô `queue_code` (`play_queue`) và ô LOA (`entity_id`, tích nhiều loa như thẻ).
 
 Giao diện action của Home Assistant đọc ô nhập từ `services.yaml` (tĩnh), nên mặc định chỉ có ô gõ chữ — người dùng phải chép mã từ thẻ.
 Home Assistant cho tích hợp ĐẶT LẠI mô tả của một action lúc đang chạy (`async_set_service_schema`): ta nạp mô tả gốc từ `services.yaml`,
@@ -16,12 +16,15 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.service import async_set_service_schema
 from homeassistant.util.yaml import load_yaml
 
 from .api import YouTubePlayerApiError
-from .const import DOMAIN, LOGGER, SERVICE_PLAY_PLAYLIST, SERVICE_PLAY_QUEUE
+from .const import DOMAIN, LOGGER, SERVICE_PLAY_ON_PLAYERS, SERVICE_PLAY_PLAYLIST, SERVICE_PLAY_QUEUE
+from .hidden_players import STORAGE_KEY as HIDDEN_KEY, STORAGE_VERSION as HIDDEN_VERSION, normalize_hidden
 from .queue_store import get_queue_store
 
 SERVICES_YAML = Path(__file__).with_name("services.yaml")
@@ -57,20 +60,46 @@ def dung_lua_chon_queue(queues: dict[str, Any], ten_loa: dict[str, str]) -> list
     return out
 
 
+def dung_lua_chon_loa(players: list[tuple[str, str]], an: set[str]) -> list[dict[str, str]]:
+    """[{value: entity_id, label: tên}] các loa như THẺ liệt kê: bỏ loa bị ẩn trên thẻ, xếp theo tên; trùng tên thì thêm entity_id."""
+    rows = [(eid, " ".join(str(ten or eid).split())) for eid, ten in players if eid not in an]
+    rows.sort(key=lambda r: (r[1].casefold(), r[0]))
+    dem: dict[str, int] = {}
+    for _eid, ten in rows:
+        dem[ten.casefold()] = dem.get(ten.casefold(), 0) + 1
+    return [
+        {"value": eid, "label": f"{ten} · {eid}" if dem[ten.casefold()] > 1 else ten}
+        for eid, ten in rows[:TOI_DA_LUA_CHON]
+    ]
+
+
 def _chon(options: list[dict[str, str]]) -> dict[str, Any]:
     return {"select": {"options": options, "custom_value": True, "mode": "dropdown"}}
 
 
-def ap_lua_chon(base: dict[str, Any], playlist_opts: list[dict[str, str]], queue_opts: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
-    """Mô tả của hai action sau khi thay bộ chọn (bản sao; `base` giữ nguyên). Danh sách rỗng thì giữ ô gõ chữ gốc."""
+def _chon_loa(options: list[dict[str, str]]) -> dict[str, Any]:
+    """Danh sách TÍCH CHỌN nhiều loa (ô tích như thẻ). Không `custom_value`: chế độ danh sách không có ô gõ tay — ai cần entity ngoài danh sách dùng YAML."""
+    return {"select": {"options": options, "multiple": True, "mode": "list"}}
+
+
+def ap_lua_chon(
+    base: dict[str, Any],
+    playlist_opts: list[dict[str, str]],
+    queue_opts: list[dict[str, str]],
+    loa_opts: list[dict[str, str]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Mô tả của các action sau khi thay bộ chọn (bản sao; `base` giữ nguyên). Danh sách rỗng thì giữ ô gốc."""
     out: dict[str, dict[str, Any]] = {}
-    for service, field, opts in (
-        (SERVICE_PLAY_PLAYLIST, "playlist_code", playlist_opts),
-        (SERVICE_PLAY_QUEUE, "queue_code", queue_opts),
+    for service, field, opts, tao in (
+        (SERVICE_PLAY_PLAYLIST, "playlist_code", playlist_opts, _chon),
+        (SERVICE_PLAY_QUEUE, "queue_code", queue_opts, _chon),
+        (SERVICE_PLAY_PLAYLIST, "entity_id", loa_opts or [], _chon_loa),
+        (SERVICE_PLAY_QUEUE, "entity_id", loa_opts or [], _chon_loa),
+        (SERVICE_PLAY_ON_PLAYERS, "entity_id", loa_opts or [], _chon_loa),
     ):
-        desc = copy.deepcopy(base.get(service) or {})
+        desc = out.get(service) or copy.deepcopy(base.get(service) or {})
         if opts and field in (desc.get("fields") or {}):
-            desc["fields"][field]["selector"] = _chon(opts)
+            desc["fields"][field]["selector"] = tao(opts)
         out[service] = desc
     return out
 
@@ -86,7 +115,17 @@ async def async_cap_nhat_lua_chon(hass: HomeAssistant, *, reset: bool = False, e
         base = await hass.async_add_executor_job(_doc_services_yaml)
         playlist_opts: list[dict[str, str]] = []
         queue_opts: list[dict[str, str]] = []
+        loa_opts: list[dict[str, str]] = []
         if not reset:
+            registry = er.async_get(hass)
+            loa = []
+            for st in hass.states.async_all("media_player"):
+                reg = registry.async_get(st.entity_id)
+                if (reg is not None and reg.platform == DOMAIN) or st.state == "unavailable":
+                    continue                                 # loa ảo của chính tích hợp, hoặc loa mất kết nối: thẻ cũng không liệt kê
+                loa.append((st.entity_id, st.name))
+            an = set(normalize_hidden(await Store(hass, HIDDEN_VERSION, HIDDEN_KEY).async_load()))
+            loa_opts = dung_lua_chon_loa(loa, an)
             # Lúc `async_setup_entry` đang chạy, cấu hình CHƯA ở trạng thái LOADED (đang SETUP_IN_PROGRESS) nên lọc theo LOADED sẽ bỏ sót
             # chính tích hợp vừa nạp → danh sách playlist trống tới lần làm mới sau (báo cáo chủ máy 20/10/2026). Nơi gọi truyền entry thẳng vào.
             entries = [entry] if entry is not None else [
@@ -107,7 +146,7 @@ async def async_cap_nhat_lua_chon(hass: HomeAssistant, *, reset: bool = False, e
                 if state is not None and state.name:
                     ten_loa[key] = state.name
             queue_opts = dung_lua_chon_queue(queues, ten_loa)
-        for service, desc in ap_lua_chon(base, playlist_opts, queue_opts).items():
+        for service, desc in ap_lua_chon(base, playlist_opts, queue_opts, loa_opts).items():
             async_set_service_schema(hass, DOMAIN, service, desc)
     except Exception as err:  # noqa: BLE001 — danh sách chọn chỉ là tiện lợi, lỗi gì cũng không được kéo theo tích hợp
         LOGGER.debug("Không cập nhật được danh sách chọn của action: %s", type(err).__name__)

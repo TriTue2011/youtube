@@ -5,7 +5,7 @@ from homeassistant.core import Event, HomeAssistant, callback
 from datetime import timedelta
 
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .advance import SessionAutoAdvance
@@ -15,7 +15,7 @@ from .coordinator import YouTubePlayerConfigEntry, YouTubePlayerCoordinator
 from .dung_loa import async_dung_loa_luong
 from .frontend import async_register_frontend
 from .llm_api import async_register_llm_api
-from .lua_chon_action import async_cap_nhat_lua_chon, huy_hen_lua_chon
+from .lua_chon_action import async_cap_nhat_lua_chon, huy_hen_lua_chon, lam_moi_lua_chon_sau
 from .queue_store import get_queue_store
 from .services import async_register_services
 
@@ -58,6 +58,14 @@ async def async_setup_entry(
         await async_cap_nhat_lua_chon(hass)
 
     entry.async_on_unload(async_track_time_interval(hass, _lam_moi_lua_chon, timedelta(minutes=10)))
+
+    @callback
+    def _doi_loa(event: Event) -> None:
+        # Thêm/xoá/đổi tên một media_player → danh sách loa trong action cũng đổi (gộp vài giây).
+        if str(event.data.get("entity_id") or "").startswith("media_player."):
+            lam_moi_lua_chon_sau(hass)
+
+    entry.async_on_unload(hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _doi_loa))
     return True
 
 

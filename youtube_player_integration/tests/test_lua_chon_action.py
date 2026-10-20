@@ -69,8 +69,44 @@ class ApLuaChonTests(unittest.TestCase):
         self.assertEqual(base["play_queue"]["fields"]["queue_code"], out["play_queue"]["fields"]["queue_code"])
 
 
+def _st(entity_id, name, state="idle"):
+    st = MagicMock()
+    st.entity_id, st.name, st.state = entity_id, name, state
+    return st
+
+
+class DungLuaChonLoaTests(unittest.TestCase):
+    def test_xep_theo_ten_bo_loa_bi_an_va_them_id_khi_trung_ten(self):
+        got = lc.dung_lua_chon_loa(
+            [("media_player.b", "Bếp"), ("media_player.a", "Phòng khách"), ("media_player.an", "Ẩn"),
+             ("media_player.c", "bếp")], {"media_player.an"})
+        self.assertEqual(
+            [("media_player.b", "Bếp · media_player.b"), ("media_player.c", "bếp · media_player.c"),
+             ("media_player.a", "Phòng khách")], [(o["value"], o["label"]) for o in got])
+
+    def test_o_loa_la_danh_sach_tich_chon_nhieu_loa_va_giu_o_goc_khi_rong(self):
+        base = yaml.safe_load(SERVICES_YAML.read_text(encoding="utf-8"))
+        opts = [{"value": "media_player.a", "label": "A"}]
+        out = lc.ap_lua_chon(base, [], [], opts)
+        for service in ("play_playlist", "play_queue", "play_on_players"):
+            sel = out[service]["fields"]["entity_id"]["selector"]["select"]
+            self.assertTrue(sel["multiple"])
+            self.assertEqual("list", sel["mode"])             # ô tích như thẻ
+            self.assertEqual(opts, sel["options"])
+        self.assertEqual(base["play_playlist"]["fields"]["entity_id"], lc.ap_lua_chon(base, [], [], [])["play_playlist"]["fields"]["entity_id"])
+
+
 class CapNhatTests(unittest.IsolatedAsyncioTestCase):
-    def _hass(self, playlists=None, error=None, queues=None):
+    def setUp(self):
+        self.an = None
+        registry = MagicMock()
+        registry.async_get.return_value = None
+        for p in (patch.object(lc.er, "async_get", return_value=registry),
+                  patch.object(lc, "Store", side_effect=lambda *a, **k: MagicMock(async_load=AsyncMock(return_value=self.an)))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _hass(self, playlists=None, error=None, queues=None, loa=None):
         hass = MagicMock()
         hass.data = {}
         hass.async_add_executor_job = AsyncMock(side_effect=lambda f, *a: f(*a))
@@ -82,6 +118,7 @@ class CapNhatTests(unittest.IsolatedAsyncioTestCase):
             entry.runtime_data.client.async_playlists = AsyncMock(return_value={"playlists": playlists or []})
         hass.config_entries.async_entries.return_value = [entry]
         hass.states.get.return_value = None
+        hass.states.async_all.return_value = loa or []
         store = MagicMock()
         store.async_load = AsyncMock()
         store.async_list = AsyncMock(return_value=queues or {})
@@ -92,7 +129,7 @@ class CapNhatTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(lc, "get_queue_store", return_value=store), patch.object(lc, "async_set_service_schema") as dat:
             await lc.async_cap_nhat_lua_chon(hass)
         dat_theo = {c.args[2]: c.args[3] for c in dat.call_args_list}
-        self.assertEqual({"play_playlist", "play_queue"}, set(dat_theo))
+        self.assertEqual({"play_playlist", "play_queue", "play_on_players"}, set(dat_theo))
         self.assertEqual("aaaaaaaaaaaa", dat_theo["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]["options"][0]["value"])
         self.assertEqual("media_player.x", dat_theo["play_queue"]["fields"]["queue_code"]["selector"]["select"]["options"][0]["value"])
         self.assertTrue(all(c.args[1] == DOMAIN for c in dat.call_args_list))
@@ -108,6 +145,21 @@ class CapNhatTests(unittest.IsolatedAsyncioTestCase):
             await lc.async_cap_nhat_lua_chon(hass, entry=entry)
         dat_theo = {c.args[2]: c.args[3] for c in dat.call_args_list}
         self.assertEqual("aaaaaaaaaaaa", dat_theo["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]["options"][0]["value"])
+
+    async def test_danh_sach_loa_giong_the_bo_loa_ao_mat_ket_noi_va_bi_an(self):
+        loa = [_st("media_player.phong_khach", "Phòng khách"), _st("media_player.mat", "Mất", "unavailable"),
+               _st("media_player.an", "Ẩn"), _st("media_player.ao", "TriTue ảo"), _st("media_player.bep", "Bếp")]
+        hass, store = self._hass([_pl("aaaaaaaaaaaa", "home")], loa=loa)
+        self.an = {"entity_ids": ["media_player.an"]}
+        ao = MagicMock()
+        ao.platform = lc.DOMAIN
+        sau = patch.object(lc.er, "async_get", return_value=MagicMock(async_get=lambda eid: ao if eid == "media_player.ao" else None))
+        with sau, patch.object(lc, "get_queue_store", return_value=store), patch.object(lc, "async_set_service_schema") as dat:
+            await lc.async_cap_nhat_lua_chon(hass)
+        dat_theo = {c.args[2]: c.args[3] for c in dat.call_args_list}
+        chon = dat_theo["play_queue"]["fields"]["entity_id"]["selector"]["select"]
+        self.assertEqual(["media_player.bep", "media_player.phong_khach"], [o["value"] for o in chon["options"]])
+        self.assertTrue(chon["multiple"])
 
     async def test_may_phat_khong_tra_loi_thi_giu_nguyen_khong_dat_gi(self):
         hass, store = self._hass(error=YouTubePlayerApiError("cannot_connect"))

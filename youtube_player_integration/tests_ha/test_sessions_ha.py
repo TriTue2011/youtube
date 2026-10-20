@@ -691,3 +691,8 @@ async def test_danh_sach_chon_playlist_co_ngay_sau_khi_nap_tich_hop(hass, addon_
     lua = mo_ta["fields"]["playlist_code"]["selector"]["select"]
     assert [o["label"] for o in lua["options"]] == ["Nhà (1 bài)"]
     assert lua["custom_value"] is True            # vẫn dán được mã
+    # Ô loa: danh sách TÍCH CHỌN nhiều loa như thẻ (loa ảo của chính tích hợp không nằm trong đó)
+    loa = hass.data[SERVICE_DESCRIPTION_CACHE][(DOMAIN, "play_queue")]["fields"]["entity_id"]["selector"]["select"]
+    assert loa["multiple"] is True and loa["mode"] == "list"
+    assert sorted(o["value"] for o in loa["options"]) == sorted([LOA_A, LOA_B])
+    assert not any(o["value"].endswith("_player") or "tritue" in o["value"] for o in loa["options"])

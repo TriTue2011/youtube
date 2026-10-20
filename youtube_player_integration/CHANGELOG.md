@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.17 - 2026-10-20
+
+### Chọn loa trong action bằng danh sách TÍCH CHỌN nhiều loa như thẻ
+
+- Ô «Loa và màn hình» của `play_playlist`, `play_queue`, `play_on_players` là danh sách có ô tích: chọn nhiều loa cùng lúc, nhãn là tên loa (trùng tên thì thêm entity_id). Danh sách giống thẻ: mọi `media_player` trừ loa ảo của chính tích hợp, loa mất kết nối (`unavailable`) và loa đã ẩn trên thẻ; xếp theo tên.
+- Làm mới khi tích hợp nạp, khi thêm/xoá/đổi tên một `media_player` (gộp vài giây), khi thẻ đổi playlist/hàng đợi và mỗi 10 phút. Loa vừa mất kết nối hoặc vừa ẩn trên thẻ mất khỏi danh sách ở lần làm mới kế; trang soạn action cần tải lại để thấy.
+- Giới hạn: chế độ danh sách của Home Assistant không có ô gõ tay — loa không nằm trong danh sách (đang mất kết nối, đã ẩn) chọn bằng YAML như trước. Danh sách rỗng thì giữ nguyên bộ chọn thực thể gốc (vẫn chọn nhiều loa bằng «+ Chọn thực thể»).
+- Test: `test_lua_chon_action.py` (thứ tự, ẩn, loa ảo, tích nhiều) và `tests_ha` trên Home Assistant thật (loa trong danh sách, loa ảo không có). CHƯA thử trên giao diện Home Assistant thật của chủ máy.
+
 ## 0.27.16 - 2026-10-20
 
 ### Danh sách chọn playlist có ngay sau khi khởi động; nhãn hàng đợi rõ «chọn hàng đợi» khác «chọn loa phát»
