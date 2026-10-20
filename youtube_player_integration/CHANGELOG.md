@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.15 - 2026-10-20
+
+### Chọn playlist và hàng đợi từ danh sách ngay trong action (khỏi chép mã)
+
+- Trong giao diện action `tritue_youtube_player.play_playlist` ô «Playlist code» và `play_queue` ô «Queue code» giờ là danh sách THẢ XUỐNG: playlist hiện «tên (N bài)» (trùng tên thì thêm 4 ký tự cuối của id), hàng đợi hiện «tên loa (N bài)» cho các hàng đợi đang có bài. Ô vẫn cho gõ/dán tay (mã 12 ký tự, mã `TTPL1.`, tên playlist, khoá hàng đợi) như cũ.
+- Cách làm: Home Assistant không cho `services.yaml` có danh sách động, nên tích hợp ĐẶT LẠI mô tả của hai action lúc chạy (`async_set_service_schema`): nạp mô tả gốc từ `services.yaml`, chỉ thay bộ chọn của hai ô trên. Danh sách làm mới khi tích hợp nạp, khi thẻ tạo/sửa playlist hay hàng đợi (gộp trong 3 giây), và mỗi 10 phút; gỡ/tắt tích hợp thì trả về ô gõ chữ gốc. Máy phát không trả lời thì giữ danh sách lần trước; mọi lỗi chỉ ghi log.
+- Giới hạn: danh sách được đọc khi trang tải — thêm playlist mới thì tải lại trang trình soạn action để thấy; chạy thật trong Home Assistant CHƯA kiểm (đã kiểm với lõi Home Assistant 2026.10: mô tả đặt lại đi đúng đường `async_get_all_descriptions` và khớp lược đồ bộ chọn).
+- Test: `test_lua_chon_action.py` (nhãn, trùng tên, giới hạn, bản gốc không đổi, giữ ô dán mã, máy phát lỗi, gỡ tích hợp).
+
 ## 0.27.14 - 2026-10-20
 
 ### Playlist tự tạo trên thẻ không bị nhân đôi khi gõ lại tên đã có

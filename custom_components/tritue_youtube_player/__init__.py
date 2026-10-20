@@ -2,7 +2,9 @@
 
 from homeassistant.const import CONF_URL, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later
+from datetime import timedelta
+
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -13,6 +15,7 @@ from .coordinator import YouTubePlayerConfigEntry, YouTubePlayerCoordinator
 from .dung_loa import async_dung_loa_luong
 from .frontend import async_register_frontend
 from .llm_api import async_register_llm_api
+from .lua_chon_action import async_cap_nhat_lua_chon, huy_hen_lua_chon
 from .queue_store import get_queue_store
 from .services import async_register_services
 
@@ -48,6 +51,13 @@ async def async_setup_entry(
     entry.async_on_unload(SessionAutoAdvance(hass, entry).async_start())
     _async_theo_doi_vong_doi(hass, entry, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Ô chọn playlist/hàng đợi trong giao diện action: nạp một lần rồi làm mới định kỳ (thẻ cũng gọi khi đổi).
+    await async_cap_nhat_lua_chon(hass)
+
+    async def _lam_moi_lua_chon(_now) -> None:
+        await async_cap_nhat_lua_chon(hass)
+
+    entry.async_on_unload(async_track_time_interval(hass, _lam_moi_lua_chon, timedelta(minutes=10)))
     return True
 
 
@@ -93,4 +103,8 @@ async def async_unload_entry(
 ) -> bool:
     """Unload a configured player server — gỡ / tắt / nạp lại tích hợp thì dừng hẳn nhạc ra loa trước."""
     await async_dung_loa_luong(hass, ly_do="Gỡ / tắt tích hợp")
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    huy_hen_lua_chon(hass)
+    ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if ok:
+        await async_cap_nhat_lua_chon(hass, reset=True)     # trả hai ô về dạng gõ chữ gốc
+    return ok

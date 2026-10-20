@@ -23,6 +23,7 @@ from homeassistant.helpers.storage import Store
 from .actions import speaker_base_url
 from .api import YouTubePlayerApiError
 from .const import DOMAIN
+from .lua_chon_action import lam_moi_lua_chon_sau
 from .queue_store import get_queue_store
 from .muc_luc import (
     DAU_MUC_LUC,
@@ -469,7 +470,9 @@ class TriTuePlaylistsView(HomeAssistantView):
         if entry is None:
             return self.json({"error": "entry_unavailable"}, HTTPStatus.NOT_FOUND)
         try:
-            return self.json(await entry.runtime_data.client.async_playlist_action(payload))
+            ket_qua = await entry.runtime_data.client.async_playlist_action(payload)
+            lam_moi_lua_chon_sau(request.app["hass"])
+            return self.json(ket_qua)
         except YouTubePlayerApiError as error:
             code = str(error)
             status = HTTPStatus.BAD_GATEWAY if code in {"playlist_unavailable", "cannot_connect"} else HTTPStatus.BAD_REQUEST
@@ -640,4 +643,5 @@ class TriTueQueueView(HomeAssistantView):
             queue, item = await get_queue_store(request.app["hass"]).async_change(payload)
         except ValueError as error:
             return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+        lam_moi_lua_chon_sau(request.app["hass"])
         return self.json({"queue": queue, "item": item})

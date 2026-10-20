@@ -63,6 +63,11 @@ class QueueStore:
                 self._doc = document
             return get_queue(document, queue_key(payload.get("key"))), item
 
+    async def async_list(self) -> dict[str, dict[str, Any]]:
+        """Mọi hàng đợi đang có bài (khoá → hàng đợi) — cho danh sách chọn của action."""
+        await self.async_load()
+        return {k: q for k, q in (self._doc or {}).get("queues", {}).items() if q.get("items")}
+
     async def async_advance(self, key: str) -> dict[str, Any] | None:
         """Move ``key``'s queue to its next song and return it (None = done)."""
         await self.async_load()
