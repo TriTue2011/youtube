@@ -76,6 +76,21 @@ function cardCopyQueueText(key) {
 }
 /* === END CARD-COPY-HELPERS === */
 
+/* === BEGIN CARD-PLAYLIST-NAME-HELPERS === */
+/* Tạo playlist theo TÊN: máy phát cho phép trùng tên nên gõ lại tên đã có là đẻ thêm một playlist giống hệt (báo cáo chủ máy 20/10/2026).
+   Hàm thuần, test bởi youtube_player_integration/tests/test-card-playlist-name.js. */
+function cardTenPlaylistChuan(name) {
+  return String(name ?? "").split(/\s+/).filter(Boolean).join(" ").toLocaleLowerCase("vi");
+}
+
+/** Playlist ĐÃ CÓ cùng tên (không phân biệt hoa/thường, gộp khoảng trắng); không có thì null. */
+function cardTimPlaylistTheoTen(playlists, name) {
+  const want = cardTenPlaylistChuan(name);
+  if (!want || !Array.isArray(playlists)) return null;
+  return playlists.find((p) => p && cardTenPlaylistChuan(p.name) === want) || null;
+}
+/* === END CARD-PLAYLIST-NAME-HELPERS === */
+
 /* === BEGIN CARD-PROGRESS-HELPERS === */
 /* Thanh tua + khôi phục loa khi vào lại thẻ — hàm thuần, không chạm DOM. Test bởi
    youtube_player_integration/tests/test-card-progress.js (trích đoạn giữa hai mốc rồi chạy bằng node).
@@ -3571,7 +3586,14 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       // Anything that looks like a link or a code goes to the server, which says what
       // it can't read; only plain words name a new playlist.
       if (PLAYLIST_LINK.test(text) || /^(https?:\/\/|TTPL)/i.test(text)) this._importPlaylist(text, false);
-      else this._playlistCommand({ action: "create", name: text, items: [] }, (payload) => {
+      else if (cardTimPlaylistTheoTen(this._playlists, text)) {
+        // Đã có playlist tên này: mở nó ra thay vì tạo thêm một bản trùng tên.
+        const co = cardTimPlaylistTheoTen(this._playlists, text);
+        playlistInput.value = "";
+        this._openPlaylist = co.id;
+        this._renderPlaylists();
+        this._setStatus(`Đã có playlist “${co.name}” — mở sẵn, không tạo thêm.`);
+      } else this._playlistCommand({ action: "create", name: text, items: [] }, (payload) => {
         playlistInput.value = "";
         this._openPlaylist = payload.playlist.id;
         return `Đã tạo “${payload.playlist.name}”. Bấm + ở kết quả tìm để thêm bài.`;
@@ -8694,7 +8716,10 @@ class TriTueYouTubePlayerCard extends HTMLElement {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       if (!input.value.trim()) return;
-      this._playlistCommand({ action: "add", name: input.value.trim(), items: [target.item] }, done, create);
+      // Tên đã có thì thêm bài vào CHÍNH playlist đó, không tạo một playlist trùng tên.
+      const co = cardTimPlaylistTheoTen(this._playlists, input.value);
+      if (co) this._playlistCommand({ action: "add", id: co.id, items: [target.item] }, done, create);
+      else this._playlistCommand({ action: "add", name: input.value.trim(), items: [target.item] }, done, create);
     });
     menu.append(form);
     target.row.append(menu);

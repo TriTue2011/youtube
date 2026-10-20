@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.14 - 2026-10-20
+
+### Playlist tự tạo trên thẻ không bị nhân đôi khi gõ lại tên đã có
+
+- Máy phát cho phép hai playlist trùng tên, và thẻ gửi lệnh tạo mỗi lần bạn gõ tên: gõ lại «home» ở ô «Playlist mới…» (menu + bên cạnh bài) hoặc ô «Tạo» ở tab Playlist là đẻ thêm một playlist «home» trống/giống hệt. Nay thẻ tìm playlist ĐÃ CÓ cùng tên (không phân biệt hoa/thường, gộp khoảng trắng): thêm bài từ menu thì thêm vào CHÍNH playlist đó; ô «Tạo» thì mở playlist đó ra và báo «Đã có playlist …», không tạo thêm. Hàm thuần `cardTimPlaylistTheoTen` có `test-card-playlist-name.js`.
+- Giới hạn: danh sách dựa vào bản thẻ đã tải; tạo cùng tên từ hai thiết bị cùng lúc thì máy phát vẫn nhận cả hai (chặn thật phải ở máy phát/add-on). CHƯA thử thao tác thật trên thẻ trong Home Assistant.
+
 ## 0.27.13 - 2026-10-20
 
 ### Action theo mã không tạo playlist trùng; dán nguyên dòng chép từ thẻ vẫn chạy; mã ngắn hơn

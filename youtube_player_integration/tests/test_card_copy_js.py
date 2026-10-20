@@ -18,6 +18,9 @@ class CardJsTests(unittest.TestCase):
     def test_ham_chep_ma_cua_the(self):
         self._chay("test-card-copy.js")
 
+    def test_tim_playlist_theo_ten_khong_de_tao_ban_trung(self):
+        self._chay("test-card-playlist-name.js")
+
     def test_ham_thanh_tua_va_khoi_phuc_loa_cua_the(self):
         self._chay("test-card-progress.js")
 
