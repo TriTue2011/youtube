@@ -117,6 +117,94 @@ class ResolveShareCodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(store.saved), share_codes.MAX_SHARE_IMPORTS)
 
 
+def _row(vid, title="Bai"):
+    return ["youtube", vid, "", title, "", 100, ""]
+
+
+def _playlist(pid, vids, name="home"):
+    return {"id": pid, "name": name, "items": [{"source": "youtube", "id": v} for v in vids]}
+
+
+class KhongTaoBanSaoTests(unittest.IsolatedAsyncioTestCase):
+    """Báo cáo chủ máy 20/10/2026: playlist «home» (44 bài) đã có trong kho, chạy play_playlist với mã TTPL1 của chính nó
+    thì kho có thêm một «home» thứ hai. Ánh xạ «mã → id» chỉ nhớ những gì action tự nhập nên bản có sẵn bị bỏ qua."""
+
+    VIDS = ["dQw4w9WgXcQ", "kJQP7kiw5Fk", "9bZkp7q19f0"]
+
+    def _code(self, vids=None, name="home"):
+        return make_code(name=name, rows=[_row(v) for v in (vids or self.VIDS)])
+
+    async def test_playlist_giong_het_da_co_thi_dung_lai_khong_nhap_them(self):
+        code, store = self._code(), FakeStore()
+        client = client_with([_playlist("aaaaaaaaaaaa", ["x" * 11], name="khac"), _playlist("bbbbbbbbbbbb", self.VIDS)])
+        got = await share_codes.async_playlist_id_from_code(None, client, code, store=store)
+        self.assertEqual("bbbbbbbbbbbb", got)
+        client.async_playlist_action.assert_not_called()
+        self.assertEqual(["bbbbbbbbbbbb"], list(store.saved.values()))   # lần sau khỏi so sánh nữa
+
+    async def test_doi_ten_khong_lam_no_thanh_ban_khac(self):
+        client = client_with([_playlist("bbbbbbbbbbbb", self.VIDS, name="Ten da doi")])
+        got = await share_codes.async_playlist_id_from_code(None, client, self._code(name="home"), store=FakeStore())
+        self.assertEqual("bbbbbbbbbbbb", got)
+
+    async def test_khac_thu_tu_hoac_khac_bai_thi_van_nhap_moi(self):
+        for have in (list(reversed(self.VIDS)), self.VIDS[:2], self.VIDS + ["x1x1x1x1x1x"]):
+            with self.subTest(have=len(have)):
+                client = client_with([_playlist("bbbbbbbbbbbb", have)], imported_id="cccccccccccc")
+                got = await share_codes.async_playlist_id_from_code(None, client, self._code(), store=FakeStore())
+                self.assertEqual("cccccccccccc", got)
+                client.async_playlist_action.assert_awaited_once()
+
+    async def test_playlist_rong_khong_bao_gio_duoc_coi_la_ban_trung(self):
+        # mã không có bài hợp lệ → khoá rỗng → để máy phát phán (playlist_empty), không dùng lại playlist rỗng nào
+        code = make_code(rows=[["youtube", "sai", "", "x", "", 0, ""]])
+        client = client_with([_playlist("bbbbbbbbbbbb", [])], imported_id="cccccccccccc")
+        await share_codes.async_playlist_id_from_code(None, client, code, store=FakeStore())
+        client.async_playlist_action.assert_awaited_once()
+
+    async def test_gap_loi_ket_noi_sau_khi_may_phat_da_tao_thi_lan_sau_khong_tao_tiep(self):
+        code, store = self._code(), FakeStore()
+        down = client_with([], import_error=CannotConnectError("het gio"))
+        with self.assertRaises(YouTubePlayerApiError):
+            await share_codes.async_playlist_id_from_code(None, down, code, store=store)
+        # máy phát thực ra đã tạo xong trước khi hết giờ: lần chạy lại thấy nó trong kho
+        retry = client_with([_playlist("dddddddddddd", self.VIDS)])
+        got = await share_codes.async_playlist_id_from_code(None, retry, code, store=store)
+        self.assertEqual("dddddddddddd", got)
+        retry.async_playlist_action.assert_not_called()
+
+    async def test_hai_lan_goi_chong_nhau_chi_nhap_mot_lan(self):
+        import asyncio
+        code, store = self._code(), FakeStore()
+        kho = []
+
+        async def playlists():
+            return {"playlists": list(kho)}
+
+        async def action(payload):
+            await asyncio.sleep(0.05)               # lúc máy phát đang đọc, lần gọi thứ hai đã tới
+            kho.append(_playlist("eeeeeeeeeeee", self.VIDS))
+            return {"playlist": {"id": "eeeeeeeeeeee"}, "playlists": []}
+
+        client = MagicMock()
+        client.async_playlists = playlists
+        client.async_playlist_action = AsyncMock(side_effect=action)
+        got = await asyncio.gather(*[share_codes.async_playlist_id_from_code(None, client, code, store=store) for _ in range(5)])
+        self.assertEqual(["eeeeeeeeeeee"] * 5, got)
+        self.assertEqual(1, client.async_playlist_action.await_count)
+
+    async def test_nhan_playlist_code_dan_nguyen_dong_duoc_chap_nhan(self):
+        client = client_with([])
+        for raw in ("playlist_code: abcdef012345", "'playlist_code: abcdef012345'", ' PLAYLIST_CODE:"abcdef012345" '):
+            with self.subTest(raw=raw):
+                got = await share_codes.async_playlist_id_from_code(None, client, raw, store=FakeStore())
+                self.assertEqual("abcdef012345", got)
+        code = self._code()
+        client2 = client_with([_playlist("bbbbbbbbbbbb", self.VIDS)])
+        got = await share_codes.async_playlist_id_from_code(None, client2, f"playlist_code: {code}", store=FakeStore())
+        self.assertEqual("bbbbbbbbbbbb", got)
+
+
 class HandlerShareCodeTests(unittest.IsolatedAsyncioTestCase):
     async def test_play_playlist_nhan_ttpl1_va_phat_theo_id_da_nhap(self):
         hass, entry = MagicMock(), MagicMock()

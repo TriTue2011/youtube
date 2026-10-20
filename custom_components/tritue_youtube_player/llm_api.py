@@ -22,6 +22,7 @@ from homeassistant.util.json import JsonObjectType
 
 from .api import YouTubePlayerApiError
 from .playback import CHON_MODE_HOP_LE
+from .code_input import clean_code
 from .share_codes import async_playlist_id_from_code
 from .assist_tools import (
     PLAYLIST_SOURCES,
@@ -417,7 +418,7 @@ class PlayPlaylistTool(llm.Tool):
         from .services import async_dispatch
 
         entry = _entry(hass)
-        choice = str(tool_input.tool_args["danh_sach"]).strip()
+        choice = clean_code(tool_input.tool_args["danh_sach"], "playlist_code")
         user_key = _user_key(llm_context)
         source = tool_input.tool_args["nguon_playlist"]
 

@@ -286,11 +286,12 @@ async def async_play_queue(
     dispatch_fn: Any = None,
 ) -> dict[str, Any]:
     """Shared implementation to play a queue, select the track, and bind session to queue."""
+    from .code_input import clean_code
     from .queue import QUEUE_KEY
     from .queue_store import get_queue_store
     from .sessions import attach_session_queue
 
-    code = str(queue_code or "").strip()
+    code = clean_code(queue_code, "queue_code")
     if not QUEUE_KEY.fullmatch(code):
         raise ValueError("invalid_queue_code")
 

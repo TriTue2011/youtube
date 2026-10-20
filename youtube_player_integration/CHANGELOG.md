@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.27.13 - 2026-10-20
+
+### Action theo mã không tạo playlist trùng; dán nguyên dòng chép từ thẻ vẫn chạy; mã ngắn hơn
+
+Chủ máy báo 20/10/2026: chạy `play_playlist` với mã `TTPL1.` thì kho có thêm một «home» (44 bài) thứ hai giống hệt bản đã có; `play_queue` với `queue_code` báo «Mã hàng đợi không hợp lệ»; mã dài quá.
+
+- **`play_playlist` / Assist `phat_playlist` không nhập thêm bản sao.** Ánh xạ «mã → id» trước đây chỉ nhớ những gì action TỰ nhập, nên playlist giống hệt đã có (nhập từ thẻ, từ bản cũ, hoặc tự dán) bị bỏ qua và nhập thêm một bản. Nay trước khi nhập, so danh sách bài (nguồn + id, đúng thứ tự, theo đúng luật lọc của máy phát) với các playlist trong kho: giống hệt thì dùng lại và nhớ ánh xạ; đổi tên không làm nó thành bản khác. Bản giải nén trong tích hợp chỉ để so sánh — máy phát vẫn là nơi kiểm định duy nhất khi nhập, nên sai lệch chỉ làm mất cơ hội dùng lại, không bao giờ phát nhầm nội dung.
+- **Gọi chồng/gọi lại cùng mã chỉ nhập một lần.** Cả «đọc kho → nhập → ghi ánh xạ» nằm trong một khoá theo mã (automation kích hai lần, thẻ + action cùng lúc). Gặp lỗi kết nối sau khi máy phát đã tạo xong (hết giờ 150 giây với playlist dài) thì lần chạy lại thấy bản đó trong kho và dùng lại, không tạo tiếp.
+- **Dán nguyên dòng chép từ thẻ vẫn dùng được.** Nút sao chép của thẻ chép `queue_code: media_player.loa` (một dòng YAML); dán cả dòng vào ô «Mã hàng đợi» của giao diện action làm giá trị thành `queue_code: media_player.loa` và bị từ chối. Nay nhãn ĐÚNG tên trường (`queue_code:` / `playlist_code:`) và dấu nháy bao quanh được bỏ trước khi kiểm khuôn; nhãn khác hay khoá hỏng vẫn bị từ chối.
+- **Mã ngắn hơn.** `playlist_code` nhận thêm TÊN playlist (`home`; không phân biệt hoa/thường; trùng tên thì báo `playlist_name_ambiguous` và bắt dùng mã 12 ký tự thay vì đoán). `queue_code` thành tuỳ chọn: bỏ trống thì dùng hàng đợi của loa đầu tiên trong `entity_id`. Mã chia sẻ `TTPL1.` vẫn dài vì mang cả nội dung playlist (để gửi sang nhà khác); trong cùng một nhà dùng tên hoặc mã 12 ký tự.
+- Test: `test_share_code.py` (bản sao, đổi tên, khác thứ tự/khác bài, lỗi sau khi tạo, gọi chồng, dòng dán nguyên), `test_code_input.py`, `test_services.py` (queue dán nguyên dòng, bỏ trống `queue_code`, tên ngắn, tên trùng). CHƯA kiểm trên Home Assistant thật.
+- Chưa sửa (máy phát/add-on, cần bản add-on mới): hành động «thêm bài vào playlist theo tên» tạo playlist trước rồi mới thêm, nên thêm lỗi thì playlist rỗng vẫn nằm lại.
+
 ## 0.27.12 - 2026-10-19
 
 ### Next không làm phiên chết, thanh tua dưới hàng nút, vào lại thẻ giữ loa/bài/giây

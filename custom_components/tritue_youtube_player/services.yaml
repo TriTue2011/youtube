@@ -90,9 +90,9 @@ play_playlist:
           integration: tritue_youtube_player
     playlist_code:
       name: Playlist code
-      description: 12-character library playlist ID (e.g. abcdef012345), or a TTPL1. share code copied from the card (imported into the library once, then reused). A YouTube playlist link must be imported into the library first.
+      description: Playlist name as shown on the card (e.g. home), 12-character library playlist ID (e.g. abcdef012345), or a TTPL1. share code copied from the card (imported into the library once, then reused). A YouTube playlist link must be imported into the library first.
       required: true
-      example: abcdef012345
+      example: home
       selector:
         text:
     entity_id:
@@ -136,8 +136,8 @@ play_queue:
           integration: tritue_youtube_player
     queue_code:
       name: Queue code
-      description: Queue key code copied from the card (e.g. media_player.living_room).
-      required: true
+      description: Queue key (e.g. media_player.living_room). Leave empty to use the queue of the first selected speaker.
+      required: false
       example: media_player.living_room
       selector:
         text:

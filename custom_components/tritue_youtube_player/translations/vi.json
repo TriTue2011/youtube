@@ -121,6 +121,9 @@
     },
     "playlist_import_failed": {
       "message": "Không nhập được playlist từ mã chia sẻ. Hãy thử lại hoặc nhập bằng nút trên thẻ."
+    },
+    "playlist_name_ambiguous": {
+      "message": "Có nhiều playlist trùng tên này. Hãy dùng mã 12 ký tự của playlist thay cho tên."
     }
   },
   "services": {
@@ -180,7 +183,7 @@
         },
         "playlist_code": {
           "name": "Mã playlist",
-          "description": "Mã playlist trong kho (12 ký tự) hoặc mã chia sẻ TTPL1. chép từ thẻ (nhập vào kho một lần)."
+          "description": "Tên playlist (vd home), mã 12 ký tự trong kho, hoặc mã chia sẻ TTPL1. chép từ thẻ."
         },
         "entity_id": {
           "name": "Loa và màn hình",
@@ -206,7 +209,7 @@
         },
         "queue_code": {
           "name": "Mã hàng đợi",
-          "description": "Mã khoá hàng đợi chép từ thẻ."
+          "description": "Mã hàng đợi (vd media_player.phong_khach). Bỏ trống thì dùng hàng đợi của loa đầu tiên được chọn."
         },
         "entity_id": {
           "name": "Loa và màn hình",

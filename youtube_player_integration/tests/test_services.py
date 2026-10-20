@@ -214,6 +214,85 @@ class ServicesStructuralAndHandlerTests(unittest.IsolatedAsyncioTestCase):
                 await services_mod._async_handle_play_queue(hass, call_bad)
             self.assertEqual("invalid_queue_code", cm.exception.translation_key)
 
+    async def test_play_queue_nhan_ca_dong_queue_code_chep_tu_the(self):
+        """Chủ máy 20/10/2026: nút sao chép trên thẻ chép `queue_code: media_player.x`; dán nguyên dòng vào ô action thì báo
+        «Mã hàng đợi không hợp lệ». Nhãn đúng tên trường và dấu nháy bao quanh phải được bỏ trước khi kiểm khuôn."""
+        for raw in ("queue_code: media_player.speaker_x", "'queue_code: media_player.speaker_x'", ' "Queue_Code:media_player.speaker_x" '):
+            with self.subTest(raw=raw):
+                hass = MagicMock()
+                hass.data = {}
+                entry = MagicMock()
+                store = services_mod.get_queue_store(hass)
+                store._store.async_save = AsyncMock()
+                store._store.async_load = AsyncMock(return_value={"queues": {}})
+                await store.async_change({"key": "media_player.speaker_x", "action": "add",
+                                          "items": [{"id": "dQw4w9WgXcQ", "title": "Song 1", "source": "youtube"}]})
+                with patch.object(services_mod, "_loaded_entry_or_raise", return_value=entry), \
+                     patch.object(services_mod, "async_dispatch", new_callable=AsyncMock) as mock_dispatch:
+                    mock_dispatch.return_value = {"session_id": "sess_q", "target_count": 1}
+                    call = MagicMock(data={"entry_id": "e", "queue_code": raw, "entity_id": ["media_player.speaker_y"]})
+                    await services_mod._async_handle_play_queue(hass, call)
+                    mock_dispatch.assert_awaited_once()
+                q = await store.async_get("media_player.speaker_x")
+                self.assertIsNotNone(q["current"])
+
+    async def test_play_queue_nhan_sai_van_la_ma_khong_hop_le(self):
+        """Chỉ gỡ ĐÚNG nhãn `queue_code:`; nhãn khác hay khoá hỏng vẫn bị từ chối (không đoán)."""
+        for raw in ("playlist_code: media_player.speaker_x", "queue_code: loa phong khach!!", "queue_code:"):
+            with self.subTest(raw=raw):
+                hass = MagicMock()
+                hass.data = {}
+                with patch.object(services_mod, "_loaded_entry_or_raise", return_value=MagicMock()):
+                    call = MagicMock(data={"entry_id": "e", "queue_code": raw, "entity_id": ["media_player.s"]})
+                    with self.assertRaises(services_mod.ServiceValidationError) as cm:
+                        await services_mod._async_handle_play_queue(hass, call)
+                    self.assertEqual("invalid_queue_code", cm.exception.translation_key)
+
+    async def test_play_queue_bo_trong_queue_code_dung_hang_doi_cua_loa_dau(self):
+        hass = MagicMock()
+        hass.data = {}
+        entry = MagicMock()
+        store = services_mod.get_queue_store(hass)
+        store._store.async_save = AsyncMock()
+        store._store.async_load = AsyncMock(return_value={"queues": {}})
+        await store.async_change({"key": "media_player.speaker_x", "action": "add",
+                                  "items": [{"id": "dQw4w9WgXcQ", "title": "Song 1", "source": "youtube"}]})
+        with patch.object(services_mod, "_loaded_entry_or_raise", return_value=entry), \
+             patch.object(services_mod, "async_dispatch", new_callable=AsyncMock) as mock_dispatch:
+            mock_dispatch.return_value = {"session_id": "sess_q2", "target_count": 1}
+            call = MagicMock(data={"entry_id": "e", "entity_id": ["media_player.speaker_x", "media_player.speaker_z"]})
+            await services_mod._async_handle_play_queue(hass, call)
+        from custom_components.tritue_youtube_player.sessions import session_queue_key
+        self.assertEqual("media_player.speaker_x", session_queue_key({"session_id": "sess_q2"}))
+
+    async def test_play_playlist_theo_ten_ngan(self):
+        from custom_components.tritue_youtube_player import share_codes  # noqa: F401
+        hass, entry = MagicMock(), MagicMock()
+        pls = [
+            {"id": "aaaaaaaaaaaa", "name": "Account cafe", "items": [{"source": "youtube", "id": "kJQP7kiw5Fk"}]},
+            {"id": "bbbbbbbbbbbb", "name": "home", "items": [{"source": "youtube", "id": "dQw4w9WgXcQ"}]},
+        ]
+        entry.runtime_data.client.async_playlists = AsyncMock(return_value={"playlists": pls})
+        for raw in ("home", " HOME ", "'home'"):
+            with self.subTest(raw=raw), \
+                 patch.object(services_mod, "_loaded_entry_or_raise", return_value=entry), \
+                 patch.object(services_mod, "async_dispatch", new=AsyncMock()) as dispatch:
+                call = MagicMock(data={"entry_id": "e", "playlist_code": raw, "entity_id": ["media_player.s1"]})
+                await services_mod._async_handle_play_playlist(hass, call)
+                self.assertEqual("bbbbbbbbbbbb", dispatch.await_args.kwargs["playlist_id"])
+
+    async def test_play_playlist_ten_trung_thi_bat_chon_ma_khong_doan(self):
+        hass, entry = MagicMock(), MagicMock()
+        pls = [{"id": "aaaaaaaaaaaa", "name": "home", "items": []}, {"id": "bbbbbbbbbbbb", "name": "Home", "items": []}]
+        entry.runtime_data.client.async_playlists = AsyncMock(return_value={"playlists": pls})
+        with patch.object(services_mod, "_loaded_entry_or_raise", return_value=entry), \
+             patch.object(services_mod, "async_dispatch", new=AsyncMock()) as dispatch:
+            call = MagicMock(data={"entry_id": "e", "playlist_code": "home", "entity_id": ["media_player.s1"]})
+            with self.assertRaises(services_mod.ServiceValidationError) as cm:
+                await services_mod._async_handle_play_playlist(hass, call)
+        self.assertEqual("playlist_name_ambiguous", cm.exception.translation_key)
+        dispatch.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

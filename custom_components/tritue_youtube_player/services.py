@@ -39,6 +39,7 @@ from .playback import (
     normalize_target_entity_ids,
 )
 from .queue import QUEUE_KEY
+from .code_input import clean_code
 from .share_codes import async_playlist_id_from_code
 from .sessions import (
     active_sessions,
@@ -89,7 +90,7 @@ PLAY_QUEUE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTRY_ID): cv.string,
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
-        vol.Required("queue_code"): cv.string,
+        vol.Optional("queue_code"): cv.string,
         vol.Optional(CONF_VOLUME_LEVEL): vol.All(
             vol.Coerce(float), vol.Range(min=0, max=1)
         ),
@@ -251,9 +252,25 @@ async def _async_handle_play_on_players(
 async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
     """Resolve a playlist by code and play it."""
     entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
-    code = str(call.data["playlist_code"]).strip()
+    code = clean_code(call.data["playlist_code"], "playlist_code")
     if not code:
         raise _validation_error("invalid_playlist_code")
+
+    # 0. Tên playlist (ngắn, dễ nhớ): `playlist_code: home`. Khớp đúng tên (không phân biệt hoa/thường); trùng tên thì bắt chọn lại
+    #    bằng id 12 ký tự thay vì đoán; không khớp tên nào thì rơi xuống các nhánh bên dưới như cũ.
+    if not (code.startswith("TTPL1.") or re.fullmatch(r"^[a-z0-9]{12}$", code)) and "://" not in code and "list=" not in code:
+        try:
+            tim = await entry.runtime_data.client.async_playlists()
+            khop = [
+                p for p in (tim.get("playlists") or [])
+                if isinstance(p, dict) and " ".join(str(p.get("name") or "").split()).casefold() == " ".join(code.split()).casefold()
+            ]
+        except Exception:  # noqa: BLE001 — không tra được tên thì để các nhánh sau báo lỗi đúng như trước
+            khop = []
+        if len(khop) > 1:
+            raise _validation_error("playlist_name_ambiguous")
+        if khop:
+            code = str(khop[0].get("id") or "")
 
     # 1. Id trong kho (12 ký tự a-z0-9) hoặc mã chia sẻ TTPL1. của nút chia sẻ trên thẻ. Mã chia sẻ được nhập vào
     #    kho MỘT lần (nhớ ánh xạ mã -> id) nên automation chạy lặp không đẻ bản trùng.
@@ -303,7 +320,8 @@ async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) ->
 async def _async_handle_play_queue(hass: HomeAssistant, call: ServiceCall) -> None:
     """Play the queue immediately on requested players."""
     entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
-    queue_code = str(call.data["queue_code"]).strip()
+    # Bỏ trống thì dùng hàng đợi của chính loa đầu tiên được chọn (cách ngắn nhất, khỏi chép mã).
+    queue_code = clean_code(call.data.get("queue_code") or (call.data.get(ATTR_ENTITY_ID) or [""])[0], "queue_code")
     try:
         await async_play_queue(
             hass,
