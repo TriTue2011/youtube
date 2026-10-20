@@ -77,6 +77,44 @@ API_VERSION = "1"
 #: (~450x). Smaller chunks mean more connections; 4 MB already arrives at full rate
 #: on the first chunk (0.09 s), so sound still starts promptly.
 STREAM_CHUNK = 4 * 1024 * 1024
+STREAM_RETRY_DELAYS = (0.5, 1.0, 2.0, 2.0, 2.0)
+MAX_STREAM_RETRIES = 5
+
+
+def _kiem_tra_ban_noi(response, expected_offset: int, expected_total: int | None):
+    """Kiem tra ban noi tu nguon: PHAI la HTTP 206, Content-Range bat dau dung offset va cung tong co."""
+    status = getattr(response, "status", None)
+    if status is None:
+        status = getattr(response, "code", None)
+    if status is None and callable(getattr(response, "getcode", None)):
+        status = response.getcode()
+    if status != 206:
+        return False, f"status {status} != 206"
+
+    cr = ""
+    if hasattr(response, "headers") and response.headers:
+        if hasattr(response.headers, "get"):
+            cr = response.headers.get("Content-Range") or ""
+            if not cr:
+                for k, v in response.headers.items():
+                    if k.lower() == "content-range":
+                        cr = v
+                        break
+    cr = str(cr).strip()
+    match = re.match(r"^bytes\s+(\d+)-(\d+)/(\d+)$", cr, re.IGNORECASE)
+    if not match:
+        return False, f"Content-Range khong hop le: {cr!r}"
+
+    cr_start = int(match.group(1))
+    cr_total = int(match.group(3))
+
+    if cr_start != expected_offset:
+        return False, f"offset bat dau {cr_start} != {expected_offset}"
+
+    if expected_total is not None and cr_total != expected_total:
+        return False, f"tong co doi thanh {cr_total} != {expected_total}"
+
+    return True, ""
 
 
 def stream_total_size(response) -> int:
@@ -1028,12 +1066,11 @@ class PlayerHandler(BaseHTTPRequestHandler):
         return payload
 
     def proxy_stream(self, token):
-        """Resolve and relay a signed public Zing audio request to a speaker."""
+        """Resolve and relay a signed public audio request to a speaker."""
         if not token or len(token) > 4096:
             self.send_json(403, {"error": "invalid_stream_token"})
             return
         response_started = False
-        so_chunk = 0
         try:
             source, target = verify_stream_token(token, self.server.integration_token)
             range_header = self.headers.get("Range")
@@ -1051,36 +1088,154 @@ class PlayerHandler(BaseHTTPRequestHandler):
             response, resolved = self.open_upstream(source, target, start, first_end)
             total = stream_total_size(response)
             end = asked_end if asked_end is not None else (total - 1 if total else None)
-            self.send_response(206 if (range_header and total) else 200)
-            self.send_header(
-                "Content-Type",
-                response.headers.get(
-                    "Content-Type", resolved.get("content_type", "audio/mpeg")
-                ),
-            )
-            self.send_header("Accept-Ranges", "bytes")
-            if end is not None:
-                self.send_header("Content-Length", str(end - start + 1))
-            if range_header and total:
-                self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
-            self.send_header("Cache-Control", "private, no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            response_started = True
-            # Read the open chunk out, then fetch the next one: the listener sees a
-            # single unbroken stream.
-            at = start
-            while True:
-                with response:
-                    while piece := response.read(64 * 1024):
-                        at += len(piece)
-                        self.wfile.write(piece)
-                if end is None or at > end:
-                    break
-                so_chunk += 1
-                response, resolved = self.open_upstream(
-                    source, target, at, min(at + STREAM_CHUNK - 1, end)
+            try:
+                self.send_response(206 if (range_header and total) else 200)
+                self.send_header(
+                    "Content-Type",
+                    response.headers.get(
+                        "Content-Type", resolved.get("content_type", "audio/mpeg")
+                    ),
                 )
+                self.send_header("Accept-Ranges", "bytes")
+                if end is not None:
+                    self.send_header("Content-Length", str(end - start + 1))
+                if range_header and total:
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                response.close()
+                return
+            response_started = True
+
+            at = start
+            if end is None:
+                # Khong biet tong co (end is None) thi KHONG noi (khong biet diem ket thuc dung)
+                try:
+                    with response:
+                        while piece := response.read(64 * 1024):
+                            try:
+                                self.wfile.write(piece)
+                            except (BrokenPipeError, ConnectionResetError, OSError):
+                                return
+                            at += len(piece)
+                except (StreamUnavailableError, OSError) as error:
+                    self.log_message(
+                        "ERROR proxy_stream: luong_that_bai offset=%d nguon=%s: %s",
+                        at, source, type(error).__name__,
+                    )
+                return
+
+            current_response = response
+            so_lan_noi_lai = 0
+            consecutive_retries = 0
+            loi_hien_tai = None
+
+            while at <= end:
+                if current_response is not None:
+                    read_error = None
+                    speaker_closed = False
+                    at_dau_khuc = at
+                    try:
+                        with current_response:
+                            while at <= end:
+                                try:
+                                    piece = current_response.read(64 * 1024)
+                                except (StreamUnavailableError, OSError) as error:
+                                    read_error = error
+                                    break
+                                if not piece:
+                                    break
+                                try:
+                                    self.wfile.write(piece)
+                                except (BrokenPipeError, ConnectionResetError, OSError):
+                                    speaker_closed = True
+                                    break
+                                at += len(piece)
+                                consecutive_retries = 0
+                    except (StreamUnavailableError, OSError) as error:
+                        read_error = error
+                    finally:
+                        current_response = None
+
+                    if speaker_closed:
+                        # Loa da dong: dung NGAY, KHONG noi lai
+                        return
+
+                    if at > end:
+                        break
+
+                    if read_error is None and at == at_dau_khuc:
+                        # Khuc hop le nhung khong co byte nao: khong tien duoc thi la that bai, khong mo lai mai
+                        read_error = ValueError("khuc_rong")
+
+                    if read_error is not None:
+                        loi_hien_tai = read_error
+                    else:
+                        loi_hien_tai = None
+
+                # Can response moi tai offset `at`:
+                if loi_hien_tai is None:
+                    try:
+                        resp, resolved = self.open_upstream(
+                            source, target, at, min(at + STREAM_CHUNK - 1, end)
+                        )
+                        hop_le, ly_do = _kiem_tra_ban_noi(resp, at, total)
+                        if hop_le:
+                            current_response = resp
+                            continue
+                        resp.close()
+                        loi_hien_tai = ValueError(ly_do or "ban_noi_sai")
+                    except (StreamUnavailableError, OSError) as error:
+                        loi_hien_tai = error
+
+                # Thu lai / noi lai khi co loi nguon hoac ban noi sai
+                while consecutive_retries < MAX_STREAM_RETRIES:
+                    consecutive_retries += 1
+                    loai_loi = (
+                        type(loi_hien_tai).__name__
+                        if isinstance(loi_hien_tai, Exception)
+                        else str(loi_hien_tai)
+                    )
+                    self.log_message(
+                        "WARNING proxy_stream: luong_dut_noi_lai offset=%d lan=%d loi=%s nguon=%s",
+                        at, consecutive_retries, loai_loi, source,
+                    )
+                    time.sleep(STREAM_RETRY_DELAYS[consecutive_retries - 1])
+                    try:
+                        resp, resolved = self.open_upstream(
+                            source, target, at, min(at + STREAM_CHUNK - 1, end)
+                        )
+                    except (StreamUnavailableError, OSError) as error:
+                        loi_hien_tai = error
+                        continue
+
+                    hop_le, ly_do = _kiem_tra_ban_noi(resp, at, total)
+                    if not hop_le:
+                        resp.close()
+                        loi_hien_tai = ValueError(ly_do or "ban_noi_sai")
+                        continue
+
+                    current_response = resp
+                    so_lan_noi_lai += 1
+                    loi_hien_tai = None
+                    break
+
+                if current_response is None:
+                    # Qua 5 lan thu: ngat luong
+                    self.log_message(
+                        "ERROR proxy_stream: luong_that_bai offset=%d nguon=%s: da thu %d lan",
+                        at, source, MAX_STREAM_RETRIES,
+                    )
+                    break
+
+            if at > end and so_lan_noi_lai > 0:
+                self.log_message(
+                    "INFO proxy_stream: luong_hoan_tat so_byte=%d so_lan_noi_lai=%d nguon=%s",
+                    at - start, so_lan_noi_lai, source,
+                )
+
         except InvalidStreamTokenError:
             self.send_json(403, {"error": "invalid_stream_token"})
         except (BrokenPipeError, ConnectionResetError):
@@ -1089,14 +1244,12 @@ class PlayerHandler(BaseHTTPRequestHandler):
             if not response_started:
                 self.send_json(502, {"error": "stream_unavailable"})
             else:
-                # Chunk lỗi SAU KHI đã bắt đầu trả response: loa thấy stream đứt
-                # đột ngột và dừng giữa bài. Trước đây im lặng return; nay log
-                # ERROR để tra được nguyên nhân. Chỉ log 8 ký tự đầu token.
                 self.log_message(
-                    "ERROR proxy_stream: chunk %d bi loi sau khi response da started "
-                    "(token %s..., source=%s): %s: %s",
-                    so_chunk, token[:8], source,
-                    type(error).__name__, error)
+                    "ERROR proxy_stream: luong_that_bai offset=%d nguon=%s: %s",
+                    at if "at" in locals() else 0,
+                    source if "source" in locals() else "unknown",
+                    type(error).__name__,
+                )
 
     def open_upstream(self, source, target, tu, den):
         """Open one BOUNDED chunk of the audio upstream.

@@ -57,21 +57,21 @@ class ProxyStreamLogTests(unittest.TestCase):
 
     def test_chunk_loi_sau_khi_started_phai_log(self):
         open_upstream = MagicMock(
-            side_effect=[(self.fake_response(), {}), OSError("google throttle")]
+            side_effect=[(self.fake_response(), {})] + [OSError("google throttle")] * 10
         )
         handler = self.make_handler(open_upstream)
         with patch.object(
             self.server_mod, "verify_stream_token", return_value=("youtube", "dQw4w9WgXcQ")
         ), patch.object(
             self.server_mod, "stream_total_size", return_value=10 * 1024 * 1024
-        ):
+        ), patch("time.sleep"):
             handler.proxy_stream("deadbeefcafef00d")
-        self.assertEqual(1, len(self.logs), f"phải log 1 dòng ERROR, thực tế: {self.logs}")
-        dong = self.logs[0]
-        self.assertIn("deadbeef", dong)  # token rút gọn, không log full token
-        self.assertNotIn("deadbeefcafef00d", dong)
-        self.assertIn("chunk 1", dong)
-        self.assertIn("OSError", dong)
+        self.assertGreater(len(self.logs), 0, f"phải log khi chunk lỗi sau khi started, thực tế: {self.logs}")
+        for dong in self.logs:
+            self.assertNotIn("deadbeef", dong)  # nguyên tắc «không token trong log»
+            self.assertNotIn("deadbeefcafef00d", dong)
+        all_logs = " ".join(self.logs)
+        self.assertIn("OSError", all_logs)
         # Đã started nên KHÔNG gửi 502 nữa.
         handler.send_json.assert_not_called()
 

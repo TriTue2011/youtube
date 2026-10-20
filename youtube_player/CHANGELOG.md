@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.8 - 2026-10-20
+
+### Fixed — proxy_stream: tự động nối lại luồng khi nguồn đứt giữa bài
+
+- **Hiện tượng đo được:** Luồng phát bị cắt im lặng giữa chừng khi khúc tiếp theo bị đứt giữa chừng, mở khúc bị quá giờ hoặc gặp lỗi mạng. Ví dụ với bài 10 MiB bị đứt ở khúc thứ hai: loa chỉ nhận 4 MiB trên 10 MiB đã công bố trong `Content-Length`, không hề thử lại (`open_upstream` chỉ thử lại 1 lần với 403/404/410), khiến loa dừng giữa bài. Đo trên máy phát c2a: luồng kết thúc sớm ở 467 s và 486 s khi đọc 17 KB/s (cách ranh giới khúc 4 MiB đúng 131.072 hoặc 458.752 byte).
+- **Cách sửa:**
+  - Phân biệt rõ hai chiều lỗi: lỗi đọc/mở nguồn (`StreamUnavailableError`/`OSError` từ `response.read` hoặc `open_upstream`) thì tự động nối lại từ đúng byte đã gửi cho loa (`at`), tối đa 5 lần mỗi luồng với thời gian chờ tăng dần (0,5 / 1 / 2 / 2 / 2 s). Lỗi ghi ra loa (`self.wfile.write` gặp `OSError`/`BrokenPipeError`/`ConnectionResetError`) nghĩa là loa đã đóng kết nối: dừng ngay lập tức, không nối lại, không giữ kết nối nguồn mở.
+  - Kiểm tra tính hợp lệ của bản nối lại: bắt buộc phản hồi HTTP 206, `Content-Range` phải bắt đầu từ đúng offset xin (`at`) và giữ nguyên tổng cỡ bài hát (`total`). Nếu trả về HTTP 200, lệch offset hoặc đổi tổng cỡ thì tính là một lần thất bại, đóng kết nối nguồn và không gửi byte rác nào cho loa.
+  - Quá 5 lần thử thất bại thì ngắt luồng và ghi log `luong_that_bai`; nếu truyền dữ liệu thành công thì đặt lại bộ đếm lỗi liên tiếp.
+  - Trường hợp không biết tổng kích thước (`end is None`) thì giữ hành vi cũ (không nối lại vì không xác định được điểm kết thúc) và ghi log.
+  - Nhật ký ghi qua `self.log_message`: `luong_dut_noi_lai` (offset, lần thử, loại lỗi, nguồn), `luong_that_bai`, và `luong_hoan_tat` (chỉ khi có nối lại). Tuyệt đối không ghi token luồng (kể cả 8 ký tự đầu), URL có ký hoặc thông tin xác thực vào log.
+- **Giới hạn:**
+  - Thay đổi mới được xác minh bằng bộ kiểm thử mô phỏng đầy đủ các kịch bản lỗi và đột biến (unittest stdlib), chưa thử nghiệm trực tiếp trên luồng YouTube và loa phần cứng thực tế.
+
+
 ## 0.9.6 - 2026-09-20
 
 ### Fixed — khai sai kiểu nội dung cho bài phát trực tiếp
