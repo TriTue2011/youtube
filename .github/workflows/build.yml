@@ -40,20 +40,23 @@ jobs:
       - name: Run HTTP behavior tests
         run: python -m unittest discover -s youtube_player/tests -v
 
-      - name: Install integration test dependency
-        run: python -m pip install aiohttp==3.13.5
-
-      - name: Run add-on to integration contract tests
-        run: python -m unittest discover -s youtube_player_integration/tests -p 'test_*.py' -v
-
-      - name: Run sessions end-to-end on Home Assistant
+      - name: Install integration test dependencies
+        # Home Assistant PHẢI được cài TRƯỚC bước contract tests: các test tích hợp (services, llm_api, advance, share_code…)
+        # import homeassistant, voluptuous, yaml. Trước đây bước này chỉ cài aiohttp nên từ 0.27.9 contract tests đỏ →
+        # job «Build image»/«Publish manifest» bị BỎ QUA → ảnh add-on 0.9.8 không bao giờ được xuất bản (HA báo 404 manifest unknown).
         run: |
+          python -m pip install aiohttp==3.13.5
           python -m pip install pytest-homeassistant-custom-component
           # The integration depends on `frontend`; install the exact frontend build HA pins.
           python -m pip install "$(python -c 'import json, os, homeassistant.components.frontend as f; print(json.load(open(os.path.join(os.path.dirname(f.__file__), "manifest.json")))["requirements"][0])')"
           # Assist tools go through `conversation`, which needs hassil and the intents package.
           python -m pip install $(python -c 'import json, os, homeassistant; print(" ".join(json.load(open(os.path.join(os.path.dirname(homeassistant.__file__), "components", "conversation", "manifest.json")))["requirements"]))')
-          python -m pytest youtube_player_integration/tests_ha -q -c youtube_player_integration/tests_ha/pytest.ini
+
+      - name: Run add-on to integration contract tests
+        run: python -m unittest discover -s youtube_player_integration/tests -p 'test_*.py' -v
+
+      - name: Run sessions end-to-end on Home Assistant
+        run: python -m pytest youtube_player_integration/tests_ha -q -c youtube_player_integration/tests_ha/pytest.ini
 
       - name: Check Python and JavaScript syntax
         run: |
