@@ -52,7 +52,7 @@ async def async_setup_entry(
     _async_theo_doi_vong_doi(hass, entry, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # Ô chọn playlist/hàng đợi trong giao diện action: nạp một lần rồi làm mới định kỳ (thẻ cũng gọi khi đổi).
-    await async_cap_nhat_lua_chon(hass)
+    await async_cap_nhat_lua_chon(hass, entry=entry)
 
     async def _lam_moi_lua_chon(_now) -> None:
         await async_cap_nhat_lua_chon(hass)

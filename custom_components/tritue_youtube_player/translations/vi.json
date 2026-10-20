@@ -209,7 +209,7 @@
         },
         "queue_code": {
           "name": "Mã hàng đợi",
-          "description": "Mã hàng đợi (vd media_player.phong_khach). Bỏ trống thì dùng hàng đợi của loa đầu tiên được chọn."
+          "description": "Chọn hàng đợi nào để phát (chọn trong danh sách). Không phụ thuộc loa phát ở ô bên dưới — hàng đợi nào cũng phát được ra loa nào bạn chọn. Bỏ trống thì dùng hàng đợi lưu ở loa đầu tiên được chọn."
         },
         "entity_id": {
           "name": "Loa và màn hình",

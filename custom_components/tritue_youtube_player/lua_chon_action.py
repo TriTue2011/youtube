@@ -46,14 +46,14 @@ def dung_lua_chon_playlist(playlists: list[Any]) -> list[dict[str, str]]:
 
 
 def dung_lua_chon_queue(queues: dict[str, Any], ten_loa: dict[str, str]) -> list[dict[str, str]]:
-    """[{value: khoá hàng đợi, label: «tên loa (N bài)»}] cho các hàng đợi đang có bài."""
+    """[{value: khoá hàng đợi, label: «Hàng đợi «tên» (N bài)»}] cho các hàng đợi đang có bài. Tên chỉ cho biết danh sách NÀY nằm ở loa nào; loa PHÁT chọn riêng ở ô `entity_id`."""
     out = []
     for key, queue in list(queues.items())[:TOI_DA_LUA_CHON]:
         so_bai = len((queue or {}).get("items") or [])
         if not so_bai:
             continue
         ten = ten_loa.get(key) or ("Máy " + key.split(":", 1)[1][:6] if key.startswith("device:") else key)
-        out.append({"value": key, "label": f"{ten} ({so_bai} bài)"})
+        out.append({"value": key, "label": f"Hàng đợi «{ten}» ({so_bai} bài)"})
     return out
 
 
@@ -80,14 +80,18 @@ def _doc_services_yaml() -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-async def async_cap_nhat_lua_chon(hass: HomeAssistant, *, reset: bool = False) -> None:
+async def async_cap_nhat_lua_chon(hass: HomeAssistant, *, reset: bool = False, entry: Any = None) -> None:
     """Đặt lại mô tả hai action. `reset=True` (lúc gỡ tích hợp) trả về ô gõ chữ gốc. Mọi lỗi chỉ ghi log — không bao giờ làm hỏng tích hợp."""
     try:
         base = await hass.async_add_executor_job(_doc_services_yaml)
         playlist_opts: list[dict[str, str]] = []
         queue_opts: list[dict[str, str]] = []
         if not reset:
-            entries = [e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED]
+            # Lúc `async_setup_entry` đang chạy, cấu hình CHƯA ở trạng thái LOADED (đang SETUP_IN_PROGRESS) nên lọc theo LOADED sẽ bỏ sót
+            # chính tích hợp vừa nạp → danh sách playlist trống tới lần làm mới sau (báo cáo chủ máy 20/10/2026). Nơi gọi truyền entry thẳng vào.
+            entries = [entry] if entry is not None else [
+                e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED
+            ]
             if entries:
                 try:
                     data = await entries[0].runtime_data.client.async_playlists()

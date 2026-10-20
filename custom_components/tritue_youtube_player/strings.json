@@ -209,7 +209,7 @@
         },
         "queue_code": {
           "name": "Queue code",
-          "description": "Queue key (e.g. media_player.living_room). Leave empty to use the queue of the first selected speaker."
+          "description": "Which queue list to play (pick from the list). Independent of the speakers below. Leave empty to use the queue saved under the first selected speaker."
         },
         "entity_id": {
           "name": "Speakers and displays",

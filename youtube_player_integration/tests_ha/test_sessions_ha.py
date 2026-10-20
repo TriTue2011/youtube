@@ -674,3 +674,20 @@ async def test_turn_off_thuc_the_youtube_dung_phien(hass, addon_server):
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
     assert _phien(hass) == []
+
+
+async def test_danh_sach_chon_playlist_co_ngay_sau_khi_nap_tich_hop(hass, addon_server):
+    """Chủ máy 20/10/2026: «mã playlist chưa có list để chọn trong action». Lúc async_setup_entry chạy, entry chưa LOADED; danh sách phải có
+    NGAY sau khi nạp (đi đúng đường mô tả action của Home Assistant), không chờ lần làm mới 10 phút sau."""
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+    from homeassistant.helpers.service import SERVICE_DESCRIPTION_CACHE
+
+    from custom_components.tritue_youtube_player.api import YouTubePlayerClient
+
+    truoc = YouTubePlayerClient(f"http://127.0.0.1:{addon_server.server_address[1]}", TOKEN, async_get_clientsession(hass))
+    await truoc.async_playlist_action({"action": "create", "name": "Nhà", "items": [KET_QUA[0]]})
+    await _setup(hass, addon_server)
+    mo_ta = hass.data[SERVICE_DESCRIPTION_CACHE][(DOMAIN, "play_playlist")]   # nơi Home Assistant đọc mô tả action để gửi cho giao diện
+    lua = mo_ta["fields"]["playlist_code"]["selector"]["select"]
+    assert [o["label"] for o in lua["options"]] == ["Nhà (1 bài)"]
+    assert lua["custom_value"] is True            # vẫn dán được mã

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.27.16 - 2026-10-20
+
+### Danh sách chọn playlist có ngay sau khi khởi động; nhãn hàng đợi rõ «chọn hàng đợi» khác «chọn loa phát»
+
+- **Sửa: ô «Playlist code» trống danh sách sau khi khởi động** (chủ máy báo 20/10/2026: «mã playlist chưa có list để chọn»). Lúc tích hợp đang nạp, cấu hình còn ở trạng thái «đang nạp» nên bước lấy danh sách (chỉ nhận cấu hình ĐÃ nạp xong) bỏ sót chính nó; playlist chỉ hiện sau lần làm mới kế (tối đa 10 phút, hoặc khi thẻ đổi gì đó). Nay nơi nạp truyền thẳng cấu hình vào. Test đỏ trước, xanh sau.
+- **Nhãn hàng đợi:** «Hàng đợi «Phòng khách» (3 bài)» thay cho «Phòng khách (3 bài)» — tên chỉ cho biết danh sách NÀY được lưu ở loa nào; loa PHÁT vẫn chọn riêng ở ô «Loa và màn hình» (hàng đợi nào cũng phát được ra loa nào). Mô tả hai ô viết lại cho rõ.
+
 ## 0.27.15 - 2026-10-20
 
 ### Chọn playlist và hàng đợi từ danh sách ngay trong action (khỏi chép mã)

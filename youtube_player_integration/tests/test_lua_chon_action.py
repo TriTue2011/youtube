@@ -43,8 +43,8 @@ class DungLuaChonTests(unittest.TestCase):
         }
         got = lc.dung_lua_chon_queue(queues, {"media_player.googlehome5802": "Phòng khách"})
         self.assertEqual(
-            [{"value": "media_player.googlehome5802", "label": "Phòng khách (2 bài)"},
-             {"value": "device:b612ec534541f383", "label": "Máy b612ec (1 bài)"}], got)
+            [{"value": "media_player.googlehome5802", "label": "Hàng đợi «Phòng khách» (2 bài)"},
+             {"value": "device:b612ec534541f383", "label": "Hàng đợi «Máy b612ec» (1 bài)"}], got)
 
 
 class ApLuaChonTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class ApLuaChonTests(unittest.TestCase):
 
     def test_chi_thay_bo_chon_hai_o_va_giu_cho_dan_ma(self):
         base = self._base()
-        out = lc.ap_lua_chon(base, [{"value": "aaaaaaaaaaaa", "label": "home (1 bài)"}], [{"value": "media_player.x", "label": "x (1 bài)"}])
+        out = lc.ap_lua_chon(base, [{"value": "aaaaaaaaaaaa", "label": "home (1 bài)"}], [{"value": "media_player.x", "label": "Hàng đợi «x» (1 bài)"}])
         sel = out["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]
         self.assertTrue(sel["custom_value"])           # vẫn dán được mã TTPL1 / mã 12 ký tự / tên
         self.assertEqual("aaaaaaaaaaaa", sel["options"][0]["value"])
@@ -96,6 +96,18 @@ class CapNhatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("aaaaaaaaaaaa", dat_theo["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]["options"][0]["value"])
         self.assertEqual("media_player.x", dat_theo["play_queue"]["fields"]["queue_code"]["selector"]["select"]["options"][0]["value"])
         self.assertTrue(all(c.args[1] == DOMAIN for c in dat.call_args_list))
+
+    async def test_entry_dang_nap_chua_la_loaded_van_co_danh_sach_playlist(self):
+        """Báo cáo chủ máy 20/10/2026: «mã playlist chưa có list để chọn». Lúc async_setup_entry chạy, entry đang SETUP_IN_PROGRESS."""
+        hass, store = self._hass([_pl("aaaaaaaaaaaa", "home", 3)])
+        entry = MagicMock()
+        entry.state = "setup_in_progress"
+        entry.runtime_data.client.async_playlists = AsyncMock(return_value={"playlists": [_pl("aaaaaaaaaaaa", "home", 3)]})
+        hass.config_entries.async_entries.return_value = [entry]   # lọc theo LOADED sẽ trả rỗng
+        with patch.object(lc, "get_queue_store", return_value=store), patch.object(lc, "async_set_service_schema") as dat:
+            await lc.async_cap_nhat_lua_chon(hass, entry=entry)
+        dat_theo = {c.args[2]: c.args[3] for c in dat.call_args_list}
+        self.assertEqual("aaaaaaaaaaaa", dat_theo["play_playlist"]["fields"]["playlist_code"]["selector"]["select"]["options"][0]["value"])
 
     async def test_may_phat_khong_tra_loi_thi_giu_nguyen_khong_dat_gi(self):
         hass, store = self._hass(error=YouTubePlayerApiError("cannot_connect"))
