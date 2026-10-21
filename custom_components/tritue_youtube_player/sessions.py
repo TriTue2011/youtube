@@ -71,6 +71,14 @@ def queue_item(session: dict[str, Any], step: int) -> tuple[int, dict[str, Any]]
 
 
 def item_target(item: dict[str, Any]) -> str:
+    """Target chuẩn để phát một bài: URL trước, id sau.
+
+    Máy phát chuẩn hoá được từ URL với youtube/facebook nhưng BẮT BUỘC URL đầy
+    đủ với zing (`validate_zing_target`), nên thứ tự url-trước đúng với MỌI
+    nguồn. Mọi đường phát (action, Assist, hàng đợi, next) đều phải qua đây
+    thay vì tự chọn `id`/`url` theo thứ tự riêng (NV201: hai chỗ chọn id-trước
+    làm bài Zing không phát được).
+    """
     return str(item.get("url") or item.get("id") or "")
 
 

@@ -296,7 +296,7 @@ async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) ->
         if not items:
             raise _validation_error("playlist_empty")
         first = items[0]
-        target = str(first.get("id") or first.get("url") or "")
+        target = item_target(first)
         source = str(first.get("source") or "youtube")
         await async_dispatch(
             hass,

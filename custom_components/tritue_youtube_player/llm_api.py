@@ -8,6 +8,7 @@ several, or all), plays, and can pause/skip/stop per group of speakers.
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -43,7 +44,7 @@ from .const import DOMAIN
 from .hidden_players import STORAGE_KEY, STORAGE_VERSION, normalize_hidden
 from .playback import async_play_queue
 from .queue_store import get_queue_store
-from .sessions import active_sessions, attach_session_queue
+from .sessions import active_sessions, attach_session_queue, item_target
 
 API_ID = DOMAIN
 API_NAME = "TriTue Music"
@@ -214,7 +215,7 @@ class PlayMusicTool(llm.Tool):
             if not items or not 1 <= number <= len(items):
                 return {"loi": "Chưa có kết quả tìm kiếm hoặc số bài không hợp lệ — hãy gọi tim_nhac trước."}
             item = items[number - 1]
-            source, target = str(item.get("source") or "youtube"), str(item.get("url") or item.get("id"))
+            source, target = str(item.get("source") or "youtube"), item_target(item)
             title = str(item.get("title") or target)
         else:
             extracted = extract_item_id(choice, "youtube")
@@ -468,7 +469,7 @@ class PlayPlaylistTool(llm.Tool):
             if not sub_items:
                 return {"loi": f"Playlist '{title}' đang rỗng, không có bài hát nào."}
             first = sub_items[0]
-            target = str(first.get("id") or first.get("url"))
+            target = item_target(first)
             play_source = str(first.get("source") or "youtube")
         except Exception:
             return {"loi": "Lỗi đọc playlist từ máy chủ."}
@@ -651,7 +652,7 @@ class QueueManageTool(llm.Tool):
                     hass,
                     entry,
                     source=str(matched.get("source") or "youtube"),
-                    target=str(matched.get("url") or matched.get("id")),
+                    target=item_target(matched),
                     entity_ids=entity_ids,
                     mode=None,
                 )

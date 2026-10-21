@@ -289,7 +289,7 @@ async def async_play_queue(
     from .code_input import clean_code
     from .queue import QUEUE_KEY
     from .queue_store import get_queue_store
-    from .sessions import attach_session_queue
+    from .sessions import attach_session_queue, item_target
 
     code = clean_code(queue_code, "queue_code")
     if not QUEUE_KEY.fullmatch(code):
@@ -310,7 +310,7 @@ async def async_play_queue(
         from .services import async_dispatch
         dispatch_fn = async_dispatch
 
-    target = str(item.get("url") or item.get("id") or "")
+    target = item_target(item)
     source = str(item.get("source") or "youtube")
     result = await dispatch_fn(
         hass,
