@@ -186,7 +186,11 @@ class YouTubePlayerClient:
                 )
                 if response.status == 401:
                     raise AuthenticationError(error_code)
-                if response.status == 400 and error_code == "invalid_youtube_target":
+                if 400 <= response.status < 500:
+                    # NV202: mọi lỗi 4xx (trừ 401 xác thực) đều là lỗi VĨNH VIỄN —
+                    # yêu cầu sai/thiếu/không được phép thì thử lại không đổi gì.
+                    # Phân loại theo MÃ HTTP, không theo tên nguồn: advance bỏ qua
+                    # bài hỏng và đi tiếp thay vì thử lại 3 lần rồi dừng cả playlist.
                     raise InvalidTargetError(error_code)
                 if response.status >= 400:
                     raise YouTubePlayerApiError(error_code)

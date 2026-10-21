@@ -74,6 +74,7 @@ async def async_play_on_players(
     join_entity_ids: list[str] | None = None,
     playlist_id: str | None = None,
     mode: str | None = None,
+    giu_phien_khi_loi: bool = False,
 ) -> dict[str, Any]:
     """Resolve one source item and dispatch it to one or more HA players.
 
@@ -277,7 +278,10 @@ async def async_play_on_players(
             )
             session = recorded.get("session") or session
     except Exception:
-        if not physical_dispatch_completed:
+        # NV202: tự chuyển bài (advance) thất bại KHÔNG được giết phiên — phiên
+        # còn giữ cả playlist, giết nó là mất các bài chưa phát. Đường phát trực
+        # tiếp giữ nguyên: lỗi thì dọn phiên để không còn phiên «ma».
+        if not physical_dispatch_completed and not giu_phien_khi_loi:
             with suppress(Exception):
                 if session_id:
                     await client.async_stop(session_id=session_id)

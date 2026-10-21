@@ -425,12 +425,21 @@ class SessionAutoAdvance:
         finally:
             self._advancing.discard(session_id)
 
-    async def _async_chuyen_bai(self, session: dict[str, Any], fn_queue_next, fn_skip) -> None:
-        """Chuyển sang bài kế một lần (không thử lại)."""
+    async def _async_chuyen_bai(
+        self, session: dict[str, Any], fn_queue_next, fn_skip, buoc: int = 1
+    ) -> None:
+        """Chuyển sang bài kế một lần (không thử lại).
+
+        ``buoc``: số bài nhảy qua so với con trỏ hiện tại. NV202: khi bài vừa
+        thử hỏng VĨNH VIỄN, lần thử kế nhảy QUA nó (buoc+1) thay vì phát lại nó.
+        """
         if self._next_from(session) == "queue":
             await fn_queue_next(self.hass, self.entry, session)
         else:
-            await fn_skip(self.hass, self.entry, session.get("session_id"), 1)
+            await fn_skip(
+                self.hass, self.entry, session.get("session_id"), buoc,
+                giu_phien_khi_loi=True,
+            )
 
     async def _async_chuyen_bai_co_thu_lai(
         self, session: dict[str, Any], fn_queue_next, fn_skip
@@ -447,12 +456,13 @@ class SessionAutoAdvance:
         """
         session_id = str(session.get("session_id") or "")
         bo_qua_vinh_vien = 0
+        buoc = 1
         loi_cho_xu_ly: HomeAssistantError | None = None
         while True:
             try:
                 if loi_cho_xu_ly is not None:
                     raise loi_cho_xu_ly
-                await self._async_chuyen_bai(session, fn_queue_next, fn_skip)
+                await self._async_chuyen_bai(session, fn_queue_next, fn_skip, buoc=buoc)
                 return
             except HomeAssistantError as error:
                 loi_cho_xu_ly = None
@@ -471,6 +481,10 @@ class SessionAutoAdvance:
                             f"Tự chuyển bài dừng: {bo_qua_vinh_vien} bài liên tiếp không phát được "
                             "(video có thể đã bị xoá hoặc không tồn tại).")
                         return
+                    # NV202: bài vừa thử hỏng vĩnh viễn → lần tới nhảy QUA nó
+                    # (buoc+1), không phát lại nó. Bước nhảy tính từ con trỏ lúc
+                    # bắt đầu nên đúng cả khi máy phát đã/không kịp ghi nhận bài hỏng.
+                    buoc += 1
                     LOGGER.warning(
                         "Auto-advance of session %s: bỏ qua bài lỗi vĩnh viễn (%s), chuyển bài kế (%d/%d)",
                         session_id, error, bo_qua_vinh_vien, BO_QUA_VINH_VIEN_TOI_DA)

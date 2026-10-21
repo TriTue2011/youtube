@@ -156,10 +156,13 @@ async def async_dispatch(
     join_entity_ids: list[str] | None = None,
     playlist_id: str | None = None,
     mode: str | None = None,
+    giu_phien_khi_loi: bool = False,
 ) -> dict:
     """Play one item on physical players as one session controlled by ``entry``.
 
-    Shared by the play/skip actions, server-side auto-advance and Assist."""
+    Shared by the play/skip actions, server-side auto-advance and Assist.
+    ``giu_phien_khi_loi`` (NV202): tự chuyển bài thất bại thì giữ phiên để
+    thử bài kế, không dọn phiên như đường phát trực tiếp."""
     excluded = _virtual_players(hass, entry)
     try:
         entity_ids = normalize_target_entity_ids(entity_ids, excluded=excluded)
@@ -208,6 +211,7 @@ async def async_dispatch(
             join_entity_ids=join_entity_ids,
             playlist_id=playlist_id,
             mode=mode,
+            giu_phien_khi_loi=giu_phien_khi_loi,
         )
         await entry.runtime_data.async_refresh()
         lenh_cua_minh.danh_dau(entity_ids)          # tính lại từ lúc lệnh XONG: loa chậm chỉ idle sau khi nhận lệnh
@@ -357,7 +361,10 @@ def _khoa_chuyen_bai(hass: HomeAssistant, entry) -> asyncio.Lock:
     return khoa.setdefault(entry.entry_id, asyncio.Lock())
 
 
-async def async_skip(hass: HomeAssistant, entry, session_id: str | None, step: int) -> dict:
+async def async_skip(
+    hass: HomeAssistant, entry, session_id: str | None, step: int,
+    giu_phien_khi_loi: bool = False,
+) -> dict:
     """Play the next/previous item of a session's own queue on its speakers."""
     async with _khoa_chuyen_bai(hass, entry):
         session = find_session(entry.runtime_data.data, session_id)
@@ -367,7 +374,8 @@ async def async_skip(hass: HomeAssistant, entry, session_id: str | None, step: i
         if found is None:
             raise _validation_error("queue_end")
         _, item = found
-        return await _async_play_session_item(hass, entry, session, item)
+        return await _async_play_session_item(
+            hass, entry, session, item, giu_phien_khi_loi=giu_phien_khi_loi)
 
 
 async def async_play_queue_next(hass: HomeAssistant, entry, session: dict) -> dict:
@@ -389,7 +397,10 @@ async def async_play_queue_next(hass: HomeAssistant, entry, session: dict) -> di
         return res
 
 
-async def _async_play_session_item(hass: HomeAssistant, entry, session: dict, item: dict) -> dict:
+async def _async_play_session_item(
+    hass: HomeAssistant, entry, session: dict, item: dict,
+    giu_phien_khi_loi: bool = False,
+) -> dict:
     outputs = [
         entity_id
         for entity_id in session.get("output_entity_ids") or []
@@ -405,6 +416,7 @@ async def _async_play_session_item(hass: HomeAssistant, entry, session: dict, it
         entity_ids=outputs,
         media_content_type=item.get("media_content_type"),
         session_id=session.get("session_id"),
+        giu_phien_khi_loi=giu_phien_khi_loi,
     )
 
 

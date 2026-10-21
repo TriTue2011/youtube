@@ -221,8 +221,29 @@ class PlaybackSession:
                 raise ValueError("invalid_volume_level")
         if source == "http":
             item = build_direct_http_item(target, media_content_type)
-            queue = [item]
-            index = 0
+            # NV202: bài http NẰM TRONG playlist (tới lượt khi tự chuyển bài) phải
+            # giữ hàng đợi của phiên — tìm nó trong hàng đợi hiện tại trước, chỉ
+            # dựng hàng đợi 1 bài khi phát link http riêng lẻ.
+            candidates = (
+                [dict(item) for item in queue_items if isinstance(item, dict)]
+                if queue_items
+                else (self._sessions.get(session_id) or {}).get("queue", {}).get("items") or []
+            )
+            queue = candidates
+            index = next(
+                (
+                    position
+                    for position, candidate in enumerate(queue)
+                    if candidate.get("source", source) == "http"
+                    and item.get("url") in {candidate.get("id"), candidate.get("url")}
+                ),
+                -1,
+            )
+            if index < 0:
+                queue = [item]
+                index = 0
+            else:
+                item = dict(queue[index])
         else:
             fallback = normalize_session_item(source, fallback_item or {})
             target_text = str(target or "").strip()
