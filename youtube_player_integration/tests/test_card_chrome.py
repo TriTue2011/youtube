@@ -98,6 +98,7 @@ class TheTrongChromeTests(unittest.TestCase):
         luu = json.loads(self.kq["F_luu_dinh_ky"]["luu"])
         self.assertEqual(["media_player.d50s"], luu["chon"])
         self.assertEqual("media_player.d50s", luu["cuoi"])
+        self.assertTrue(luu["uoc"] and luu["uoc"]["key"].startswith("s1|"))
 
     def test_facebook_action_roi_mo_the_co_thanh_tua_va_tua_duoc(self):
         """NV203 (f): bài Facebook bắt đầu bằng action rồi mới mở thẻ."""
@@ -118,7 +119,6 @@ class TheTrongChromeTests(unittest.TestCase):
         """NV203 (h): action chuyển FB → YouTube → FB, thanh tua theo từng bài."""
         r = self.kq["FB_h_fb_youtube_fb"]
         self.assertEqual(["3:07", "3:37", "3:07"], r["tong"])
-        self.assertTrue(luu["uoc"] and luu["uoc"]["key"].startswith("s1|"))
 
 
 if __name__ == "__main__":

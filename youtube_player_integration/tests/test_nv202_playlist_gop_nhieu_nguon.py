@@ -34,6 +34,13 @@ def cai_stub_homeassistant():
     """Stub tối thiểu cho homeassistant.* và aiohttp — chỉ đủ nạp module ở mức import."""
     if "homeassistant" in sys.modules:
         return
+    # Chỉ giả aiohttp khi gói thật KHÔNG có: thay gói thật bằng bản giả làm hỏng test khác chạy chung (test_api).
+    if importlib.util.find_spec("aiohttp") is None:
+        _dat_aiohttp_gia()
+    _dat_homeassistant_gia()
+
+
+def _dat_aiohttp_gia():
     aiohttp = types.ModuleType("aiohttp")
 
     class ClientSession:
@@ -55,6 +62,8 @@ def cai_stub_homeassistant():
     aiohttp.ContentTypeError = ContentTypeError
     _dat_stub("aiohttp", aiohttp)
 
+
+def _dat_homeassistant_gia():
     ha = types.ModuleType("homeassistant")
     ha.__path__ = []
     _dat_stub("homeassistant", ha)
@@ -415,7 +424,7 @@ class _MayPhatGia:
         # bài hỏng thì lỗi ngay ở đây như client thật sau fix NV202.
         if (source, target) in self.hong_stream:
             raise api_mod.InvalidTargetError("invalid_target")
-        return {"stream_url": "http://192.168.1.2:8099/api/stream/x.mp3",
+        return {"stream_url": "http://192.0.2.20:8099/api/stream/x.mp3",
                 "media_content_type": "audio/mpeg"}
 
     async def async_stop(self, session_id=None, expected_revision=None):
@@ -524,7 +533,7 @@ class GiuPhienKhiLoiTests(unittest.IsolatedAsyncioTestCase):
             return_value={"session": {"session_id": "s9", "revision": 3,
                                       "output_entity_ids": ["media_player.loa1"]}})
         client.async_create_stream = AsyncMock(
-            return_value={"stream_url": "http://192.168.1.2:8099/api/stream/x.mp3",
+            return_value={"stream_url": "http://192.0.2.20:8099/api/stream/x.mp3",
                           "media_content_type": "audio/mpeg"})
         client.async_stop = AsyncMock()
         return hass, client

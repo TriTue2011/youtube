@@ -51,7 +51,7 @@ class FacebookThanhTuaTests(unittest.TestCase):
             app_title="Test Player",
             max_history=2,
             integration_token="nv203-test-token",
-            public_base_url="http://172.16.10.200:8099",
+            public_base_url="http://192.0.2.10:8099",
         )
         self.server.prefetch_streams = False
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -99,7 +99,7 @@ class FacebookThanhTuaTests(unittest.TestCase):
         )
         self.assertEqual(200, status, body)
         self.assertTrue(body["success"])
-        self.assertTrue(body["stream_url"].startswith("http://172.16.10.200:8099/api/stream/"))
+        self.assertTrue(body["stream_url"].startswith("http://192.0.2.10:8099/api/stream/"))
 
     @patch("server.resolve_facebook_video")
     def test_endpoint_stream_chap_nhan_facebook_video(self, resolve):
