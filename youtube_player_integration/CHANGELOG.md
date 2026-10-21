@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.27.19 - 2026-10-20
+
+### play_queue: bỏ trống `queue_code` = hàng đợi duy nhất; tài liệu README cập nhật
+
+- **Bỏ trống = hàng đợi duy nhất.** `play_queue` mà để trống ô `queue_code` thì dùng đúng hàng đợi
+  duy nhất của nhà (mã 12 ký tự), phiên phát được gắn mã đó. Trước đây bỏ trống mặc định lấy
+  «hàng đợi của loa đầu tiên» — từ 0.27.18 mọi khoá đều trỏ về một hàng đợi nên hành vi phát giống
+  nhau, nhưng phiên gắn sai khoá (khoá loa thay vì mã 12 ký tự). Mã 12 ký tự và khoá cũ
+  (`media_player.x`, `device:…`) vẫn được nhận như cũ.
+- **Tài liệu:** README viết lại mục `queue_code` của `play_queue` (bỏ trống được, khoá cũ tương thích)
+  và ghi rõ giới hạn: nhiều loa phát chung hàng đợi dùng chung MỘT con trỏ «bài hiện tại/đã phát».
+- **Playlist:** (a) KHÔNG thêm mục giả «✏️ Nhập mã / link…» vào danh sách chọn `playlist_code` — ô chọn
+  đã có `custom_value` cho gõ tay, thêm mục giả (giá trị rỗng) chỉ dẫn tới lỗi `invalid_playlist_code`.
+  (c) «Nhập mã online giữ nguyên như lúc nhập» ĐÃ đạt từ 0.27.13: mã chia sẻ `TTPL1.…` được nhập vào
+  kho MỘT lần, ánh xạ mã → id lưu bền nên mã nhập là khoá ổn định của playlist đã nhập.
+- Test: `test_play_queue_hang_doi_duy_nhat.py` (bỏ trống phát đúng hàng đợi duy nhất + gắn phiên đúng mã;
+  khoá cũ và mã 12 ký tự cùng một hàng đợi). CHƯA thử trên Home Assistant thật của chủ máy.
+
 ## 0.27.18 - 2026-10-20
 
 ### Hàng đợi DUY NHẤT (mã 12 ký tự); action queue không phát bài ngoài hàng đợi

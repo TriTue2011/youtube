@@ -6,6 +6,7 @@ chạy cả thẻ để biết phần NỐI vào thẻ không ném lỗi và cho
 """
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -14,7 +15,13 @@ import unittest
 from pathlib import Path
 
 HARNESS = Path(__file__).resolve().parent / "card_harness.html"
-CHROME = shutil.which("google-chrome") or shutil.which("google-chrome-stable") or shutil.which("chromium") or shutil.which("chromium-browser")
+CHROME = (
+    shutil.which("google-chrome")
+    or shutil.which("google-chrome-stable")
+    or shutil.which("chromium")
+    or shutil.which("chromium-browser")
+    or os.environ.get("CHROME_BIN")        # NV186: VM có Chromium ở /opt/meta-chromium/chrome, không nằm trong PATH
+)
 
 
 def giay(text):
@@ -40,7 +47,17 @@ class TheTrongChromeTests(unittest.TestCase):
 
     def test_khong_co_loi_javascript(self):
         self.assertEqual([], self.loi)
-        self.assertEqual(8, len(self.kq))
+        self.assertEqual(9, len(self.kq))
+
+    def test_hang_doi_duy_nhat_mot_khoi_va_ma_12_ky_tu(self):
+        """NV186 (0.27.18): thẻ chỉ còn MỘT khối «Hàng đợi», mã 12 ký tự; nút chép ra `queue_code: <12 ký tự>`."""
+        r = self.kq["Q_hang_doi_duy_nhat"]
+        self.assertEqual("Hàng đợi", r["tieuDe"])
+        self.assertIn("2 bài", r["dem"])
+        self.assertRegex(r["ma"], r"^[a-z0-9]{12}$")
+        self.assertEqual(r["ma"], r["khoa"])
+        self.assertEqual(f"queue_code: {r['ma']}", r["chep"])
+        self.assertEqual(2, r["soMuc"])
 
     def test_loa_khong_bao_vi_tri_van_co_thanh_tua_va_gio_uoc(self):
         r = self.kq["A_d50s_khong_bao_vi_tri"]

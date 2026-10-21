@@ -56,6 +56,19 @@ class NguonBaiTests(unittest.TestCase):
 
 
 class PlaylistStoreTests(unittest.TestCase):
+    def test_ma_playlist_tu_tao_la_12_ky_tu_ngau_nhien(self):
+        """NV186 yêu cầu 4b: mã playlist TỰ TẠO phải là ngẫu nhiên 12 ký tự [a-z0-9] (`secrets.token_hex(6)`) —
+        test khoá điều này để sau này không ai đổi sang id dễ đoán/trùng."""
+        with tempfile.TemporaryDirectory() as folder:
+            store = playlists.PlaylistStore(Path(folder) / "playlists.json")
+            a = store.create("Nhạc 1")
+            b = store.create("Nhạc 2")
+            self.assertRegex(a["id"], r"^[a-z0-9]{12}$")
+            self.assertRegex(b["id"], r"^[a-z0-9]{12}$")
+            self.assertNotEqual(a["id"], b["id"])
+            # mã tạo ra phải đi được vào khuôn id kho mà tích hợp dùng
+            self.assertRegex(a["id"], r"^[a-z0-9]{12}$")
+
     def test_share_code_round_trip_and_bad_codes(self):
         with tempfile.TemporaryDirectory() as folder:
             store = playlists.PlaylistStore(Path(folder) / "playlists.json")

@@ -55,11 +55,15 @@ class QueueTests(unittest.TestCase):
 
     def test_khoa_chi_nhan_loa_hoac_may(self):
         doc = self.q.normalize_document(None)
-        for xau in ["", "light.den", "media_player.Phong", "device:ab", "device:../../x", None]:
+        # 0.27.19: bỏ trống khoá = hàng đợi duy nhất (không còn lỗi) — còn khoá SAI khuôn vẫn lỗi.
+        for xau in ["light.den", "media_player.Phong", "device:ab", "device:../../x"]:
             with self.assertRaises(ValueError):
                 self.lam(doc, key=xau, action="clear")
         for tot in [LOA, MAY]:
             self.assertEqual(self.q.queue_key(tot), tot)
+        moi, _ = self.lam(doc, key="", action="clear")          # không lỗi
+        moi, _ = self.lam(doc, action="clear")                  # không lỗi
+        self.assertEqual(moi["id"], doc["id"])
 
     def test_moi_nguon_mot_khuon_ma(self):
         doc = self.q.normalize_document(None)
@@ -181,6 +185,37 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(len(queue["items"]), 1)
         self.assertIsNone(queue["current"])
         self.assertEqual((queue["mode"], queue["order"], queue["played"]), ("video", "shuffle", ["0000000a"]))
+
+    def test_hanh_dong_khong_gui_khoa_dung_hang_doi_duy_nhat(self):
+        """Soát 0.27.18 (NV186): GET không gửi khoá trả hàng đợi duy nhất, POST không gửi khoá thì 400 — không nhất quán.
+
+        Từ 0.27.19, `apply_queue_change` thiếu «key» thì dùng mã của tài liệu (hàng đợi duy nhất)."""
+        doc = self.them(self.q.normalize_document(None), LOA, 2)
+        moi, _ = self.q.apply_queue_change(doc, {"action": "next"}, self.uid)
+        self.assertEqual(self.q.get_queue(moi, "media_player.bep")["current"],
+                         self.q.get_queue(moi, doc["id"])["current"])
+        self.assertIsNotNone(self.q.get_queue(moi, doc["id"])["current"])
+
+    def test_hai_loa_dung_chung_mot_con_tro_current(self):
+        """Giới hạn đã ghi trong CHANGELOG 0.27.18/0.27.19: nhiều loa phát chung hàng đợi dùng chung MỘT con trỏ «bài hiện tại».
+
+        Test đặc tả hành vi (không phải bug cần sửa ở đây): chuyển bài qua khoá loa A thì khoá loa B cũng thấy."""
+        doc = self.them(self.q.normalize_document(None), LOA, 3)
+        doc, _ = self.lam(doc, key=LOA, action="next")
+        self.assertEqual(self.q.get_queue(doc, LOA)["current"], self.q.get_queue(doc, MAY)["current"])
+        self.assertIsNotNone(self.q.get_queue(doc, MAY)["current"])
+
+    def test_tai_lieu_nua_voi_chi_co_id_giu_nguyen_ma(self):
+        ma = "abcd1234efgh"
+        doc = self.q.normalize_document({"id": ma})
+        self.assertEqual(doc["id"], ma)
+        self.assertEqual(doc["queues"], {})
+
+    def test_queues_khong_phai_dict_thi_bo_nhung_giu_ma(self):
+        ma = "abcd1234efgh"
+        doc = self.q.normalize_document({"id": ma, "queues": ["oops"]})
+        self.assertEqual(doc["id"], ma)
+        self.assertEqual(doc["queues"], {})
 
     def test_gioi_han_so_bai(self):
         doc = self.q.normalize_document(None)

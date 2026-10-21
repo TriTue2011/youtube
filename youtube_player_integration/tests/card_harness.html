@@ -53,13 +53,47 @@ async function bam(el, ti) {
   bar.dispatchEvent(ev("pointerdown")); bar.dispatchEvent(ev("pointerup"));
   await sleep(150);
 }
+/* NV186 (0.27.18): thẻ chỉ còn MỘT khối «Hàng đợi», mã 12 ký tự; nút chép ra `queue_code: <12 ký tự>`. */
+async function chayQueue() {
+  localStorage.clear();
+  const el = document.createElement("tritue-youtube-player-card");
+  el.setConfig({ entity: ENT });
+  document.body.append(el);
+  const QUEUE = { items: [
+      { uid: "00000001", source: "youtube", id: "dQw4w9WgXcQ", title: "Bai 1", artist: "K1",
+        duration_seconds: 200, thumbnail_url: "", media_content_type: "video" },
+      { uid: "00000002", source: "youtube", id: "M7lc1UVf-VE", title: "Bai 2", artist: "K2",
+        duration_seconds: 180, thumbnail_url: "", media_content_type: "video" }],
+    current: "00000001", mode: "video", order: "sequential", played: ["00000001"] };
+  el.hass = mkHass([], [], { callApi: async (method, path) =>
+    String(path).startsWith("tritue_youtube_player/queue") ? { queue: QUEUE, code: "abcd1234efgh" } : {} });
+  await el._loadQueueList();
+  el._view = "queue";
+  el._renderQueue();
+  await sleep(300);
+  const box = el.shadowRoot.querySelector(".queue-panel");
+  // Hàm sao chép là nội bộ của thẻ (không ra phạm vi toàn cục): chặn _copyText và bắt đúng văn bản thẻ sẽ chép.
+  let daChep = null;
+  const copyGoc = el._copyText;
+  el._copyText = (t) => { daChep = t; };
+  el._copyQueueCode(el._queueKey());
+  el._copyText = copyGoc;
+  const r = { ten: "Q_hang_doi_duy_nhat",
+    tieuDe: box.querySelector(".queue-title")?.textContent,
+    dem: box.querySelector(".queue-count")?.textContent,
+    ma: el._queueCode,
+    khoa: el._queueKey(),
+    chep: daChep,
+    soMuc: box.querySelectorAll(".queue-item").length };
+  el.remove();
+  return r;
+}
 (async () => {
   const kq = [];
   try {
     kq.push(await chay("A_d50s_khong_bao_vi_tri", null, [P("s1", 5, ["media_player.d50s"])], async (el, r) => {
       await bam(el, 0.5); r.trangThai = el.shadowRoot.querySelector(".status").textContent;
-    }));
-    kq.push(await chay("B_cam_co_SEEK", null, [P("s2", 5, ["media_player.cam"])], async (el, r, calls) => {
+    }));    kq.push(await chay("B_cam_co_SEEK", null, [P("s2", 5, ["media_player.cam"])], async (el, r, calls) => {
       await bam(el, 0.5); r.goi = calls.filter(c => c[1] === "media_seek").map(c => c[2]);
       await sleep(1300); r.troiSauTua = el.shadowRoot.querySelector(".progress .elapsed").textContent;
     }));
@@ -73,6 +107,7 @@ async function bam(el, ti) {
     kq.push(await chay("H_vao_lai_bai_khac_tinh_lai_giay", { chon: ["media_player.d50s"], cuoi: "media_player.d50s",
       uoc: { key: "s0|bai_cu|7", batDauMs: Date.now() - 100000 } }, [P("s1", 5, ["media_player.d50s"])]));
     kq.push(await chay("F_luu_dinh_ky", null, [P("s1", 5, ["media_player.d50s"])], async (el) => { await sleep(1300); }));
+    kq.push(await chayQueue());
   } catch (e) { loi.push("ngoại lệ chạy: " + e.message + " " + (e.stack || "").split("\n").slice(0, 3).join(" | ")); }
   document.getElementById("out").textContent = JSON.stringify({ kq, loi }, null, 1);
   document.title = "xong";

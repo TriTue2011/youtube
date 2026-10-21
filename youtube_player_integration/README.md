@@ -107,7 +107,10 @@ trong UI chọn từ danh sách thả xuống, không cần gõ tay.
   lần đầu playlist được NHẬP vào kho (như dán mã vào ô Playlist của thẻ), các lần
   sau dùng lại bản đã nhập nên chạy automation lặp không đẻ bản trùng. Mã 12 ký
   tự ngắn và rõ ràng hơn, nên dùng nó trong automation nếu playlist đã có trong kho.
-- **queue_code**: nút chép mã trên thẻ, ví dụ `media_player.loa_phong_khach`.
+- **queue_code** (không bắt buộc): mã 12 ký tự của hàng đợi DUY NHẤT cho cả nhà, chép từ nút
+  «Chép mã hàng đợi» trên thẻ (dạng `queue_code: abcdef012345`). Bỏ trống = dùng luôn hàng đợi
+  duy nhất đó. Khoá cũ (`media_player.loa_phong_khach`, `device:…`) vẫn được nhận và đều trỏ về
+  cùng một hàng đợi nên automation cũ không phải sửa. Loa PHÁT chọn riêng ở `entity_id`.
 - **target**: mã video YouTube 11 ký tự (phần `v=` trong URL), URL video đầy
   đủ, hoặc URL bài Zing lấy từ kết quả tìm kiếm của card/web app. Trên thẻ có
   nút chép mã/URL của video đang phát; web app có nút "⧉ Chép mã đang phát"
@@ -178,16 +181,20 @@ data:
 | Tham số | Bắt buộc | Mô tả |
 |---|---|---|
 | `entry_id` | Có | ID bản cài integration |
-| `queue_code` | Có | mã hàng đợi chép từ thẻ, ví dụ `media_player.loa_phong_khach` |
-| `entity_id` | Có | một hoặc nhiều `media_player` |
+| `queue_code` | Không | bỏ trống = hàng đợi duy nhất của nhà; mã 12 ký tự chép từ thẻ, hoặc khoá cũ `media_player.x` / `device:…` (tương thích, cùng trỏ một hàng đợi) |
+| `entity_id` | Có | một hoặc nhiều `media_player` — loa PHÁT, chọn riêng, không ảnh hưởng hàng đợi |
 | `volume_level` | Không | 0–1 |
 | `mode` | Không | như `play_on_players` |
+
+**Giới hạn:** nhiều loa phát cùng lúc từ hàng đợi chung dùng chung MỘT con trỏ «bài hiện tại/đã phát» —
+hai phiên chuyển bài độc lập trên hai loa sẽ làm nhau nhảy bài. Muốn hai loa phát hai danh sách khác
+nhau thì dùng playlist.
 
 ```yaml
 action: tritue_youtube_player.play_queue
 data:
   entry_id: 01J00000000000000000000000
-  queue_code: media_player.loa_phong_khach
+  queue_code: abcdef012345   # bỏ trống cũng được = hàng đợi duy nhất
   entity_id:
     - media_player.loa_phong_khach
   mode: audio

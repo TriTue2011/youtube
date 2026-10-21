@@ -63,14 +63,16 @@ class QueueStore:
         return get_queue(self._doc, queue_key(key))
 
     async def async_change(self, payload: Any) -> tuple[dict[str, Any], dict[str, Any] | None]:
-        """Apply a card action; return (the queue, song to play). ValueError on bad input."""
+        """Apply a card action; return (the queue, song to play). ValueError on bad input.
+
+        0.27.19: payload không có «key» = hàng đợi DUY NHẤT (mặc định trong `apply_queue_change`)."""
         await self.async_load()
         async with self._lock:
             document, item = apply_queue_change(self._doc, payload, lambda: secrets.token_hex(8))
             if document is not self._doc:
                 await self._store.async_save(document)
                 self._doc = document
-            return get_queue(document, queue_key(payload.get("key"))), item
+            return get_queue(document, document["id"]), item
 
     async def async_advance(self, key: str) -> dict[str, Any] | None:
         """Move ``key``'s queue to its next song and return it (None = done)."""

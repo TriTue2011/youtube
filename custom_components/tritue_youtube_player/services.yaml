@@ -136,9 +136,9 @@ play_queue:
           integration: tritue_youtube_player
     queue_code:
       name: Queue code
-      description: Which queue list to play (pick from the list). Independent of the speakers below — the queue can play on any selected speaker. Leave empty to use the queue saved under the first selected speaker.
+      description: The household's SINGLE queue (12-character code, shown on the card). The same queue plays on any speakers selected below — queues are no longer per speaker. Leave empty to use the single queue. Old keys (media_player.x, device:...) are still accepted and point to the same queue.
       required: false
-      example: media_player.living_room
+      example: abcd1234efgh
       selector:
         text:
     entity_id:

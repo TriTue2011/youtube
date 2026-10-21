@@ -201,7 +201,7 @@
     },
     "play_queue": {
       "name": "Phát hàng đợi theo mã",
-      "description": "Phát hàng đợi đã lưu theo mã ra trực tiếp các loa.",
+      "description": "Phát hàng đợi DUY NHẤT của nhà (mã 12 ký tự) ra trực tiếp các loa.",
       "fields": {
         "entry_id": {
           "name": "Máy chủ",
@@ -209,7 +209,7 @@
         },
         "queue_code": {
           "name": "Mã hàng đợi",
-          "description": "Chọn hàng đợi nào để phát (chọn trong danh sách). Không phụ thuộc loa phát ở ô bên dưới — hàng đợi nào cũng phát được ra loa nào bạn chọn. Bỏ trống thì dùng hàng đợi lưu ở loa đầu tiên được chọn."
+          "description": "Hàng đợi DUY NHẤT của nhà (mã 12 ký tự) — chọn trong danh sách. Hàng đợi nào cũng phát được ra loa nào bạn chọn ở ô bên dưới; bỏ trống thì dùng hàng đợi duy nhất. Khoá cũ theo loa (media_player.x, device:…) vẫn được nhận và trỏ về cùng hàng đợi."
         },
         "entity_id": {
           "name": "Loa và màn hình",

@@ -335,8 +335,10 @@ class SessionAutoAdvance:
             return True
 
     def _next_from(self, session: dict[str, Any]) -> str | None:
-        """Where the next song comes from: the bound Queue of the session
-        or first speaker while it has songs left, then the session's own queue."""
+        """Where the next song comes from: the session's bound Queue while it has songs left
+        (then STOP — 0.27.18: a queue-bound session no longer falls through to the session's
+        own queue, fixing «action queue ra bài không có trong queue»); otherwise the single
+        household queue while it has songs left, then the session's own queue."""
         queue_key = session_queue_key(session)
         if queue_key:
             # Phiên do `play_queue` / «Phát hàng đợi» chủ động gắn với hàng đợi: hết bài của hàng đợi thì DỪNG. Trước đây rơi xuống

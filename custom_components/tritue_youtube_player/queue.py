@@ -1,9 +1,14 @@
-"""Queue — the songs a device or a speaker plays next, kept in Home Assistant storage.
+"""Queue — the songs to play next, kept in Home Assistant storage.
 
-One queue per output: ``media_player.<speaker>`` for a speaker (a group of ticked
-speakers uses the first one ticked), ``device:<id>`` for a phone or computer
-playing by itself. The queue lives in ``.storage`` like pinned videos, so it
-survives reloads, restarts and integration updates.
+The household has ONE queue (0.27.18+), identified by a random 12-character code
+(``secrets.token_hex(6)``, generated once, stored in the queue document as ``{"id": ...}``).
+Old per-speaker / per-device keys (``media_player.x``, ``device:<id>``) are still accepted
+but ALL point at the same queue — the SPEAKERS that play it are chosen separately
+(action's speaker field / the card's ticked speakers). The queue lives in ``.storage``
+like pinned videos, so it survives reloads, restarts and integration updates.
+
+Limitation: several speakers playing from the shared queue share ONE «current / played»
+pointer — advancing on one speaker moves it for the others too.
 
 When a song ends, ``advance_queue`` picks the next one — in order, or shuffled
 among the songs not played yet — for the speakers (``advance.py``, with every
@@ -239,7 +244,9 @@ def apply_queue_change(
     Raise ValueError with an error code on bad input."""
     if not isinstance(payload, dict):
         raise ValueError("invalid_request")
-    key = queue_key(payload.get("key"))
+    # 0.27.19: không gửi «key» = hàng đợi DUY NHẤT của tài liệu (GET đã làm vậy từ 0.27.18; POST trước đây 400).
+    ma_tai_lieu = document.get("id") if isinstance(document, dict) else None
+    key = queue_key(payload.get("key") or ma_tai_lieu)
     queue = get_queue(document, key)
     action = payload.get("action")
     if action == "add":

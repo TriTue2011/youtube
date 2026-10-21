@@ -320,8 +320,15 @@ async def _async_handle_play_playlist(hass: HomeAssistant, call: ServiceCall) ->
 async def _async_handle_play_queue(hass: HomeAssistant, call: ServiceCall) -> None:
     """Play the queue immediately on requested players."""
     entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
-    # Bỏ trống thì dùng hàng đợi của chính loa đầu tiên được chọn (cách ngắn nhất, khỏi chép mã).
-    queue_code = clean_code(call.data.get("queue_code") or (call.data.get(ATTR_ENTITY_ID) or [""])[0], "queue_code")
+    # Hàng đợi DUY NHẤT cho cả nhà (0.27.19): bỏ trống = hàng đợi duy nhất; mã 12 ký tự
+    # hay khoá cũ (media_player.x, device:…) đều trỏ về đúng hàng đợi đó. Loa PHÁT chọn riêng.
+    raw = clean_code(call.data.get("queue_code") or "", "queue_code")
+    if raw:
+        queue_code = raw
+    else:
+        store = get_queue_store(hass)
+        await store.async_load()
+        queue_code = store.code
     try:
         await async_play_queue(
             hass,
