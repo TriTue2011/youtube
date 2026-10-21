@@ -705,6 +705,20 @@ def _facebook_info(video_id: str, timeout: int, extractor) -> dict:
     return info
 
 
+def _thoi_luong_info(info: dict) -> int | None:
+    """Thời lượng (giây) yt-dlp đo được — số đo thật, không suy đoán.
+
+    Dùng cho thanh tua: luồng Facebook không mang thời lượng trong metadata của
+    bài (playlist lưu sẵn / action với target trần thường duration=0), nhưng lúc
+    dựng luồng yt-dlp đã đo được. Trả None khi không đo được — bên gọi giữ
+    nguyên trạng thái "chưa biết", không bịa số."""
+    try:
+        giay = int(float(info.get("duration")))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return giay if giay > 0 else None
+
+
 def resolve_facebook_audio(
     target: str, *, timeout: int = 20, extractor=extract_with_yt_dlp
 ) -> dict:
@@ -720,6 +734,8 @@ def resolve_facebook_audio(
         if _la_luong_chi_tieng(selected)
         else "video/mp4"
     )
+    if (thoi_luong := _thoi_luong_info(info)) is not None:
+        stream["duration"] = thoi_luong
     return stream
 
 
@@ -742,4 +758,6 @@ def resolve_facebook_video(
         stream["height"] = selected["height"]
     if selected.get("tbr"):
         stream["bitrate_kbps"] = round(float(selected["tbr"]))
+    if (thoi_luong := _thoi_luong_info(info)) is not None:
+        stream["duration"] = thoi_luong
     return stream

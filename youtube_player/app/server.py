@@ -925,7 +925,7 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 if not isinstance(payload, dict):
                     raise ValueError("invalid_request")
                 source = payload.get("source")
-                if source not in {"zing", "youtube", "youtube_video"}:
+                if source not in {"zing", "youtube", "youtube_video", "facebook", "facebook_video"}:
                     raise ValueError("unsupported_stream_source")
                 # youtube_video: the picture only, for the card when YouTube refuses the embed.
                 heights = [payload.get("max_height") or 720] if source == "youtube_video" else []
@@ -935,6 +935,17 @@ class PlayerHandler(BaseHTTPRequestHandler):
                 stream_url = self.server.create_stream_url(
                     source, target, hint=payload.get("public_base_url")
                 )
+                # Lúc dựng luồng yt-dlp đã đo được thời lượng thật: ghi vào phiên
+                # đang phát đúng luồng ấy để thẻ có `tong` mà vẽ thanh tua.
+                # (NV203: bài Facebook từ playlist lưu sẵn / action với target
+                # trần thường duration=0 ở metadata.)
+                try:
+                    self.server.playback_session.note_stream_duration(
+                        source, target, resolved.get("duration")
+                    )
+                except Exception as error:
+                    # Ghi thời lượng là phụ: luồng vẫn phải chạy dù bước này lỗi.
+                    self.log_message("note_stream_duration failed: %r", error)
             except StreamUnavailableError:
                 self.send_json(502, {"error": "stream_unavailable"})
                 return
@@ -967,6 +978,14 @@ class PlayerHandler(BaseHTTPRequestHandler):
                     "stream_url": stream_url,
                     "media_content_type": resolved.get("content_type", "audio/mpeg"),
                     "expires_in": 3600,
+                    # Thời lượng yt-dlp đo được lúc dựng luồng (số đo thật);
+                    # vắng khi không đo được — bên nhận giữ "chưa biết".
+                    **(
+                        {"duration": int(resolved["duration"])}
+                        if isinstance(resolved.get("duration"), (int, float))
+                        and resolved["duration"] > 0
+                        else {}
+                    ),
                     # direct_url is bound to the home's Internet address: a browser at
                     # home plays it without going through the add-on; failing that it is
                     # away from home and the signed stream_url costs the home's upload.

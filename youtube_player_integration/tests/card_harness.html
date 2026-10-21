@@ -29,6 +29,11 @@ function mkHass(phien, calls, extra = {}) {
 }
 const P = (id, rev, loa, title = "M2M") => ({ session_id: id, revision: rev, source: "youtube", id: "vid_" + id, title, duration: 217,
   output_entity_ids: loa, queue_index: 0, queue_size: 44, auto_advance: true });
+/* NV203: phiên Facebook — duration đã được máy phát ghi lúc dựng luồng (số đo
+   thật từ yt-dlp), không phải metadata của bài. */
+const PF = (id, rev, loa, duration = 187) => ({ session_id: id, revision: rev, source: "facebook",
+  id: "1807802260572674", title: "Reel FB", duration, output_entity_ids: loa,
+  queue_index: 0, queue_size: 1, auto_advance: true });
 async function chay(ten, luu, phien, buoc) {
   localStorage.clear();
   if (luu) localStorage.setItem("tritue_youtube_player_card:trang_thai:" + ENT, JSON.stringify(luu));
@@ -107,6 +112,42 @@ async function chayQueue() {
     kq.push(await chay("H_vao_lai_bai_khac_tinh_lai_giay", { chon: ["media_player.d50s"], cuoi: "media_player.d50s",
       uoc: { key: "s0|bai_cu|7", batDauMs: Date.now() - 100000 } }, [P("s1", 5, ["media_player.d50s"])]));
     kq.push(await chay("F_luu_dinh_ky", null, [P("s1", 5, ["media_player.d50s"])], async (el) => { await sleep(1300); }));
+    /* NV203 (f): bài Facebook bắt đầu bằng ACTION rồi mới mở thẻ — phiên do
+       action tạo mang đủ duration nên thẻ vẫn vẽ thanh tua và tua được. */
+    kq.push(await chay("FB_f_action_roi_mo_the", null, [PF("s1", 5, ["media_player.cam"])], async (el, r, calls) => {
+      await bam(el, 0.5); r.goi = calls.filter(c => c[1] === "media_seek").map(c => c[2]);
+    }));
+    /* NV203 (g): thẻ đang mở, action đổi sang bài Facebook — thanh tua theo bài mới. */
+    {
+      const calls = [];
+      const el = document.createElement("tritue-youtube-player-card");
+      el.setConfig({ entity: ENT });
+      document.body.append(el);
+      el.hass = mkHass([P("s9", 5, ["media_player.cam"])], calls);
+      await sleep(1800);
+      el.hass = mkHass([PF("s10", 6, ["media_player.cam"])], calls);
+      await sleep(1200);
+      const bar = el.shadowRoot.querySelector(".progress");
+      kq.push({ ten: "FB_g_doi_bai_khi_the_dang_mo", thanhAn: bar.hidden,
+        tong: bar.querySelector(".total").textContent });
+      el.remove();
+    }
+    /* NV203 (h): action chuyển Facebook → YouTube → Facebook trong cùng playlist —
+       mỗi lần đổi bài thanh tua theo đúng bài đang phát. */
+    {
+      const calls = [];
+      const el = document.createElement("tritue-youtube-player-card");
+      el.setConfig({ entity: ENT });
+      document.body.append(el);
+      const tong = [];
+      for (const phien of [[PF("s11", 5, ["media_player.cam"])], [P("s12", 6, ["media_player.cam"])], [PF("s13", 7, ["media_player.cam"])]]) {
+        el.hass = mkHass(phien, calls);
+        await sleep(1200);
+        tong.push(el.shadowRoot.querySelector(".progress .total").textContent);
+      }
+      kq.push({ ten: "FB_h_fb_youtube_fb", tong });
+      el.remove();
+    }
     kq.push(await chayQueue());
   } catch (e) { loi.push("ngoại lệ chạy: " + e.message + " " + (e.stack || "").split("\n").slice(0, 3).join(" | ")); }
   document.getElementById("out").textContent = JSON.stringify({ kq, loi }, null, 1);

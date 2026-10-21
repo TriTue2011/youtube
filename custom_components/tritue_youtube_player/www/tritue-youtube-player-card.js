@@ -4280,10 +4280,17 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       return { kieu: "may", viTri: heard ? heard.time : null, tong: heard?.duration || 0 };
     }
     if (this._video.open && !this._video.withSpeakers) {
+      /* Thời lượng LẤY TỪ KHẢ NĂNG THẬT, không theo tên nguồn: phần tử <video>
+         (Facebook / chế độ hình khi YouTube không nhúng được) tự biết duration
+         khi đã nạp metadata; metadata của bài (thường = 0 với Facebook) chỉ là
+         dự phòng. Không có duration thật thì thanh vẫn hiện giờ đã phát nhưng
+         báo "không cho tua" như cũ — không bịa số. */
+      const el = this._video.pictureEl;
+      const thuc = el && Number.isFinite(el.duration) && el.duration > 0 ? Math.round(el.duration) : 0;
       return {
         kieu: "video",
         viTri: this._video.state === -1 ? null : this._videoTimeNow(),
-        tong: Number(this._video.item?.duration || 0),
+        tong: thuc || Number(this._video.item?.duration || 0),
       };
     }
     const session = this._focusedSession();

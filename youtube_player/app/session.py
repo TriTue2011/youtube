@@ -38,6 +38,15 @@ def _bounded_text(value, maximum):
     return text[:maximum]
 
 
+def _thoi_luong_duong(value) -> int:
+    """Số giây > 0, còn lại về 0 — để so sánh thời lượng đã biết hay chưa."""
+    try:
+        giay = int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return giay if giay > 0 else 0
+
+
 def _safe_url(value):
     url = _bounded_text(value, 4096)
     parsed = urlsplit(url)
@@ -212,6 +221,7 @@ class PlaybackSession:
     ):
         outputs = validate_output_entity_ids(output_entity_ids or [])
         session_id = self._session_id_for(session_id, outputs)
+        existing = self._sessions.get(session_id)
         if volume_level is not None:
             try:
                 volume_level = float(volume_level)
@@ -267,7 +277,6 @@ class PlaybackSession:
 
             # Next/previous inside a session keeps that session's own queue,
             # even after someone searched for something else.
-            existing = self._sessions.get(session_id)
             index = -1
             if queue_items:
                 # Playing a saved playlist: its songs are the queue.
@@ -294,6 +303,17 @@ class PlaybackSession:
                 )
         if not item.get("id"):
             raise ValueError("invalid_session_target")
+        # Ghi lại CÙNG MỘT BÀI (đổi loa, đổi media_content_type, dựng lại luồng...)
+        # không được làm mất thời lượng đã đo: bài mới mà metadata chưa biết thì
+        # giữ số cũ. Đổi sang bài khác (id khác) thì lấy theo bài mới.
+        if existing and not _thoi_luong_duong(item.get("duration")):
+            cu = existing.get("item") or {}
+            if (
+                (cu.get("source"), cu.get("id"))
+                == (item.get("source"), item.get("id"))
+                and _thoi_luong_duong(existing.get("duration"))
+            ):
+                item = {**item, "duration": existing["duration"]}
         # A speaker plays one thing at a time: take it out of other sessions.
         for other_id in list(self._sessions):
             if other_id == session_id:
@@ -331,6 +351,40 @@ class PlaybackSession:
             oldest = min(self._sessions, key=lambda key: self._sessions[key]["revision"])
             del self._sessions[oldest]
         return self.snapshot(session_id)
+
+    def note_stream_duration(self, source, target, duration) -> int:
+        """Ghi thời lượng đo được lúc dựng luồng vào các phiên đang phát đúng luồng ấy.
+
+        Nguồn của dữ kiện: yt-dlp đo lúc resolve stream — số đo thật, không suy
+        đoán. Chỉ lấp chỗ TRỐNG (duration đang 0): đã biết thì giữ nguyên, không
+        ghi đè. Trả về số phiên đã cập nhật.
+        """
+        giay = _thoi_luong_duong(duration)
+        if not giay:
+            return 0
+        # "facebook_video" là hình của cùng bài "facebook"; target có thể kèm
+        # ":chieu_cao" (vd "123:720") — so theo mã video.
+        nguon = str(source or "")
+        if nguon.endswith("_video"):
+            nguon = nguon[: -len("_video")]
+        muc = str(target or "").split(":")[0]
+        dem = 0
+        for session in self._sessions.values():
+            item = session.get("item") or {}
+            if item.get("source") != nguon:
+                continue
+            if muc not in {str(item.get("id") or ""), str(item.get("url") or "")}:
+                continue
+            if _thoi_luong_duong(session.get("duration")):
+                continue
+            session["duration"] = giay
+            if isinstance(session.get("item"), dict):
+                session["item"]["duration"] = giay
+            self._revision += 1
+            session["revision"] = self._revision
+            session["updated_at"] = self._timestamp()
+            dem += 1
+        return dem
 
     def stop(self, expected_revision=None, session_id=None):
         if session_id:

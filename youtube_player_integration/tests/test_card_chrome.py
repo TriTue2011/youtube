@@ -37,7 +37,7 @@ class TheTrongChromeTests(unittest.TestCase):
             done = subprocess.run(
                 [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--allow-file-access-from-files",
                  f"--user-data-dir={profile}", "--virtual-time-budget=60000", "--dump-dom", HARNESS.as_uri()],
-                capture_output=True, text=True, timeout=180)
+                capture_output=True, text=True, timeout=420)
         match = re.search(r'<pre id="out">(.*?)</pre>', done.stdout, re.S)
         if not match:
             raise AssertionError("trang thử không in kết quả:\n" + done.stdout[:800] + done.stderr[-500:])
@@ -47,7 +47,7 @@ class TheTrongChromeTests(unittest.TestCase):
 
     def test_khong_co_loi_javascript(self):
         self.assertEqual([], self.loi)
-        self.assertEqual(9, len(self.kq))
+        self.assertEqual(12, len(self.kq))
 
     def test_hang_doi_duy_nhat_mot_khoi_va_ma_12_ky_tu(self):
         """NV186 (0.27.18): thẻ chỉ còn MỘT khối «Hàng đợi», mã 12 ký tự; nút chép ra `queue_code: <12 ký tự>`."""
@@ -98,6 +98,26 @@ class TheTrongChromeTests(unittest.TestCase):
         luu = json.loads(self.kq["F_luu_dinh_ky"]["luu"])
         self.assertEqual(["media_player.d50s"], luu["chon"])
         self.assertEqual("media_player.d50s", luu["cuoi"])
+
+    def test_facebook_action_roi_mo_the_co_thanh_tua_va_tua_duoc(self):
+        """NV203 (f): bài Facebook bắt đầu bằng action rồi mới mở thẻ."""
+        r = self.kq["FB_f_action_roi_mo_the"]
+        self.assertFalse(r["thanhAn"], "thanh tua phải hiện cho bài Facebook")
+        self.assertEqual("3:07", r["tong"])
+        self.assertEqual(1, len(r["goi"]))
+        self.assertEqual(["media_player.cam"], r["goi"][0]["entity_id"])
+        self.assertAlmostEqual(93.5, r["goi"][0]["seek_position"], delta=1)
+
+    def test_facebook_doi_bai_khi_the_dang_mo(self):
+        """NV203 (g): thẻ đang mở, action đổi sang bài Facebook."""
+        r = self.kq["FB_g_doi_bai_khi_the_dang_mo"]
+        self.assertFalse(r["thanhAn"])
+        self.assertEqual("3:07", r["tong"])
+
+    def test_facebook_youtube_facebook_theo_dung_bai(self):
+        """NV203 (h): action chuyển FB → YouTube → FB, thanh tua theo từng bài."""
+        r = self.kq["FB_h_fb_youtube_fb"]
+        self.assertEqual(["3:07", "3:37", "3:07"], r["tong"])
         self.assertTrue(luu["uoc"] and luu["uoc"]["key"].startswith("s1|"))
 
 
