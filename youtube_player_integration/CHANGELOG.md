@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.27.20 - 2026-10-21
+
+### NV227: playlist/queue mới tạo hiện ngay trong ô chọn của action — không cần khởi động lại HA
+
+Chủ máy báo 21/10/2026 (ảnh): tạo playlist «Kiểm tra» trên thẻ xong, ô «Mã playlist» của action
+`play_playlist` (Công cụ nhà phát triển → Hành động) vẫn chỉ có `home` và `Account cafe`; phải khởi
+động lại HA mới thấy. Đo bằng test trước khi sửa, gốc rễ KHÔNG nằm ở thẻ:
+
+- **Frontend không hề được báo.** Các đường tạo trên thẻ (gõ tên, dán link YouTube, album Zing,
+  mã TTPL1, đổi tên, xoá) và queue đều đã kích làm mới, và phía HA danh sách mới có sau ~3 giây —
+  nhưng `async_set_service_schema` chỉ cập nhật bộ nhớ đệm mô tả phía HA. Giao diện HA tải mô tả
+  action một lần trong phiên và chỉ tải lại khi có sự kiện `service_registered`/`service_removed`
+  (cách `ServiceRegistry.async_register`/`async_remove` của HA tự làm trong `core.py`). Nay sau khi
+  đặt lại mô tả, tích hợp bắn `service_registered` cho từng action (`play_playlist`, `play_queue`,
+  `play_on_players`) → ô chọn có mục mới sau ~3 giây, không tải lại trang, không khởi động lại.
+- **Một điểm báo đổi duy nhất.** Mọi thay đổi kho playlist/queue đi qua `lam_moi_lua_chon_sau`:
+  thẻ (POST /playlists), kho queue tự báo từ `QueueStore.async_change`/`async_advance` (che cả
+  đường Assist và tự chuyển bài — trước đây chỉ thẻ mới báo), và đường NHẬP playlist bằng mã chia
+  sẻ TTPL1 qua action/Assist (trước đây không báo gì — playlist mới thiếu cả phía HA). Báo đổi là
+  việc phụ: lỗi chỉ ghi log, không phá việc tạo vừa thành công.
+- Không đổi tên action/trường. Test: `test_nv227_bao_doi_lua_chon.py` (13 test: từng đường tạo ×
+  có báo đổi/không, thứ tự đặt-mô-tả-trước-bắn-sự-kiện-sau, tái hiện đầu-cuối đúng kịch bản chủ
+  máy). CHƯA thử trên Home Assistant thật của chủ máy.
+
 ## 0.27.19 - 2026-10-20
 
 ### play_queue: bỏ trống `queue_code` = hàng đợi duy nhất; tài liệu README cập nhật

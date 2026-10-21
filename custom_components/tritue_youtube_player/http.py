@@ -647,5 +647,5 @@ class TriTueQueueView(HomeAssistantView):
             queue, item = await store.async_change(payload)
         except ValueError as error:
             return self.json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
-        lam_moi_lua_chon_sau(request.app["hass"])
+        # Không báo đổi ở đây: QueueStore.async_change đã báo qua điểm báo đổi duy nhất (NV227).
         return self.json({"queue": queue, "item": item, "code": store.code})

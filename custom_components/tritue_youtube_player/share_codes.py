@@ -25,6 +25,7 @@ from homeassistant.helpers.storage import Store
 from .api import AuthenticationError, CannotConnectError, YouTubePlayerApiError
 from .code_input import clean_code
 from .const import DOMAIN
+from .lua_chon_action import lam_moi_lua_chon_sau
 
 SHARE_PREFIX = "TTPL1."
 #: Cùng trần với máy phát (playlists.MAX_SHARE_CODE) — mã dài hơn chắc chắn bị máy phát từ chối.
@@ -185,6 +186,9 @@ async def async_playlist_id_from_code(
             raise ValueError("playlist_import_failed")
 
         await _nho_anh_xa(store, known, digest, new_id)
+        # Vừa NHẬP một playlist MỚI vào kho (đường khác thẻ: action/Assist phát bằng mã) — báo đổi qua
+        # điểm báo đổi duy nhất để ô chọn của action có mục mới mà không cần khởi động lại HA (NV227).
+        lam_moi_lua_chon_sau(hass)
         return new_id
 
 

@@ -3,7 +3,13 @@
 Giao diện action của Home Assistant đọc ô nhập từ `services.yaml` (tĩnh), nên mặc định chỉ có ô gõ chữ — người dùng phải chép mã từ thẻ.
 Home Assistant cho tích hợp ĐẶT LẠI mô tả của một action lúc đang chạy (`async_set_service_schema`): ta nạp mô tả gốc từ `services.yaml`,
 chỉ thay bộ chọn của hai ô trên bằng danh sách playlist / hàng đợi hiện có (`custom_value: true` nên vẫn dán được mã như cũ).
-Danh sách được làm mới khi tích hợp nạp, khi thẻ tạo/sửa playlist hay hàng đợi, và mỗi 10 phút; trang cần tải lại để thấy danh sách mới.
+Danh sách được làm mới khi tích hợp nạp, khi thẻ tạo/sửa playlist hay hàng đợi, và mỗi 10 phút.
+
+NV227: `async_set_service_schema` CHỈ cập nhật bộ nhớ đệm mô tả phía HA — giao diện (tab Hành động) đã tải
+mô tả một lần trong phiên và không tự tải lại. Muốn frontend thấy danh sách mới phải bắn sự kiện
+`service_registered` SAU khi đặt mô tả, đúng như `ServiceRegistry.async_register` của HA làm
+(`homeassistant/core.py`); frontend nghe sự kiện này để tải lại mô tả action. Thiếu bước này thì
+playlist/queue mới tạo chỉ hiện sau khi tải lại trang hoặc khởi động lại HA.
 
 Phần dựng danh sách là hàm thuần (`dung_lua_chon_playlist`, `dung_lua_chon_queue`) để chạy được trong test đơn vị.
 """
@@ -15,6 +21,11 @@ from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntryState
+
+try:
+    from homeassistant.const import EVENT_SERVICE_REGISTERED
+except ImportError:  # môi trường test tối thiểu: đúng giá trị của HA (`homeassistant.const`)
+    EVENT_SERVICE_REGISTERED = "service_registered"
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_call_later
@@ -135,8 +146,14 @@ async def async_cap_nhat_lua_chon(hass: HomeAssistant, *, reset: bool = False, e
             store = get_queue_store(hass)
             await store.async_load()
             queue_opts = dung_lua_chon_queue(store.code, len((await store.async_get(store.code)).get("items") or []))
-        for service, desc in ap_lua_chon(base, playlist_opts, queue_opts, loa_opts).items():
+        mo_ta = ap_lua_chon(base, playlist_opts, queue_opts, loa_opts)
+        for service, desc in mo_ta.items():
             async_set_service_schema(hass, DOMAIN, service, desc)
+        # Báo cho frontend biết mô tả đã đổi để nó tải lại (NV227 — xem docstring đầu tệp). Đặt hết mô tả
+        # TRƯỚC rồi mới bắn: frontend tải lại ngay khi nhận sự kiện là thấy ngay bản mới; lỗi bắn chỉ mất
+        # lần báo này (ngoại lệ bị bắt ở ngoài, chỉ ghi log), không làm mất mô tả đã đặt.
+        for service in mo_ta:
+            hass.bus.async_fire(EVENT_SERVICE_REGISTERED, {"domain": DOMAIN, "service": service})
     except Exception as err:  # noqa: BLE001 — danh sách chọn chỉ là tiện lợi, lỗi gì cũng không được kéo theo tích hợp
         LOGGER.debug("Không cập nhật được danh sách chọn của action: %s", type(err).__name__)
 
@@ -147,17 +164,25 @@ TRE_LAM_MOI_GIAY = 3
 
 @callback
 def lam_moi_lua_chon_sau(hass: HomeAssistant) -> None:
-    """Hẹn làm mới sau vài giây (gộp nhiều lần đổi liên tiếp thành MỘT lần gọi máy phát); gọi lại thì hẹn lại."""
-    if huy := hass.data.pop(_HEN_KEY, None):
-        huy()
-    if not any(e.state is ConfigEntryState.LOADED for e in hass.config_entries.async_entries(DOMAIN)):
-        return                                              # chưa/không còn tích hợp nào nạp: không có gì để làm mới
+    """ĐIỂM BÁO ĐỔI DUY NHẤT của danh sách chọn (NV227): MỌI thay đổi kho playlist/queue phải đi qua đây —
+    thẻ tạo/sửa/xoá playlist (POST /playlists), kho queue đổi (QueueStore), nhập playlist bằng mã TTPL1.
+    Hẹn làm mới sau vài giây (gộp nhiều lần đổi liên tiếp thành MỘT lần gọi máy phát); gọi lại thì hẹn lại.
 
-    async def _chay(_now) -> None:
-        hass.data.pop(_HEN_KEY, None)
-        await async_cap_nhat_lua_chon(hass)
+    Báo đổi là việc PHỤ: lỗi ở đây (kể cả hass thiếu mảnh trong môi trường lạ) chỉ ghi log, TUYỆT ĐỐI
+    không được phá việc tạo/sửa vừa thành công của nơi gọi — đúng luật «lỗi làm mới chỉ log» của NV227."""
+    try:
+        if huy := hass.data.pop(_HEN_KEY, None):
+            huy()
+        if not any(e.state is ConfigEntryState.LOADED for e in hass.config_entries.async_entries(DOMAIN)):
+            return                                              # chưa/không còn tích hợp nào nạp: không có gì để làm mới
 
-    hass.data[_HEN_KEY] = async_call_later(hass, TRE_LAM_MOI_GIAY, _chay)
+        async def _chay(_now) -> None:
+            hass.data.pop(_HEN_KEY, None)
+            await async_cap_nhat_lua_chon(hass)
+
+        hass.data[_HEN_KEY] = async_call_later(hass, TRE_LAM_MOI_GIAY, _chay)
+    except Exception as err:  # noqa: BLE001 — báo đổi hỏng thì danh sách tự khớp lại ở lần nạp/10 phút sau
+        LOGGER.debug("Không hẹn được làm mới danh sách chọn của action: %s", type(err).__name__)
 
 
 @callback

@@ -31,9 +31,20 @@ DATA_KEY = f"{DOMAIN}_queue_store"
 
 class QueueStore:
     def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
         self._store = Store(hass, QUEUE_STORAGE_VERSION, QUEUE_STORAGE_KEY)
         self._doc: dict[str, Any] | None = None
         self._lock = asyncio.Lock()
+
+    def _bao_doi(self) -> None:
+        """Báo «kho hàng đợi đã đổi» qua ĐIỂM BÁO ĐỔI DUY NHẤT của danh sách chọn action (NV227).
+
+        Mọi đường đổi queue (thẻ, Assist, phát nhạc, tự chuyển bài) đều chảy qua `async_change` /
+        `async_advance` của kho này, nên móc ở đây là đủ — không rải móc ở từng nơi gọi.
+        Nạp lười vì `lua_chon_action` nạp `queue_store` ở đầu tệp (tránh vòng lặp import)."""
+        from .lua_chon_action import lam_moi_lua_chon_sau
+
+        lam_moi_lua_chon_sau(self._hass)
 
     async def async_load(self) -> None:
         async with self._lock:
@@ -72,7 +83,9 @@ class QueueStore:
             if document is not self._doc:
                 await self._store.async_save(document)
                 self._doc = document
-            return get_queue(document, document["id"]), item
+            ket_qua = get_queue(document, document["id"]), item
+        self._bao_doi()
+        return ket_qua
 
     async def async_advance(self, key: str) -> dict[str, Any] | None:
         """Move ``key``'s queue to its next song and return it (None = done)."""
@@ -82,7 +95,9 @@ class QueueStore:
             if item is not None:
                 await self._store.async_save(document)
                 self._doc = document
-            return item
+        if item is not None:               # chuyển bài = số bài còn lại trong ô chọn đổi
+            self._bao_doi()
+        return item
 
 
 def get_queue_store(hass: HomeAssistant) -> QueueStore:
