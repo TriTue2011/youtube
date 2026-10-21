@@ -62,9 +62,18 @@ function cardCopyPlaylistText(playlist) {
   return `playlist_code: ${id}`;
 }
 
+function cardChonTarget(item) {
+  /* NV208: một quy tắc duy nhất cho mọi nguồn — URL trước, id sau — cùng thứ tự
+     với `item_target` phía tích hợp (NV201). Máy phát chuẩn hoá được từ URL với
+     youtube/facebook nhưng BẮT BUỘC URL đầy đủ với zing (`validate_zing_target`).
+     Mọi nơi thẻ chép hay gửi target đều phải qua đây, không tự chọn `id`/`url`
+     theo thứ tự riêng. */
+  return String(item?.url ?? "").trim() || String(item?.id ?? "").trim();
+}
+
 function cardCopyItemText(item, fallbackSource) {
   const source = String(item?.source || fallbackSource || "youtube").trim() || "youtube";
-  const target = String(item?.id ?? "").trim() || String(item?.url ?? "").trim();
+  const target = cardChonTarget(item);
   if (!target) return "";
   if (target.startsWith(CARD_SHARE_PREFIX) || target.length > 2048) return "";
   return `source: ${source}\ntarget: ${target}`;
@@ -669,7 +678,7 @@ const deviceAudio = {
       const payload = await this.hass.callApi("POST", "tritue_youtube_player/stream", {
         entry_id: this.entryId,
         source: item.source,
-        target: item.url || item.id,
+        target: cardChonTarget(item),
       });
       return {
         url: String(payload?.stream_url || ""),
@@ -5724,7 +5733,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       info = await this._hass.callApi("POST", "tritue_youtube_player/stream", {
         entry_id: this._entryId(),
         source: "facebook_video",
-        target: item.url || id,
+        target: cardChonTarget(item),
         max_height: this._pictureHeight(),
       });
     } catch (_error) {
@@ -7188,7 +7197,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       info = await this._hass.callApi("POST", "tritue_youtube_player/stream", {
         entry_id: this._entryId(),
         source: "youtube_video",
-        target: item.url || item.id,
+        target: cardChonTarget(item),
         max_height: this._pictureHeight(),
       });
     } catch (_error) {
@@ -7884,7 +7893,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: entryId,
         source,
-        target: item.url || item.id,
+        target: cardChonTarget(item),
         entity_id: entityIds,
         media_content_type: item.media_content_type,
         // A saved playlist: the speakers' queue is the whole playlist.
@@ -7936,7 +7945,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: entryId,
         source: item.source || "youtube",
-        target: item.url || item.id,
+        target: cardChonTarget(item),
         entity_id: [...entityIds],
       });
       this._setStatus(`Đang gửi “${item.title || item.id}” tới loa…`);
@@ -8032,7 +8041,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: entryId,
         source: nguon,
-        target: item.url || item.id,
+        target: cardChonTarget(item),
         entity_id: [entityId],
       });
       this._dongBoLoaVeGiay(entityId, giay, moc);
@@ -8111,7 +8120,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: this._entryId(),
         source: session.source,
-        target: session.url || session.id,
+        target: cardChonTarget(session),
         entity_id: entityIds,
         session_id: session.session_id,
         join: true,
@@ -8143,7 +8152,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
       await this._hass.callService("tritue_youtube_player", "play_on_players", {
         entry_id: entryId,
         source: nguon,
-        target: item.url,
+        target: cardChonTarget(item),
         entity_id: [entityId],
       });
       this._pendingSpeakerSeek = { entityId, from: videoTime, at: Date.now() };

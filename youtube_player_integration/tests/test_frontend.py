@@ -125,7 +125,10 @@ class LovelaceCardContractTests(unittest.TestCase):
         self.assertIn(
             "if (!sharedOutputs.length || (marker === this._sharedSessionMarker && duLoa)) return;",
             script)
-        self.assertIn("source,\n        target: item.url || item.id,", script)
+        # NV208: thẻ gom mọi đường gửi target về một hàm dùng chung `cardChonTarget`
+        # (URL trước, id sau — cùng thứ tự với `item_target` phía tích hợp, NV201);
+        # hợp đồng vẫn là "gọi play_on_players kèm source + target".
+        self.assertIn("source,\n        target: cardChonTarget(item),", script)
         self.assertIn("this._syncNowPlaying()", script)
         # Hidden players: loaded from and saved to the integration's HA storage.
         self.assertIn('callApi("GET", "tritue_youtube_player/hidden_players")', script)
