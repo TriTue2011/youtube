@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.27.22 - 2026-10-23
+
+### Thẻ: tên loa dài không còn đẩy danh sách loa tràn ra ngoài màn hình
+
+Chủ máy gửi ảnh 22/10/2026 (điện thoại): chip «Bluetooth Speaker Tất cả loa Bluetooth» dài hơn màn hình, mất
+biểu tượng bên phải. Đo bằng Chrome ở 320 px: trang rộng 348 px (tràn 28 px). Gốc rễ: lưới hai cột
+`1fr 1fr` = `minmax(auto, 1fr)` nên cột không co dưới bề rộng chip dài nhất, và chip (flex item) cũng
+không co dưới nội dung. Sửa: `minmax(0, 1fr)`, `min-width: 0` cho cột/chip/tên, tên rút gọn bằng «…»,
+biểu tượng và ô tích không co. Đo lại ở 320/360/412/768 px: không còn tràn ngang. Test mới trong
+`test_card_danh_sach_loa.py`.
+
 ## 0.27.21 - 2026-10-23
 
 ### Thẻ: danh sách loa không còn giấu loa thứ 4 trở đi

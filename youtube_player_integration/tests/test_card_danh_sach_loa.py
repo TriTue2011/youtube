@@ -22,7 +22,7 @@ PAGE = """<!doctype html><meta charset="utf-8"><body><pre id="out">chưa chạy<
 const ENT = "media_player.tritue_youtube_player_x";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mk = (id, ten, trangThai) => ({ entity_id: id, state: trangThai, attributes: { friendly_name: ten, supported_features: 1048576 | 512 | 4096 } });
-async function dung(danhSach) {
+async function dung(danhSach, rong) {
   localStorage.clear();
   const states = { [ENT]: { entity_id: ENT, state: "idle", attributes: { friendly_name: "YT", supported_features: 4346625, sessions: [],
     session_revision: 1, config_entry_id: "E1", output_entity_ids: [] } } };
@@ -31,14 +31,16 @@ async function dung(danhSach) {
   const hass = { states, entities, config: { language: "vi" }, user: { is_admin: true }, language: "vi",
     callService: async () => ({}), callApi: async () => ({}), callWS: async () => ({}), connection: { subscribeEvents: async () => () => {} } };
   const c = document.createElement("tritue-youtube-player-card"); document.body.appendChild(c);
-  c.style.display = "block"; c.style.width = "420px";
+  c.style.display = "block"; c.style.width = (rong || 420) + "px";
   c.setConfig({ entity: ENT }); c.hass = hass; await sleep(300);
   c.hass = { ...hass, states: { ...states } }; await sleep(300);
   const sr = c.shadowRoot, ds = sr.querySelector(".players-audio");
   sr.querySelector(".spk-list").hidden = false;                  // «Đổi loa» mở khung danh sách
   await sleep(150);
   const r = { chips: [...sr.querySelectorAll(".player-chip")].map((x) => x.dataset.entity),
-    cao: ds.clientHeight, noi: ds.scrollHeight };
+    cao: ds.clientHeight, noi: ds.scrollHeight, phaiKhung: Math.round(ds.getBoundingClientRect().right),
+    chip: [...sr.querySelectorAll(".player-chip")].map((x) => ({ phai: Math.round(x.getBoundingClientRect().right),
+      cat: (x.querySelector(".player-name") || x).scrollWidth > (x.querySelector(".player-name") || x).clientWidth + 1 })) };
   c.remove();
   return r;
 }
@@ -47,7 +49,8 @@ const sau = [["media_player.bluetooth", "Bluetooth Speaker", "off"], ["media_pla
   ["media_player.r1_dlna", "Phicomm_R1_912F", "idle"], ["media_player.googlehome", "Phòng khách", "off"],
   ["media_player.tv_hong", "Ti vi hỏng", "unavailable"]];
 const nhieu = []; for (let i = 0; i < 40; i++) nhieu.push(["media_player.loa_" + i, "Loa so " + i, "idle"]);
-const kq = { sau: await dung(sau), nhieu: await dung(nhieu) };
+const dai = [["media_player.bluetooth", "Bluetooth Speaker Tất cả loa Bluetooth Phòng khách tầng hai", "off"], ["media_player.r1_loa", "Phicomm R1 Loa", "idle"]];
+const kq = { sau: await dung(sau), nhieu: await dung(nhieu), hep: await dung(dai, 260) };
 document.getElementById("out").textContent = JSON.stringify({ kq });
 })();</script>"""
 
@@ -86,6 +89,14 @@ class DanhSachLoaTests(unittest.TestCase):
         self.assertEqual(40, len(r["chips"]))
         self.assertLessEqual(r["cao"], 420)                            # trần: không đẩy cả thẻ ra khỏi màn hình
         self.assertGreater(r["noi"], r["cao"])                         # quá dài thì mới cuộn trong khung
+
+    def test_ten_loa_dai_khong_tran_ra_ngoai_the_o_man_hinh_hep(self):
+        """Ảnh 22/10/2026: chip «Bluetooth Speaker Tất cả loa Bluetooth» dài hơn màn hình, bị cắt mất biểu tượng bên phải.
+        Tên phải co lại có dấu «…», chip nằm gọn trong khung."""
+        r = self.kq["hep"]
+        for chip in r["chip"]:
+            self.assertLessEqual(chip["phai"], r["phaiKhung"], "chip tràn ra ngoài khung loa")
+        self.assertTrue(r["chip"][0]["cat"], "tên quá dài phải bị rút gọn bằng «…», không đẩy chip rộng ra")
 
 
 if __name__ == "__main__":

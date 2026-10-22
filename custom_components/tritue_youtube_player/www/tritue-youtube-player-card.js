@@ -1743,7 +1743,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         .players::-webkit-scrollbar-track { background: transparent; }
         .players::-webkit-scrollbar-thumb { background: rgba(var(--ad-c1,0,204,204),0.5); border-radius: 999px; }
         .players::-webkit-scrollbar-thumb:hover { background: rgba(var(--ad-c1,0,204,204),0.75); }
-        .players-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        /* minmax(0,1fr), không phải 1fr: «1fr» = minmax(auto,1fr) nên cột không co dưới bề rộng chip dài nhất và đẩy cả khung ra ngoài thẻ. */
+        .players-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+        .players-col { min-width: 0; }
         /* ===== Thanh loa gọn: loa đang chỉnh âm lượng + nút Đổi loa bung/thu danh sách ===== */
         .spk-bar {
           display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -1823,6 +1825,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           align-items: center;
           gap: 7px;
           max-width: 100%;
+          min-width: 0;                  /* flex item mặc định không co dưới bề rộng nội dung → tên loa dài đẩy chip tràn khung */
           padding: 5px 9px;
           border: 1px solid rgba(var(--ad-c1,0,204,204),0.2);
           border-radius: 999px;
@@ -1840,7 +1843,8 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         .player-chip.source-incompatible { opacity: .62; }
         .player-chip input { accent-color: var(--ad-accent,#00ffcc); }
-        .player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .player-chip input, .device-icon, .hide-player, .move-player { flex: none; }
         .device-icon { --mdc-icon-size: 17px; color: var(--secondary-text-color); }
         .hide-player {
           display: grid;
@@ -3005,7 +3009,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           .now-meta, .status { font-size: .76rem; }
           .section-title h3 { font-size: .82rem; }
           .player-chip { gap: 5px; padding: 3px 8px; font-size: .84rem; }
-          .players-columns { grid-template-columns: 1fr; gap: 6px; }
+          .players-columns { grid-template-columns: minmax(0, 1fr); gap: 6px; }
           .result { font-size: .88rem; }
           .np-zone { padding: 10px 12px; }
           .np-wave { height: 32px; }
