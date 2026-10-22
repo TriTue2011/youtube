@@ -1731,7 +1731,9 @@ class TriTueYouTubePlayerCard extends HTMLElement {
         }
         .players {
           display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px;
-          height: 132px; overflow-y: auto; overflow-x: hidden; padding-right: 4px;
+          /* Khung loa TỰ CAO theo số loa (trước đây cố định 132px = đúng ~3 chip: loa thứ 4 trở đi phải vuốt trong khung,
+             thanh cuộn mảnh trên điện thoại nên người dùng tưởng loa «không có»). Chỉ khi quá dài mới cuộn. */
+          min-height: 40px; max-height: min(55vh, 420px); overflow-y: auto; overflow-x: hidden; padding-right: 4px;
           /* Firefox */
           scrollbar-width: thin; scrollbar-color: rgba(var(--ad-c1,0,204,204),0.5) transparent;
         }
@@ -2810,7 +2812,7 @@ class TriTueYouTubePlayerCard extends HTMLElement {
           margin-inline: 0;
         }
         /* Danh sách loa/màn hình thấp hơn một nhịp (vẫn cuộn riêng bên trong) */
-        .yt-layout .players { height: 112px; }
+        .yt-layout .players { min-height: 40px; max-height: min(45vh, 360px); }   /* tự cao theo số loa, thấp trần hơn một nhịp */
         /* Cột phải trải trên 2 row (ngang bằng video + loa/màn cộng lại) và tự
            cuộn bên trong nếu kết quả tìm kiếm dài hơn — nhờ vậy chiều cao của
            cột trái mới là thứ quyết định layout, khối "speakers" luôn bám sát
