@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.27.21 - 2026-10-23
+
+### Thẻ: danh sách loa không còn giấu loa thứ 4 trở đi
+
+Chủ máy báo 22/10/2026: loa «Phicomm R1 Loa» ở trạng thái `idle` không thấy trong thẻ dù có trong
+`tts.speak`. Bộ lọc KHÔNG sai (đo bằng test Chrome: chỉ loại loa `unavailable`, loa `idle`/`off` vẫn
+hiện). Gốc rễ là chiều cao: khung chip loa bị ép cố định (`.players` 132 px, rồi
+`.yt-layout .players` 112 px ghi đè), vừa đúng ~3 chip. Nhà có 6 loa thì loa thứ 4 trở đi nằm dưới
+thanh cuộn mảnh, trên điện thoại gần như không thấy.
+
+- Khung tự cao theo số loa (`min-height` + `max-height`), chỉ cuộn khi quá dài.
+- Test mới `test_card_danh_sach_loa.py` (Chrome thật): 6 loa hiện đủ, loa `unavailable` bị loại,
+  `idle`/`off` giữ nguyên; 40 loa thì có trần chiều cao.
+
 ## 0.27.20 - 2026-10-21
 
 ### NV227: playlist/queue mới tạo hiện ngay trong ô chọn của action — không cần khởi động lại HA
