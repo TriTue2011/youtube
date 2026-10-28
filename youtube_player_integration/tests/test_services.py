@@ -238,7 +238,8 @@ class ServicesStructuralAndHandlerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_play_queue_nhan_sai_van_la_ma_khong_hop_le(self):
         """Chỉ gỡ ĐÚNG nhãn `queue_code:`; nhãn khác hay khoá hỏng vẫn bị từ chối (không đoán)."""
-        for raw in ("playlist_code: media_player.speaker_x", "queue_code: loa phong khach!!", "queue_code:"):
+        # «queue_code:» trống KHÔNG còn là mã sai: từ 0.27.19 bỏ trống = hàng đợi duy nhất (xem test dưới)
+        for raw in ("playlist_code: media_player.speaker_x", "queue_code: loa phong khach!!"):
             with self.subTest(raw=raw):
                 hass = MagicMock()
                 hass.data = {}
@@ -248,7 +249,7 @@ class ServicesStructuralAndHandlerTests(unittest.IsolatedAsyncioTestCase):
                         await services_mod._async_handle_play_queue(hass, call)
                     self.assertEqual("invalid_queue_code", cm.exception.translation_key)
 
-    async def test_play_queue_bo_trong_queue_code_dung_hang_doi_cua_loa_dau(self):
+    async def test_play_queue_bo_trong_queue_code_dung_hang_doi_duy_nhat(self):
         hass = MagicMock()
         hass.data = {}
         entry = MagicMock()
@@ -263,7 +264,8 @@ class ServicesStructuralAndHandlerTests(unittest.IsolatedAsyncioTestCase):
             call = MagicMock(data={"entry_id": "e", "entity_id": ["media_player.speaker_x", "media_player.speaker_z"]})
             await services_mod._async_handle_play_queue(hass, call)
         from custom_components.tritue_youtube_player.sessions import session_queue_key
-        self.assertEqual("media_player.speaker_x", session_queue_key({"session_id": "sess_q2"}))
+        # 0.27.19: bỏ trống queue_code = hàng đợi DUY NHẤT của cả nhà (mã 12 ký tự), không còn khoá theo loa đầu tiên
+        self.assertEqual(store.code, session_queue_key({"session_id": "sess_q2"}))
 
     async def test_play_playlist_theo_ten_ngan(self):
         from custom_components.tritue_youtube_player import share_codes  # noqa: F401

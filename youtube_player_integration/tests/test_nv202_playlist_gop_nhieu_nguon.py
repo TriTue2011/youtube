@@ -367,9 +367,23 @@ class _FakeState:
         self.attributes = attributes or {}
 
 
+class _KhoRam:
+    """Kho lưu giả trong bộ nhớ: ``Store`` thật cần ``hass.config.config_dir`` mà ``_FakeHass`` không có (Home Assistant mới
+    đọc nó ngay trong ``Store.__init__``, nên bộ test hợp đồng hỏng trên CI từ khi CI cài bản mới)."""
+
+    async def async_load(self):
+        return None
+
+    async def async_save(self, data):
+        pass
+
+
 class _FakeHass:
     def __init__(self):
         self.data = {}
+        from custom_components.tritue_youtube_player import queue_store as qs
+        with patch.object(qs, "Store", lambda *a, **k: _KhoRam()):
+            self.data[qs.DATA_KEY] = qs.QueueStore(self)
         # loa hỗ trợ play_media (512) + volume_set (4) như loa thật
         self._states = {"media_player.loa1": _FakeState(
             "playing", {"supported_features": 512 | 4})}

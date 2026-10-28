@@ -173,7 +173,7 @@ class ChuyenBaiTuanTuTests(unittest.IsolatedAsyncioTestCase):
         self.hass.data = {}                      # khoá tuần tự nằm trong hass.data: phải là dict thật
         self.da_phat = []
 
-        async def phat(hass, entry, session, item):
+        async def phat(hass, entry, session, item, **kwargs):
             await asyncio.sleep(0.02)                 # lệnh phát mất thời gian, các cuộc gọi dễ chồng lên nhau
             self.queue["index"] = int(item["id"][3:])  # máy phát cập nhật chỉ số bài; coordinator làm mới sau khi phát
             self.da_phat.append(item["id"])
@@ -200,11 +200,11 @@ class ChuyenBaiTuanTuTests(unittest.IsolatedAsyncioTestCase):
         thanh_cong = services_mod._async_play_session_item.side_effect
         lan = {"n": 0}
 
-        async def phat(hass, entry, session, item):
+        async def phat(hass, entry, session, item, **kwargs):
             lan["n"] += 1
             if lan["n"] == 1:
                 raise services_mod.ServiceValidationError(translation_domain="x", translation_key="playback_error")
-            return await thanh_cua_lan_sau(hass, entry, session, item)
+            return await thanh_cua_lan_sau(hass, entry, session, item, **kwargs)
 
         thanh_cua_lan_sau = thanh_cong
         with patch.object(services_mod, "_async_play_session_item", side_effect=phat):
