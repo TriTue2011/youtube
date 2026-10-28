@@ -12,7 +12,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .actions import async_play_on_players
-from .dung_loa import async_dung_loa_luong
+from .dung_loa import async_dung_chac, async_dung_loa_luong
 from .api import InvalidTargetError, YouTubePlayerApiError
 from . import dong_bo, lenh_cua_minh
 from .queue_store import get_queue_store
@@ -153,7 +153,8 @@ def _virtual_players(hass: HomeAssistant, entry) -> set[str]:
     }
 
 
-def _dong_bo_nen(hass: HomeAssistant, entry, entity_ids: list[str], join_entity_ids: list[str] | None) -> None:
+def _dong_bo_nen(hass: HomeAssistant, entry, entity_ids: list[str], join_entity_ids: list[str] | None,
+                 item: dict | None = None) -> None:
     """Nhiều loa cùng phát (hoặc loa mới vào phiên đang phát): kéo các loa về CÙNG VỊ TRÍ của loa chuẩn (xem dong_bo.py).
     Tắt bằng tuỳ chọn ``dong_bo: false`` của mục cấu hình; chỉnh tay từng loa bằng ``dong_bo_adjust_ms`` {entity_id: ms};
     ``dong_bo_chu_ky_s`` (mặc định 90, 0 = chỉ căn một lần) là chu kỳ kiểm trôi khi đang phát."""
@@ -175,7 +176,7 @@ def _dong_bo_nen(hass: HomeAssistant, entry, entity_ids: list[str], join_entity_
         chu_ky = float(tuy_chon.get("dong_bo_chu_ky_s", dong_bo.CHU_KY_DINH_KY_MAC_DINH_S))
     except (TypeError, ValueError):
         chu_ky = dong_bo.CHU_KY_DINH_KY_MAC_DINH_S
-    dong_bo.len_lich(entry, hass, master, followers, adjust_ms=adjust, chu_ky_s=chu_ky)
+    dong_bo.len_lich(entry, hass, master, followers, adjust_ms=adjust, chu_ky_s=chu_ky, item=item)
 
 
 async def async_dispatch(
@@ -250,7 +251,8 @@ async def async_dispatch(
         )
         await entry.runtime_data.async_refresh()
         lenh_cua_minh.danh_dau(entity_ids)          # tính lại từ lúc lệnh XONG: loa chậm chỉ idle sau khi nhận lệnh
-        _dong_bo_nen(hass, entry, entity_ids, join_entity_ids)
+        phien_moi = find_session(entry.runtime_data.data, (result or {}).get("session_id") or session_id)
+        _dong_bo_nen(hass, entry, entity_ids, join_entity_ids, (phien_moi or {}).get("item"))
     except InvalidTargetError as error:
         raise _validation_error("invalid_target") from error
     except UnsupportedCastMediaError as error:
@@ -467,9 +469,7 @@ async def async_stop_session(hass: HomeAssistant, entry, session_id: str | None)
         and int(state.attributes.get("supported_features") or 0) & STOP_FEATURE
     ]
     if outputs:
-        await hass.services.async_call(
-            "media_player", "media_stop", blocking=True, target={ATTR_ENTITY_ID: outputs}
-        )
+        await asyncio.gather(*(async_dung_chac(hass, e, "media_stop", "Stop phiên") for e in outputs))
     da_dung = list(outputs)
     if session is None and not session_id:
         # Máy phát không còn phiên (add-on dừng / khởi động lại giữa bài) mà loa vẫn phát luồng của nó.
@@ -511,9 +511,7 @@ async def async_remove_players(hass: HomeAssistant, entry, entity_ids: list[str]
         and int(state.attributes.get("supported_features") or 0) & STOP_FEATURE
     ]
     if stoppable:
-        await hass.services.async_call(
-            "media_player", "media_stop", blocking=True, target={ATTR_ENTITY_ID: stoppable}
-        )
+        await asyncio.gather(*(async_dung_chac(hass, e, "media_stop", "Gỡ loa khỏi phiên") for e in stoppable))
     await entry.runtime_data.async_refresh()
 
 

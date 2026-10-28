@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.28.4 - 2026-10-28
+
+### Sửa: sang bài thứ 2 mất đồng bộ; Stop phải bấm 2–3 lần
+
+Chủ máy (R1 + loa Google, kiểm trên HA): «khi chuyển sang bài thứ 2 lại mất đồng bộ», «Stop youtube không được ngay, phải stop lần 2, 2–3 lần», «khi thêm loa
+đồng bộ thì không phát đúng vị trí đang phát».
+
+- **Đồng bộ đo trên số liệu của bài CŨ** (`dong_bo.py`): lúc lệnh phát bài kế vừa gửi, hai loa VẪN báo «đang phát» bài trước với vị trí cũ; bộ đồng bộ đo
+  trôi trên số liệu đó rồi tua loa tới vị trí vô nghĩa (mô phỏng: tua tới giây 200,8 của bài mới). Nay `vi_tri()` chỉ tin vị trí khi loa báo ĐÚNG bài đang cần
+  căn (`plays_item`), và `async_dispatch` truyền bài đang phát vào tác vụ đồng bộ. Loa chưa lên bài mới thì chờ, không tua bậy.
+- **Stop không chắc chắn** (`dung_loa.py`): gửi một lệnh dừng rồi thôi; loa (nhất là DLNA) có thể bỏ qua Stop khi đang nạp luồng. Nay sau lệnh dừng KIỂM loa đã
+  thôi phát chưa, còn phát thì gửi lại (tối đa 2 lần thêm, mỗi lần chờ 1,2 giây), dùng cho Stop trên thẻ, Stop phiên và gỡ loa khỏi phiên. Cũng huỷ tác vụ
+  đồng bộ của loa đó: không được tua loa vừa dừng.
+- Test mới: `test_dung_chac.py` (4 ca), thêm 2 ca chuyển bài vào `test_dong_bo_troi.py`. Chưa nghe thử trên R1 + loa Google thật.
+- Muốn thấy nhật ký chi tiết khi đồng bộ/dừng (mặc định ẩn): Công cụ nhà phát triển → Hành động → `logger.set_level` với
+  `custom_components.tritue_youtube_player: debug` và `custom_components.r1_speaker: debug`.
+
 ## 0.28.3 - 2026-10-28
 
 ### Sửa: nhiều loa (R1 + loa Google) lúc đầu khớp, dần dần mất đồng bộ

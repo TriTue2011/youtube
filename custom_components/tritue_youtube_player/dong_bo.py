@@ -27,6 +27,7 @@ from datetime import datetime
 from typing import Any
 
 from . import lenh_cua_minh
+from .sessions import plays_item
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,12 +77,17 @@ def _nho_tre_seek(entity_id: str, giay: float) -> None:
         del _TRE_SEEK_S[next(iter(_TRE_SEEK_S))]
 
 
-def vi_tri(state: Any, bay_gio: float) -> float | None:
+def vi_tri(state: Any, bay_gio: float, item: dict | None = None) -> float | None:
     """Vị trí phát (giây) của một loa tại thời điểm ``bay_gio`` (epoch), nội suy từ lần cập nhật cuối; None nếu loa không
-    ở trạng thái đang phát hoặc không báo vị trí."""
+    ở trạng thái đang phát hoặc không báo vị trí.
+
+    ``item``: bài đang cần căn. Chuyển bài thì lúc lệnh phát vừa gửi loa VẪN báo «đang phát» bài TRƯỚC với vị trí cũ; đo trên số liệu đó
+    rồi tua là sai (chủ máy 28/10/2026: «sang bài thứ 2 lại mất đồng bộ»). Loa báo nội dung khác bài này thì chưa tính là đang phát."""
     if state is None or getattr(state, "state", None) != "playing":
         return None
     thuoc_tinh = getattr(state, "attributes", None) or {}
+    if item is not None and not plays_item(thuoc_tinh, item):
+        return None
     try:
         pos = float(thuoc_tinh.get("media_position"))
     except (TypeError, ValueError):
@@ -105,11 +111,11 @@ def ho_tro_seek(state: Any) -> bool:
 
 
 async def _cho_phat(hass: Any, entity_id: str, *, cho_toi_da: float, bay_gio: Callable[[], float],
-                    ngu: Callable[[float], Awaitable[Any]]) -> bool:
+                    ngu: Callable[[float], Awaitable[Any]], item: dict | None = None) -> bool:
     """Chờ tới khi loa đang phát và báo được vị trí. Trả False nếu hết giờ."""
     han = bay_gio() + cho_toi_da
     while True:
-        if vi_tri(hass.states.get(entity_id), bay_gio()) is not None:
+        if vi_tri(hass.states.get(entity_id), bay_gio(), item) is not None:
             return True
         if bay_gio() >= han:
             return False
@@ -117,7 +123,7 @@ async def _cho_phat(hass: Any, entity_id: str, *, cho_toi_da: float, bay_gio: Ca
 
 
 async def _do_troi(hass: Any, master: str, entity_id: str, chinh: float, bay_gio: Callable[[], float],
-                   ngu: Callable[[float], Awaitable[Any]]) -> tuple[float, float, float] | None:
+                   ngu: Callable[[float], Awaitable[Any]], item: dict | None = None) -> tuple[float, float, float] | None:
     """Đo trôi của ``entity_id`` so với ``master``: trung vị ``SO_MAU`` mẫu. Trả ``(trôi, vị trí loa chuẩn, lúc đo)``; None nếu một loa
     không báo được vị trí (mẫu nào thiếu thì bỏ cả lần đo)."""
     mau: list[tuple[float, float, float]] = []
@@ -125,8 +131,8 @@ async def _do_troi(hass: Any, master: str, entity_id: str, chinh: float, bay_gio
         if k:
             await ngu(CACH_MAU_S)
         t = bay_gio()
-        pm = vi_tri(hass.states.get(master), t)
-        pf = vi_tri(hass.states.get(entity_id), t)
+        pm = vi_tri(hass.states.get(master), t, item)
+        pf = vi_tri(hass.states.get(entity_id), t, item)
         if pm is None or pf is None:
             return None
         mau.append((pf - pm - chinh, pm, t))
@@ -145,12 +151,13 @@ async def async_can_chinh(
     cho_toi_da_s: float = CHO_PHAT_TOI_DA_S,
     bay_gio: Callable[[], float] = time.time,
     ngu: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+    item: dict | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Kéo từng loa trong ``followers`` về vị trí của loa ``master``. Trả ``{entity_id: kết quả}``, mỗi kết quả có
     ``ket_qua`` ∈ {da_khop, da_chinh, chua_khop, khong_ho_tro_seek, khong_phat, loa_chuan_khong_phat} và ``troi_ms``."""
     adjust_ms = adjust_ms or {}
     ket_qua: dict[str, dict[str, Any]] = {}
-    if not await _cho_phat(hass, master, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu):
+    if not await _cho_phat(hass, master, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu, item=item):
         return {f: {"ket_qua": "loa_chuan_khong_phat", "troi_ms": None} for f in followers if f != master}
 
     for entity_id in followers:
@@ -159,7 +166,7 @@ async def async_can_chinh(
         if not ho_tro_seek(hass.states.get(entity_id)):
             ket_qua[entity_id] = {"ket_qua": "khong_ho_tro_seek", "troi_ms": None}
             continue
-        if not await _cho_phat(hass, entity_id, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu):
+        if not await _cho_phat(hass, entity_id, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu, item=item):
             ket_qua[entity_id] = {"ket_qua": "khong_phat", "troi_ms": None}
             continue
         chinh = -float(adjust_ms.get(entity_id, 0)) / 1000.0      # sync_adjust ÂM = loa phát SỚM hơn = vị trí ĐI TRƯỚC loa chuẩn
@@ -168,7 +175,7 @@ async def async_can_chinh(
         nguong = max(nguong_s, nguong_rieng(entity_id))
         luc = None
         for lan in range(max(1, toi_da_lan) + 1):
-            do = await _do_troi(hass, master, entity_id, chinh, bay_gio, ngu)
+            do = await _do_troi(hass, master, entity_id, chinh, bay_gio, ngu, item)
             if do is None:
                 break
             troi, pm, luc = do                          # troi > 0: loa theo sau đang ĐI TRƯỚC loa chuẩn
@@ -190,7 +197,7 @@ async def async_can_chinh(
                 break
             da_chinh = True
             await ngu(DOI_SAU_SEEK_S)
-            await _cho_phat(hass, entity_id, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu)
+            await _cho_phat(hass, entity_id, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu, item=item)
         khop = abs(troi) <= nguong
         if not khop and da_chinh:
             # Seek rồi mà vẫn lệch: loa này không chỉnh mịn được tới ngưỡng (tua nguyên giây, báo vị trí thô): nới ngưỡng riêng.
@@ -225,27 +232,28 @@ async def vong_dong_bo(
     cho_chuan_toi_da_s: float = CHO_CHUAN_TOI_DA_S,
     bay_gio: Callable[[], float] = time.time,
     ngu: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+    item: dict | None = None,
 ) -> None:
     """Căn đầu tiên (ngưỡng thường), rồi cứ ``chu_ky_s`` giây kiểm lại trôi; chỉ seek khi vượt ``nguong_dinh_ky_s``.
     ``chu_ky_s <= 0`` = chỉ căn một lần. Dừng khi loa chuẩn không còn phát quá ``cho_chuan_toi_da_s`` giây."""
-    ket_qua = await async_can_chinh(hass, master, followers, adjust_ms=adjust_ms, bay_gio=bay_gio, ngu=ngu)
+    ket_qua = await async_can_chinh(hass, master, followers, adjust_ms=adjust_ms, bay_gio=bay_gio, ngu=ngu, item=item)
     _LOGGER.debug("dong_bo: lần đầu %s", {e: r["ket_qua"] for e, r in ket_qua.items()})
     if chu_ky_s <= 0:
         return
     khong_phat_tu = None
     while True:
         await ngu(chu_ky_s)
-        if vi_tri(hass.states.get(master), bay_gio()) is None:
+        if vi_tri(hass.states.get(master), bay_gio(), item) is None:
             khong_phat_tu = khong_phat_tu if khong_phat_tu is not None else bay_gio()
             if bay_gio() - khong_phat_tu >= cho_chuan_toi_da_s:
                 return
             continue
         khong_phat_tu = None
-        con_phat = [f for f in followers if vi_tri(hass.states.get(f), bay_gio()) is not None]
+        con_phat = [f for f in followers if vi_tri(hass.states.get(f), bay_gio(), item) is not None]
         if not con_phat:
             continue
         ket_qua = await async_can_chinh(hass, master, con_phat, adjust_ms=adjust_ms, nguong_s=nguong_dinh_ky_s,
-                                        cho_toi_da_s=3.0, bay_gio=bay_gio, ngu=ngu)
+                                        cho_toi_da_s=3.0, bay_gio=bay_gio, ngu=ngu, item=item)
         da_chinh = {e: r["troi_ms"] for e, r in ket_qua.items() if r["ket_qua"] == "da_chinh"}
         if da_chinh:
             _LOGGER.debug("dong_bo: chỉnh trôi định kỳ %s", da_chinh)
@@ -265,14 +273,14 @@ def huy_tac_vu(entity_ids: list[str]) -> None:
 
 
 def len_lich(entry: Any, hass: Any, master: str, followers: list[str], *, adjust_ms: dict[str, int] | None = None,
-             chu_ky_s: float = CHU_KY_DINH_KY_MAC_DINH_S):
+             chu_ky_s: float = CHU_KY_DINH_KY_MAC_DINH_S, item: dict | None = None):
     """Chạy ``vong_dong_bo`` nền sau lệnh phát. Lệnh phát mới cho cùng các loa sẽ huỷ tác vụ cũ."""
     cac_loa = [master, *followers]
     huy_tac_vu(cac_loa)
 
     async def _chay() -> None:
         try:
-            await vong_dong_bo(hass, master, followers, adjust_ms=adjust_ms, chu_ky_s=chu_ky_s)
+            await vong_dong_bo(hass, master, followers, adjust_ms=adjust_ms, chu_ky_s=chu_ky_s, item=item)
         except asyncio.CancelledError:
             raise
         except Exception as loi:   # noqa: BLE001 — đồng bộ là phần thêm: lỗi không được làm hỏng việc phát

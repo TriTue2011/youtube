@@ -116,3 +116,62 @@ class TestTroiNhieuLoa(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoaDoiBai(Loa):
+    """Loa phát bài A; tới ``luc_doi`` (giây ảo) chuyển sang bài B và bắt đầu từ 0 sau ``tre_bat_dau`` giây (nạp luồng). Trước đó nó VẪN báo
+    «đang phát» bài A với vị trí cũ — đúng cái bẫy lúc chuyển bài."""
+
+    def __init__(self, dh, pos_a, luc_doi, tre_bat_dau, **kw):
+        super().__init__(dh, pos_a, **kw)
+        self.luc_doi, self.tre_bat_dau, self.da_doi = luc_doi, tre_bat_dau, False
+
+    def state(self):
+        if not self.da_doi and self.dh.t >= self.luc_doi:
+            self.da_doi = True
+            self.pos0, self.t0 = 0.0, self.dh.t + self.tre_bat_dau
+            self.cho_den = self.dh.t + self.tre_bat_dau
+        st = super().state()
+        if st.state == "playing":
+            st.attributes["media_content_id"] = "B" if self.da_doi else "A"
+        return st
+
+
+class TestChuyenBaiKhongDoTrenSoLieuCu(unittest.IsolatedAsyncioTestCase):
+    """«Khi chuyển sang bài thứ 2 lại mất đồng bộ» (R1 + loa Google, 28/10/2026): lúc lệnh phát bài B vừa gửi, hai loa còn báo đang phát bài A
+    với vị trí cũ. Đo trôi trên số liệu đó rồi tua thì loa bị đẩy tới vị trí vô nghĩa."""
+
+    def setUp(self):
+        dong_bo.xoa_nho()
+
+    async def test_khong_tua_theo_vi_tri_bai_cu_va_can_dung_khi_bai_moi_len(self):
+        dh = DongHo(600.0)
+        chuan = LoaDoiBai(dh, 200.0, dh.t + 2.0, 1.0)                 # Google: sang bài B sau 2 s, nạp 1 s
+        theo = LoaDoiBai(dh, 203.0, dh.t + 2.0, 3.5, tre=1.0)          # R1: nạp luồng chậm hơn 2,5 s
+        hass = Hass({"c": chuan, "f": theo})
+        seeks = []
+        goc = hass._goi
+
+        async def goi(dom, ten, data, blocking=False):
+            seeks.append((round(dh.t - 1_000_000, 1), data["seek_position"], theo.da_doi))
+            await goc(dom, ten, data, blocking)
+
+        hass.services.async_call = goi
+        item_b = {"id": "B", "url": "u"}
+        try:
+            await dong_bo.vong_dong_bo(hass, "c", ["f"], bay_gio=dh.bay_gio, ngu=dh.ngu, item=item_b, chu_ky_s=0)
+        except Het:
+            pass
+        # mọi lần tua phải nhắm vị trí BÀI B (nhỏ, vài giây), không bao giờ ~200 giây của bài A
+        self.assertTrue(seeks, "loa R1 nạp chậm 2,5 giây phải được căn lại")
+        for luc, dich, _ in seeks:
+            self.assertLess(dich, 30.0, f"tua tới {dich} giây lúc {luc}: đang đo theo số liệu của bài cũ")
+        self.assertLess(abs(theo.that() - chuan.that()), 0.5)
+
+    async def test_khong_co_item_thi_van_dung_hanh_vi_cu_nhung_co_item_thi_cho_dung_bai(self):
+        dh = DongHo(60.0)
+        chuan = LoaDoiBai(dh, 200.0, dh.t + 5.0, 1.0)
+        hass = Hass({"c": chuan})
+        # ngay lúc đầu loa báo bài A: với item B thì CHƯA tính là đang phát
+        self.assertIsNone(dong_bo.vi_tri(hass.states.get("c"), dh.bay_gio(), {"id": "B", "url": "u"}))
+        self.assertIsNotNone(dong_bo.vi_tri(hass.states.get("c"), dh.bay_gio()))
