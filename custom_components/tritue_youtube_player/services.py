@@ -251,7 +251,7 @@ async def async_dispatch(
         )
         await entry.runtime_data.async_refresh()
         lenh_cua_minh.danh_dau(entity_ids)          # tính lại từ lúc lệnh XONG: loa chậm chỉ idle sau khi nhận lệnh
-        phien_moi = find_session(entry.runtime_data.data, (result or {}).get("session_id") or session_id)
+        phien_moi = find_session(getattr(entry.runtime_data, "data", None), (result or {}).get("session_id") or session_id)
         _dong_bo_nen(hass, entry, entity_ids, join_entity_ids, (phien_moi or {}).get("item"))
     except InvalidTargetError as error:
         raise _validation_error("invalid_target") from error
