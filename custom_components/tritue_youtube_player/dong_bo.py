@@ -32,9 +32,17 @@ _LOGGER = logging.getLogger(__name__)
 
 #: Cờ SEEK của MediaPlayerEntityFeature (giá trị cố định của Home Assistant).
 SEEK = 2
-#: Trôi cho phép (giây): dưới ngưỡng này coi là đã khớp (loa báo vị trí vốn chỉ chính xác cỡ nửa giây).
-NGUONG_MAC_DINH_S = 0.8
+#: Trôi cho phép (giây): dưới ngưỡng này coi là đã khớp. Trước 28/10/2026 là 0,8 giây (và 1 giây khi kiểm định kỳ) nên hai loa được phép
+#: lệch tới ~1 giây rồi mới kéo lại: «lúc đầu đồng bộ tốt, dần dần mất đồng bộ». Nay hạ xuống mức loa Cast/DLNA báo vị trí đủ chính xác để
+#: không đuổi theo nhiễu (đo bằng trung vị nhiều mẫu), loa nào tua không mịn được thì ngưỡng riêng của nó tự nới (``_NGUONG_RIENG``).
+NGUONG_MAC_DINH_S = 0.35
 TOI_DA_LAN_MAC_DINH = 3
+#: Mỗi lần đo trôi lấy ngần này mẫu cách nhau ``CACH_MAU_S`` giây rồi lấy TRUNG VỊ (loa báo vị trí có nhiễu cỡ vài trăm mili giây).
+SO_MAU = 3
+CACH_MAU_S = 0.4
+#: Loa chỉnh ``toi_da_lan`` vòng mà vẫn lệch quá ngưỡng (tua chỉ tới nguyên giây, báo vị trí thô…) thì ngưỡng RIÊNG của loa đó nới tới
+#: độ lệch thấy được (tối đa mức này), để không seek liên tục đuổi theo nhiễu lượng tử.
+NGUONG_RIENG_TOI_DA_S = 1.0
 #: Chờ tối đa để một loa bắt đầu phát và báo vị trí.
 CHO_PHAT_TOI_DA_S = 20.0
 #: Sau mỗi lần seek, đợi loa báo vị trí mới trước khi đo lại.
@@ -46,6 +54,7 @@ TRE_SEEK_TOI_DA_S = 3.0
 TOI_DA_NHO = 128
 
 _TRE_SEEK_S: dict[str, float] = {}
+_NGUONG_RIENG: dict[str, float] = {}
 
 
 def tre_seek_da_hoc(entity_id: str) -> float:
@@ -54,6 +63,11 @@ def tre_seek_da_hoc(entity_id: str) -> float:
 
 def xoa_nho() -> None:
     _TRE_SEEK_S.clear()
+    _NGUONG_RIENG.clear()
+
+
+def nguong_rieng(entity_id: str) -> float:
+    return _NGUONG_RIENG.get(str(entity_id), 0.0)
 
 
 def _nho_tre_seek(entity_id: str, giay: float) -> None:
@@ -102,6 +116,24 @@ async def _cho_phat(hass: Any, entity_id: str, *, cho_toi_da: float, bay_gio: Ca
         await ngu(CHU_KY_HOI_S)
 
 
+async def _do_troi(hass: Any, master: str, entity_id: str, chinh: float, bay_gio: Callable[[], float],
+                   ngu: Callable[[float], Awaitable[Any]]) -> tuple[float, float, float] | None:
+    """Đo trôi của ``entity_id`` so với ``master``: trung vị ``SO_MAU`` mẫu. Trả ``(trôi, vị trí loa chuẩn, lúc đo)``; None nếu một loa
+    không báo được vị trí (mẫu nào thiếu thì bỏ cả lần đo)."""
+    mau: list[tuple[float, float, float]] = []
+    for k in range(SO_MAU):
+        if k:
+            await ngu(CACH_MAU_S)
+        t = bay_gio()
+        pm = vi_tri(hass.states.get(master), t)
+        pf = vi_tri(hass.states.get(entity_id), t)
+        if pm is None or pf is None:
+            return None
+        mau.append((pf - pm - chinh, pm, t))
+    mau.sort()
+    return mau[len(mau) // 2]                          # (trôi, vị trí loa chuẩn LÚC t, t): người dùng phải cộng thời gian đã trôi từ t
+
+
 async def async_can_chinh(
     hass: Any,
     master: str,
@@ -133,21 +165,21 @@ async def async_can_chinh(
         chinh = -float(adjust_ms.get(entity_id, 0)) / 1000.0      # sync_adjust ÂM = loa phát SỚM hơn = vị trí ĐI TRƯỚC loa chuẩn
         da_chinh = False
         troi = 0.0
+        nguong = max(nguong_s, nguong_rieng(entity_id))
+        luc = None
         for lan in range(max(1, toi_da_lan) + 1):
-            t = bay_gio()
-            pm = vi_tri(hass.states.get(master), t)
-            pf = vi_tri(hass.states.get(entity_id), t)
-            if pm is None or pf is None:
+            do = await _do_troi(hass, master, entity_id, chinh, bay_gio, ngu)
+            if do is None:
                 break
-            troi = pf - pm - chinh                      # > 0: loa theo sau đang ĐI TRƯỚC loa chuẩn
-            if abs(troi) <= nguong_s:
+            troi, pm, luc = do                          # troi > 0: loa theo sau đang ĐI TRƯỚC loa chuẩn
+            if abs(troi) <= nguong:
                 break
             if lan >= toi_da_lan:                       # hết vòng mà chưa khớp
                 break
             if da_chinh:
                 # lần seek trước để lại sai lệch `troi` ⇒ độ trễ seek thật của loa này lớn/nhỏ hơn đã nghĩ
                 _nho_tre_seek(entity_id, tre_seek_da_hoc(entity_id) - troi)
-            dich = max(0.0, pm + chinh + tre_seek_da_hoc(entity_id))
+            dich = max(0.0, pm + (bay_gio() - luc) + chinh + tre_seek_da_hoc(entity_id))   # vị trí loa chuẩn tại lúc ra lệnh, không phải lúc đo
             lenh_cua_minh.danh_dau([entity_id])         # seek có thể làm loa thoáng về buffering/idle: không phải Stop
             try:
                 await hass.services.async_call(
@@ -159,10 +191,15 @@ async def async_can_chinh(
             da_chinh = True
             await ngu(DOI_SAU_SEEK_S)
             await _cho_phat(hass, entity_id, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu)
-        khop = abs(troi) <= nguong_s
+        khop = abs(troi) <= nguong
+        if not khop and da_chinh:
+            # Seek rồi mà vẫn lệch: loa này không chỉnh mịn được tới ngưỡng (tua nguyên giây, báo vị trí thô): nới ngưỡng riêng.
+            _NGUONG_RIENG[entity_id] = min(NGUONG_RIENG_TOI_DA_S, max(nguong_rieng(entity_id), abs(troi) * 1.2 + 0.05))
+            _LOGGER.info("dong_bo: %s chỉnh không mịn tới %.2f s, nới ngưỡng riêng lên %.2f s", entity_id, nguong, nguong_rieng(entity_id))
         ket_qua[entity_id] = {
             "ket_qua": ("da_chinh" if da_chinh else "da_khop") if khop else "chua_khop",
             "troi_ms": int(round(troi * 1000)),
+            "luc": luc,
         }
     return ket_qua
 
@@ -171,8 +208,8 @@ async def async_can_chinh(
 
 #: Chu kỳ kiểm trôi khi đang phát (giây). Loa khác loại có đồng hồ chạy lệch nhau nên trôi dần theo thời gian (vài trăm
 #: mili giây mỗi vài phút); seek quá thường thì nghe giật, nên chỉ chỉnh khi trôi vượt ngưỡng ĐỊNH KỲ (cao hơn ngưỡng đầu).
-CHU_KY_DINH_KY_MAC_DINH_S = 90.0
-NGUONG_DINH_KY_MAC_DINH_S = 1.0
+CHU_KY_DINH_KY_MAC_DINH_S = 30.0
+NGUONG_DINH_KY_MAC_DINH_S = 0.45
 #: Loa chuẩn không phát liên tục quá ngần này giây (tạm dừng, dừng, đổi nguồn) thì thôi hiệu chỉnh.
 CHO_CHUAN_TOI_DA_S = 120.0
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.28.3 - 2026-10-28
+
+### Sửa: nhiều loa (R1 + loa Google) lúc đầu khớp, dần dần mất đồng bộ
+
+Chủ máy: «Đồng bộ youtube lúc đầu, sau dần dần bị lệch» (phát trên R1 và loa Google). Mô phỏng một giờ với đồng hồ hai loa lệch nhịp tái hiện
+đúng: lệch thật giữa hai loa trôi dần lên **1,01 giây**. Ba nguyên nhân, đã sửa cả ba:
+
+- **Ngưỡng quá rộng, kiểm quá thưa** (`dong_bo.py`): chỉ chỉnh khi lệch vượt 0,8 giây (lần đầu) / 1 giây (định kỳ) và chỉ kiểm mỗi 90 giây, nên hai
+  loa được PHÉP lệch tới ~1 giây rồi mới kéo lại. Nay ngưỡng 0,35 / 0,45 giây, chu kỳ 30 giây. Mỗi lần đo lấy **trung vị 3 mẫu** (loa báo vị trí có nhiễu)
+  để không đuổi theo nhiễu. Loa nào tua không mịn được (tua chỉ nguyên giây…) tự nới **ngưỡng riêng** (tối đa 1 giây) thay vì seek liên tục.
+- **Lỗi đo của chính bản mới**: đích tua tính từ vị trí loa chuẩn của mẫu cũ (đã qua ~0,8 giây đo); nay cộng thời gian đã trôi.
+- **R1 báo vị trí quá thô (R1 0.6.2)**: UPnP chỉ báo số NGUYÊN giây (cắt xuống) và bản 0.6.0 chỉ ghi lại khi nhảy hơn 2,5 giây, nên vị trí R1 mà
+  `youtube` đọc có thể cũ và sai nửa tới một giây. R1 0.6.2 ước vị trí chính xác hơn bằng giao các ràng buộc theo thời gian, ghi lại khi lệch quá 0,3 giây
+  (hoặc 15 giây một lần), và tua bằng đích có phần thập phân (thư viện cắt xuống nguyên giây; loa từ chối thì làm tròn GẦN NHẤT).
+- Kết quả mô phỏng 1 giờ (lệch nhịp 0,04%, nhiễu ±0,12 giây): lệch lớn nhất **0,42 giây** (trước: 1,01), 5 lần seek; lệch nhịp 0,1%, nhiễu ±0,25: 0,48 giây,
+  10 lần seek; loa chỉ tua được nguyên giây: 0,90 giây (giới hạn của loa). Test mới `test_dong_bo_troi.py`.
+- Giới hạn còn lại: Cast và DLNA không có đồng hồ chung nên không đồng bộ từng mẫu âm (cỡ 0,3–0,5 giây); cần khớp chặt hơn thì cần AirPlay hoặc nhóm Cast.
+
 ## 0.28.2 - 2026-10-28
 
 ### Phân biệt Stop / hết bài / lỗi bằng TÍN HIỆU THẬT của loa (Cast, loa camera, loa tự viết)
