@@ -233,8 +233,7 @@ def observe_track(
     elapsed = max(0.0, (now - position_at).total_seconds())
     if position + elapsed >= duration - END_TOLERANCE_SECONDS:
         return True
-    tracker["dung_som"] = True        # stopped well before the end — the caller decides: Stop thật hay luồng bị cắt
-    tracker["dung_som_vi_tri"] = position + elapsed    # giây đã phát tới lúc dừng (để phát tiếp đúng chỗ)
+    tracker["dung_som"] = True        # stopped well before the end — Stop thật (nút trên loa/remote hay trong Home Assistant)
     return False
 
 

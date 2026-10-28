@@ -14,8 +14,22 @@ khi đang nghe nội dung khác trên cùng loa rồi tạm dừng thì video c�
   tạm dừng, tắt) thì ghi lại lúc ngừng; nội dung lạ lên sóng sau hơn 15 giây (`CHO_CHEN_SAU_NGUNG_GIAY`) là người dùng đã dừng,
   không phát lại. Giữ nguyên hai ca đúng: loa idle thoáng qua vài giây giữa luồng và TTS (R1, loa camera) và loa phát yên nhiều phút
   không có sự kiện nào rồi TTS tới vẫn phát tiếp đúng giây.
-- Test mới `DungRoiTtsKhongPhatLaiTests` (4 ca; ca dừng rồi TTS đỏ trước khi sửa). Không thêm đỏ nào so với trước (17 đỏ có sẵn
-  của bộ test tích hợp, không liên quan).
+- Test mới `DungRoiTtsKhongPhatLaiTests` (4 ca; ca dừng rồi TTS đỏ trước khi sửa).
+
+### Sửa: bấm Stop trên loa/remote phải dừng hẳn, không phát tiếp
+
+Chủ máy 28/10/2026: «bấm Stop trực tiếp trên loa hoặc remote thì phải dừng luôn chứ, sao lại phát tiếp».
+
+- **Lớp lỗi:** từ 19/10 loa về idle giữa bài mà sự kiện không mang `user_id`/`parent_id` bị coi là «luồng bị cắt» và tự phát tiếp
+  đúng chỗ một lần (hoặc sang bài kế nếu loa không tua được). Nút Stop trên loa và luồng bị cắt tạo ra CÙNG một sự kiện (idle, không ngữ
+  cảnh) nên không phân biệt được; đoán «luồng cắt» làm Stop thật không dừng được.
+- **Sửa theo nguyên tắc:** loa idle sớm giữa bài (biết thời lượng bài) = Stop, dù bấm trong Home Assistant hay trên loa/remote → gỡ
+  loa khỏi phiên. Gỡ `_nen_tu_cuu_sau_dung_som`, nhánh phát tiếp/sang bài kế và `_loa_tua_duoc`. Nếu luồng bị cắt còn xảy ra thì sửa ở
+  NGUỒN (máy phát/luồng), không đoán ở đây.
+- **Giữ nguyên:** loa KHÔNG báo thời lượng bài vẫn không phân biệt được hết bài với Stop nên sang bài kế một lần (idle lần nữa trong
+  90 s là Stop thật); hết bài thật vẫn tự sang bài kế; TTS chen giữa bài vẫn phát tiếp đúng giây.
+- Test `test_dung_som_phat_lai.py` viết lại theo quy tắc mới; `test_lenh_cua_minh.py` chỉnh hai ca. Bộ test tích hợp: 12 đỏ có sẵn
+  (lỗi vòng lặp sự kiện của môi trường chạy test), không thêm đỏ nào. `tests_ha/` cần môi trường Home Assistant đầy đủ, chưa chạy được ở đây.
 - Không có cookie nào được lưu; phiên phát chỉ nằm trong RAM của add-on, khởi động lại không tự phát gì.
 
 ## 0.28.0 - 2026-10-28

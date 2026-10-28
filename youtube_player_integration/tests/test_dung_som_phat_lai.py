@@ -1,14 +1,12 @@
-"""Loa về idle SỚM giữa bài: luồng bị cắt hay người dùng bấm Stop?
+"""Loa về idle SỚM giữa bài (biết thời lượng bài): đó là Stop, không phải hết bài.
 
-Chủ máy 19/10/2026 23:00:34: loa d50s tự về idle ~35–70 s trước hết bài thứ 2 của playlist, phiên bị gỡ hết loa
-(`output_entity_ids=[]`) và nhạc KHÔNG phát tiếp. Nguyên nhân trong mã: `observe_track` đặt cờ `dung_som` khi loa idle sớm
-hơn cuối bài quá END_TOLERANCE_SECONDS, `_observe` coi đó là Stop → gỡ loa → phiên một loa chết. Luồng bị cắt giữa bài
-(máy phát/Google ngắt kết nối) trông Y HỆT.
+Lịch sử: 19/10/2026 loa d50s về idle trước hết bài, phiên bị gỡ hết loa và nhạc không phát tiếp, nên mã từng «tự cứu» (coi là luồng
+bị cắt và phát tiếp đúng chỗ MỘT lần) khi sự kiện không mang `user_id`/`parent_id`. 28/10/2026 chủ máy: «Bấm Stop trực tiếp trên
+loa hoặc remote thì phải dừng luôn chứ, sao lại phát tiếp». Nút Stop trên loa và luồng bị cắt trông Y HỆT nhau với tích hợp (cùng
+một sự kiện idle, không ngữ cảnh), nên tự cứu làm Stop thật không dừng được. Quy tắc nay: loa idle sớm giữa bài (biết thời lượng) =
+Stop → gỡ loa khỏi phiên, dù ai bấm. Luồng bị cắt nếu còn xảy ra thì sửa ở NGUỒN (máy phát/luồng), không đoán ở đây.
 
-Quy tắc mới (phân biệt bằng CẤU TRÚC — ngữ cảnh của sự kiện đổi trạng thái, không dò chữ):
-- Stop do người dùng hoặc automation trong Home Assistant (`context.user_id` hoặc `context.parent_id`) → tôn trọng ngay.
-- Loa tự đổi trạng thái (không ai ra lệnh qua Home Assistant) → coi là luồng cắt: phát tiếp đúng chỗ MỘT lần.
-- Loa lại dừng sớm ở cùng bài trong CHO_XAC_NHAN_DUNG_THAT_GIAY giây sau lần phát tiếp → Stop thật (nút trên loa/remote).
+Giữ nguyên: loa KHÔNG báo thời lượng (xem BaiKhongRoThoiLuongTests) vẫn không phân biệt được hết bài với Stop nên sang bài kế.
 """
 import types
 import unittest
@@ -41,13 +39,12 @@ def ctx(user_id=None, parent_id=None):
     return types.SimpleNamespace(id="c1", user_id=user_id, parent_id=parent_id)
 
 
-class ObserveTrackViTriTests(unittest.TestCase):
-    def test_dung_som_ghi_vi_tri_luc_dung(self):
+class ObserveTrackDungSomTests(unittest.TestCase):
+    def test_dung_som_dat_co_khi_idle_giua_bai(self):
         tracker = {}
         self.assertFalse(observe_track(tracker, "playing", attrs(10), T0, ITEM))
         self.assertFalse(observe_track(tracker, "idle", {}, T0 + timedelta(seconds=60), ITEM))
         self.assertTrue(tracker.get("dung_som"))
-        self.assertAlmostEqual(70.0, tracker["dung_som_vi_tri"], delta=1)
 
     def test_het_bai_that_khong_phai_dung_som(self):
         tracker = {}
@@ -84,53 +81,34 @@ class DungSomQuyetDinhTests(unittest.TestCase):
         with self._at(seconds):
             self.adv._observe(self.session, SPEAKER, "idle", {"supported_features": features}, context)
 
-    def _sang_bai_khac(self, index):
-        """Phiên chuyển sang bài kế: khoá theo dõi (phiên, bài, vị trí hàng đợi, loa) đổi → tracker mới."""
-        self.session = {**self.session, "item": {**ITEM, "id": f"vid{index}"}, "queue": {"index": index}}
+    def test_stop_tren_loa_khong_ngu_canh_thi_dung_han(self):
+        """Ca chủ máy 28/10/2026: bấm Stop trên loa/remote (sự kiện không có user_id/parent_id) phải dừng, không phát tiếp."""
+        for context in (None, ctx()):
+            with self.subTest(context=context):
+                self.adv._async_remove_speaker.reset_mock()
+                self.session = {"session_id": f"s-{context!r}", "item": dict(ITEM), "queue": {"index": 1}}
+                self._play(0)
+                self._idle(60, context)
+                self.adv._async_remove_speaker.assert_called_once()
+                self.adv._async_resume.assert_not_called()
+                self.adv._async_advance.assert_not_called()
 
-    def test_loa_tu_idle_som_thi_phat_tiep_dung_cho_mot_lan(self):
-        self._play(0)
-        self._idle(60, ctx())
-        self.adv._async_resume.assert_called_once()
-        _, entity_id, position = self.adv._async_resume.call_args.args
-        self.assertEqual(SPEAKER, entity_id)
-        self.assertAlmostEqual(70.0, position, delta=1)
-        self.adv._async_remove_speaker.assert_not_called()
+    def test_stop_cua_nguoi_dung_hay_automation_trong_ha_dung_han(self):
+        for context in (ctx(user_id="u1"), ctx(parent_id="auto-ctx")):
+            with self.subTest(context=context):
+                self.adv._async_remove_speaker.reset_mock()
+                self.session = {"session_id": f"s-{context.user_id}", "item": dict(ITEM), "queue": {"index": 1}}
+                self._play(0)
+                self._idle(60, context)
+                self.adv._async_remove_speaker.assert_called_once()
+                self.adv._async_resume.assert_not_called()
 
-    def test_khong_co_context_van_phat_tiep(self):
+    def test_loa_khong_tua_duoc_cung_dung_han_khong_sang_bai_ke(self):
         self._play(0)
-        self._idle(60, None)
-        self.adv._async_resume.assert_called_once()
-        self.adv._async_remove_speaker.assert_not_called()
-
-    def test_stop_cua_nguoi_dung_trong_ha_duoc_ton_trong_ngay(self):
-        self._play(0)
-        self._idle(60, ctx(user_id="u1"))
+        self._idle(60, ctx(), KHONG_TUA)
         self.adv._async_remove_speaker.assert_called_once()
+        self.adv._async_advance.assert_not_called()
         self.adv._async_resume.assert_not_called()
-
-    def test_stop_tu_automation_duoc_ton_trong_ngay(self):
-        self._play(0)
-        self._idle(60, ctx(parent_id="auto-ctx"))
-        self.adv._async_remove_speaker.assert_called_once()
-        self.adv._async_resume.assert_not_called()
-
-    def test_dung_som_lan_hai_ngay_sau_khi_phat_tiep_la_stop_that(self):
-        self._play(0)
-        self._idle(60, ctx())
-        self.assertEqual(1, self.adv._async_resume.call_count)
-        self._play(65, position=70)                       # đã phát tiếp
-        self._idle(80, ctx())                             # lại dừng sớm trong vòng 90 s
-        self.adv._async_remove_speaker.assert_called_once()
-        self.assertEqual(1, self.adv._async_resume.call_count)
-
-    def test_dung_som_lan_hai_sau_khoang_cho_lai_duoc_phat_tiep(self):
-        self._play(0)
-        self._idle(60, ctx())
-        self._play(65, position=70)
-        self._idle(65 + advance_mod.CHO_XAC_NHAN_DUNG_THAT_GIAY + 5, ctx())
-        self.assertEqual(2, self.adv._async_resume.call_count)
-        self.adv._async_remove_speaker.assert_not_called()
 
     def test_het_bai_that_van_chuyen_bai_khong_phat_lai(self):
         self._play(0)
@@ -139,59 +117,12 @@ class DungSomQuyetDinhTests(unittest.TestCase):
         self.adv._async_remove_speaker.assert_not_called()
         self.adv._async_advance.assert_called_once()
 
-    def test_phien_dang_chuyen_bai_thi_khong_xep_hai_viec(self):
+    def test_stop_xong_het_tracker_khong_con_cho_phat_lai(self):
         self._play(0)
-        self.adv._advancing.add("s1")
-        with self._at(60):
-            self.adv._observe(self.session, SPEAKER, "idle", {}, ctx())
+        self._idle(60, None)
+        self._idle(70, None)                           # sự kiện idle lặp lại không được phát gì
         self.adv._async_resume.assert_not_called()
-
-    def test_loa_khong_tua_duoc_thi_sang_bai_ke_khong_phat_lai_tu_dau(self):
-        self._play(0)
-        self._idle(60, ctx(), KHONG_TUA)
-        self.adv._async_advance.assert_called_once()
-        self.adv._async_resume.assert_not_called()
-        self.adv._async_remove_speaker.assert_not_called()
-
-    def test_loa_khong_tua_duoc_va_het_bai_ke_thi_nhu_cu_go_loa(self):
-        self.adv._next_from = MagicMock(return_value=None)
-        self._play(0)
-        self._idle(60, ctx(), KHONG_TUA)
-        self.adv._async_remove_speaker.assert_called_once()
         self.adv._async_advance.assert_not_called()
-        self.adv._async_resume.assert_not_called()
-
-    def test_bam_stop_tren_loa_khong_tua_duoc_van_dung_duoc_khi_da_sang_bai_moi(self):
-        # Nhớ «đã tự cứu một lần» theo PHIÊN + LOA, không theo bài: sang bài mới tracker đổi nhưng Stop thật vẫn được tôn trọng.
-        self._play(0)
-        self._idle(60, ctx(), KHONG_TUA)
-        self.assertEqual(1, self.adv._async_advance.call_count)
-        self._sang_bai_khac(2)
-        self._play(65, position=0)
-        self._idle(80, ctx(), KHONG_TUA)
-        self.adv._async_remove_speaker.assert_called_once()
-        self.assertEqual(1, self.adv._async_advance.call_count)
-
-    def test_bo_nho_da_cuu_het_han_thi_duoc_cuu_lai(self):
-        self._play(0)
-        self._idle(60, ctx(), KHONG_TUA)
-        self._sang_bai_khac(2)
-        self._play(65, position=0)
-        self._idle(65 + advance_mod.CHO_XAC_NHAN_DUNG_THAT_GIAY + 5, ctx(), KHONG_TUA)
-        self.assertEqual(2, self.adv._async_advance.call_count)
-        self.adv._async_remove_speaker.assert_not_called()
-
-    def test_hai_phien_khac_nhau_khong_dung_chung_bo_nho(self):
-        self._play(0)
-        self._idle(60, ctx())
-        khac = {**self.session, "session_id": "s2"}
-        with self._at(70):
-            self.adv._observe(khac, SPEAKER, "playing", attrs(10, self.now), ctx())
-        self.adv._advancing.clear()
-        with self._at(100):
-            self.adv._observe(khac, SPEAKER, "idle", {"supported_features": CO_TUA}, ctx())
-        self.assertEqual(2, self.adv._async_resume.call_count)
-        self.adv._async_remove_speaker.assert_not_called()
 
 
 class BaiKhongRoThoiLuongTests(unittest.TestCase):

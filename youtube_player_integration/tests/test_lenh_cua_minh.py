@@ -119,15 +119,16 @@ class IdleThoangQuaSauLenhCuaMinhTests(unittest.TestCase):
         self._play(0)
         lenh_cua_minh.danh_dau([SPEAKER], now=T0 + timedelta(seconds=9))
         self._idle(9.5 + lenh_cua_minh.KHOANG_GIAY)                           # hết khoảng, loa vẫn idle sớm
-        self.adv._async_advance.assert_called_once()                          # loa không tua được → sang bài kế
+        self.adv._async_remove_speaker.assert_called_once()                   # idle giữa bài sau khoảng = Stop thật → gỡ loa
+        self.adv._async_advance.assert_not_called()
 
     def test_playing_trong_khoang_van_duoc_ghi_nhan(self):
         self._play(0)
         lenh_cua_minh.danh_dau([SPEAKER], now=T0 + timedelta(seconds=9))
         self.session = {**self.session, "item": {**ITEM, "id": "vid2"}, "queue": {"index": 1}}
         self._play(10)                                                         # bài mới lên sóng
-        self._idle(10 + 200)                                                   # bài mới hết sau 200 s, ngoài khoảng
-        self.adv._async_advance.assert_called_once()                          # bài hai có thời lượng 240: dừng sớm → bài kế
+        self._idle(10 + 235)                                                   # bài mới hết thật (240 s), ngoài khoảng
+        self.adv._async_advance.assert_called_once()                          # đã ghi nhận playing trong khoảng → hết bài → bài kế
         self.adv._async_remove_speaker.assert_not_called()
 
     def test_kiem_lai_loa_da_phat_bai_moi_thi_khong_lam_gi(self):
