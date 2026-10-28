@@ -3,7 +3,7 @@ rồi hiệu chỉnh): https://github.com/music-assistant/server (providers/airp
 
 Cast và DLNA không có đồng hồ chung để lên lịch mẫu âm (khác AirPlay/PTP), nên ở đây KHÔNG hứa đồng bộ từng mẫu. Mục tiêu:
 loa vào sau hoặc loa khởi động chậm được kéo về ĐÚNG VỊ TRÍ của loa chuẩn (sai lệch cỡ vài trăm mili giây, tuỳ loa báo vị
-trí chính xác tới đâu). Cần khớp chặt hơn thì dùng Cast group / Snapcast (xem README, mục «Các loa không đồng bộ»).
+trí chính xác tới đâu). Cần khớp chặt hơn thì dùng Cast group / Snapcast (xem docs/CHI-TIET.md, mục 6.3).
 
 Cách làm (mỗi loa theo sau, tối đa ``toi_da_lan`` vòng):
   1. chờ loa thực sự phát và báo vị trí (dựa trên trạng thái, không đoán thời gian cố định);
