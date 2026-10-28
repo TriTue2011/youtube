@@ -251,6 +251,13 @@ def _ghi_nhan_luong_dang_phat(tracker: dict[str, Any], state: str, attributes: d
     phát luồng của mình (xem ``_vua_phat_luong_minh``)."""
     if "chen_tu" in tracker:
         return                                        # đang bị chen: trạng thái của nội dung chen không đổi gì ở đây
+    if state == "paused":
+        # Người dùng CHỦ ĐỘNG tạm dừng (nhóm báo 28/10/2026: «pause nhạc rồi phát TTS/gọi Assist, xong nó tự phát tiếp nhạc, không giữ
+        # trạng thái»). Khoảng ân hạn chỉ dành cho idle/tắt thoáng qua giữa luồng và TTS (R1, loa camera), không phải cho Tạm dừng:
+        # đã tạm dừng thì nội dung lạ lên loa sau đó KHÔNG phải «chen giữa bài» và không được phát tiếp.
+        tracker.pop("luong_dang", None)
+        tracker.pop("luong_ngung_luc", None)
+        return
     if state in PLAYING_STATES:
         if stream_target(attributes.get("media_content_id")) is not None and plays_item(attributes, item, tracker):
             tracker["luong_dang"] = True

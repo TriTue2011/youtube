@@ -195,6 +195,16 @@ class DungRoiTtsKhongPhatLaiTests(unittest.TestCase):
         self.assertNotIn("chen_tu", tr)
         self.assertIsNone(self.feed(tr, "paused", "http://radio/stream.mp3", 400))
 
+    def test_nguoi_dung_tam_dung_roi_tts_ngay_sau_do_khong_phat_tiep(self):
+        """Báo từ nhóm 28/10/2026: đang phát, người dùng bấm Tạm dừng, vài giây sau TTS / trả lời Assist; TTS xong thì nhạc tự phát tiếp
+        (không giữ trạng thái tạm dừng). Ân hạn 15 giây chỉ dành cho idle thoáng qua, không cho Tạm dừng."""
+        tr = {}
+        self.feed(tr, "playing", self.ours, 0, position=40, duration=3000)
+        self.feed(tr, "paused", self.ours, 20)                           # người dùng tạm dừng
+        self.assertIsNone(self.feed(tr, "playing", self.tts, 24))          # 4 giây sau, TTS ra loa
+        self.assertNotIn("chen_tu", tr)
+        self.assertIsNone(self.feed(tr, "idle", self.tts, 28), "TTS xong KHÔNG được phát tiếp bài đã tạm dừng")
+
     def test_loa_idle_thoang_qua_giua_luong_va_tts_van_phat_tiep(self):
         """Một số loa (R1, camera) về idle vài giây giữa luồng và TTS: vẫn là chen giữa bài."""
         tr = {}

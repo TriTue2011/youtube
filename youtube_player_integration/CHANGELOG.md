@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.28.5 - 2026-10-28
+
+### Sửa: người dùng bấm Tạm dừng rồi TTS / trả lời Assist, xong thì nhạc tự phát tiếp
+
+Nhóm báo: «đang phát nhạc xong pause, rồi TTS (hoặc gọi Assist nó phản hồi), sau khi phản hồi xong nó tự phát tiếp; không giữ trạng thái». Nguyên nhân (0.28.2 trở đi):
+để chịu loa idle thoáng qua giữa luồng và TTS (R1, loa camera) mã cho phép «vừa ngừng phát trong 15 giây» vẫn tính là bị chen giữa bài, nhưng Tạm dừng của
+người dùng cũng lọt vào cửa sổ đó nên TTS xong là phát tiếp. Nay Tạm dừng không bao giờ được coi là «vừa phát»; ân hạn chỉ dành cho idle/tắt thoáng qua. Giữ
+đúng ca còn lại: loa đang phát mà gọi Assist/TTS thì vẫn tạm dừng rồi phát tiếp. Test mới ca Tạm dừng rồi TTS sau 4 giây.
+
 ## 0.28.4 - 2026-10-28
 
 ### Sửa: sang bài thứ 2 mất đồng bộ; Stop phải bấm 2–3 lần
