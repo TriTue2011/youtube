@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.28.2 - 2026-10-28
+
+### Phân biệt Stop / hết bài / lỗi bằng TÍN HIỆU THẬT của loa (Cast, loa camera, loa tự viết)
+
+Chủ máy: «Stop hay không thì lấy event hoặc trigger gì đó là được mà nhỉ … cả loa, cam, cast». Mô-đun mới `ly_do_idle.py`:
+
+- **Google Cast:** giao thức báo `IdleReason` (`FINISHED` / `CANCELLED` / `INTERRUPTED` / `ERROR`) trong `media_status` của thực thể,
+  nhưng Home Assistant không đưa nó vào thuộc tính trạng thái. Đọc thuộc tính công khai `media_status.idle_reason`; lỗi/đổi cấu trúc
+  bên trong Home Assistant thì quay về cách đo thời lượng, không vỡ.
+- **Loa tự viết (R1, loa camera):** đọc thuộc tính chuẩn `idle_reason` (`finished` / `stopped` / `interrupted` / `error`).
+- **DLNA, AirPlay:** giao thức không có mã lý do tin cậy → vẫn dùng thời lượng bài như 0.28.1.
+- Khi loa khai lý do: `finished` → sang bài kế (kể cả bài không biết thời lượng); `stopped`/`interrupted` → gỡ loa (Stop dù sát cuối bài);
+  `error` (luồng đứt) → phát tiếp đúng chỗ MỘT lần, lỗi lại trong 90 giây thì gỡ loa. Nhờ vậy cách «tự cứu luồng cắt» của 19/10 trở lại
+  nhưng chỉ khi loa NÓI là lỗi, không còn nhầm với nút Stop.
+- Test mới `test_ly_do_idle.py` (14 ca). Không thêm đỏ so với trước.
+
 ## 0.28.1 - 2026-10-28
 
 ### Sửa: dừng nhạc rồi TTS ra loa thì TTS xong video đã dừng tự chạy lại

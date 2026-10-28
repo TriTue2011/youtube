@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -21,7 +22,7 @@ from homeassistant.util import dt as dt_util
 from .const import LOGGER
 from .queue_store import get_queue_store
 from .playback import build_target_capabilities, is_native_youtube_transport
-from . import lenh_cua_minh
+from . import lenh_cua_minh, ly_do_idle
 from .sessions import (
     FINISHED_STATES,
     active_sessions,
@@ -193,7 +194,26 @@ class SessionAutoAdvance:
             return
         if "chen_tu" in tracker:
             return
-        if not observe_track(tracker, state, attributes, now, session.get("item")):
+        dang_phat_truoc = bool(tracker.get("seen_playing"))
+        da_het = observe_track(tracker, state, attributes, now, session.get("item"))
+        # Loa tự khai lý do idle (Cast, R1, loa camera) thì tin nó hơn là đoán bằng thời lượng bài.
+        ly_do = (
+            ly_do_idle.doc_ly_do_idle(self.hass, entity_id, attributes)
+            if dang_phat_truoc and state in FINISHED_STATES else None
+        )
+        if ly_do is not None:
+            tracker.pop("het_khong_ro", None)
+            tracker.pop("dung_som", None)
+            LOGGER.info("Session %s: %s về %s, lý do loa khai: %s", session.get("session_id"), entity_id, state, ly_do)
+            if ly_do == ly_do_idle.HET_BAI:
+                da_het = True
+            elif ly_do == ly_do_idle.LOI:
+                self._cuu_luong_loi(session, entity_id, tracker, attributes, now)
+                return
+            else:                                       # người dùng dừng, hoặc nội dung khác đè lên: không còn là phiên này
+                self.hass.async_create_task(self._async_remove_speaker(session, entity_id), eager_start=False)
+                return
+        if not da_het:
             if tracker.pop("het_khong_ro", False):
                 self._xu_ly_het_khong_ro(session, entity_id, context, now)
                 return
@@ -207,6 +227,42 @@ class SessionAutoAdvance:
             return
         self._advancing.add(session_id)
         self.hass.async_create_task(self._async_advance(session), eager_start=False)
+
+    def _cuu_luong_loi(
+        self, session: dict[str, Any], entity_id: str, tracker: dict[str, Any], attributes: dict[str, Any], now: Any
+    ) -> None:
+        """Loa KHAI lỗi luồng (không phải Stop, không phải hết bài): giữ nhạc chạy MỘT lần; lỗi lặp lại trong
+        CHO_XAC_NHAN_DUNG_THAT_GIAY giây thì thôi (gỡ loa), tránh vòng lặp phát-lỗi-phát."""
+        session_id = str(session.get("session_id") or "")
+        if session_id in self._advancing:
+            return
+        truoc = self._lan_tu_cuu.get((session_id, entity_id))
+        if truoc is not None and (now - truoc).total_seconds() < CHO_XAC_NHAN_DUNG_THAT_GIAY:
+            self.hass.async_create_task(self._async_remove_speaker(session, entity_id), eager_start=False)
+            return
+        if self._loa_tua_duoc(attributes):
+            position, position_at = tracker.get("position"), tracker.get("position_at")
+            vi_tri = 0.0 if position is None else position + max(0.0, (now - (position_at or now)).total_seconds())
+            self._ghi_tu_cuu(session_id, entity_id, now)
+            self._advancing.add(session_id)
+            self.hass.async_create_task(self._async_resume(session, entity_id, vi_tri), eager_start=False)
+        elif self._next_from(session) is not None:
+            self._ghi_tu_cuu(session_id, entity_id, now)
+            self._advancing.add(session_id)
+            self.hass.async_create_task(self._async_advance(session), eager_start=False)
+        else:
+            self.hass.async_create_task(self._async_remove_speaker(session, entity_id), eager_start=False)
+
+    @staticmethod
+    def _loa_tua_duoc(attributes: dict[str, Any]) -> bool:
+        """Loa có khả năng SEEK không. Thiếu thông tin thì coi là tua được."""
+        features = attributes.get("supported_features")
+        if features is None:
+            return True
+        try:
+            return bool(int(features) & MediaPlayerEntityFeature.SEEK)
+        except (TypeError, ValueError):
+            return True
 
     def _hen_kiem_lai(self, session: dict[str, Any], entity_id: str, con_lai: float) -> None:
         """Hẹn kiểm lại loa sau khi khoảng «vừa nhận lệnh phát» kết thúc (mỗi (phiên, loa) chỉ một hẹn)."""
