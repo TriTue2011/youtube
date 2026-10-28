@@ -19,11 +19,13 @@ ports_description:
 options:
   app_title: "TriTue YouTube Player"
   max_history: 20
+  max_extract: 2
   integration_token: ""
   public_base_url: ""
 schema:
   app_title: "str(1,80)"
   max_history: "int(1,100)"
+  max_extract: "int(1,8)"
   integration_token: "password"
   public_base_url: "str"
 image: "ghcr.io/tritue2011/youtube-player"

@@ -1420,6 +1420,8 @@ def main():
     max_history = bounded_integer(
         os.environ.get("MAX_HISTORY", options.get("max_history")), 20, 1, 100
     )
+    gioi_han.dat_so_cho(bounded_integer(
+        os.environ.get("YT_TRICH_XUAT_DONG_THOI", options.get("max_extract")), gioi_han.TRICH_XUAT_DONG_THOI, 1, 8))
     integration_token = resolve_integration_token(
         data_dir,
         os.environ.get("INTEGRATION_TOKEN") or options.get("integration_token", ""),

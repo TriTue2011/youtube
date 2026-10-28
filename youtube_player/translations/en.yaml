@@ -5,6 +5,9 @@ configuration:
   max_history:
     name: History size
     description: Number of recent videos or playlists to retain, from 1 to 100.
+  max_extract:
+    name: Concurrent extractions
+    description: Maximum yt-dlp/search runs at the same time (1-8, default 2). Lower uses less RAM/CPU; higher makes many speakers wait less.
   integration_token:
     name: Integration token
     description: Optional bearer token for the Home Assistant integration. Leave empty to generate one in /data.

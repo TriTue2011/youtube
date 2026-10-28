@@ -24,6 +24,14 @@ def _so_nguyen(ten: str, mac_dinh: int, thap: int, cao: int) -> int:
 
 TRICH_XUAT_DONG_THOI = _so_nguyen("YT_TRICH_XUAT_DONG_THOI", 2, 1, 8)
 _CHO = threading.BoundedSemaphore(TRICH_XUAT_DONG_THOI)
+
+
+def dat_so_cho(so: int) -> int:
+    """Đặt lại số chỗ theo tuỳ chọn add-on (``max_extract``); chỉ gọi LÚC KHỞI ĐỘNG, trước khi nhận yêu cầu."""
+    global TRICH_XUAT_DONG_THOI, _CHO
+    TRICH_XUAT_DONG_THOI = max(1, min(8, int(so)))
+    _CHO = threading.BoundedSemaphore(TRICH_XUAT_DONG_THOI)
+    return TRICH_XUAT_DONG_THOI
 #: Số mục tối đa của mỗi bộ nhớ đệm (luồng đã giải, kết quả Zing).
 BO_NHO_DEM_TOI_DA = 256
 

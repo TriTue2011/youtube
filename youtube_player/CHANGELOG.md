@@ -10,7 +10,12 @@ cùng bấm «bài kế» + tải trước bài sau + tìm kiếm thì chồng c
 - `chiem_cho`: tối đa **2** lần trích xuất/tìm kiếm chạy cùng lúc (đổi bằng biến môi trường `YT_TRICH_XUAT_DONG_THOI`, 1–8);
   lần thừa chờ tối đa theo `timeout` rồi báo bận (`extract_busy` / `search_busy`), không treo luồng.
 - `cat_bo_nho_dem`: hai bộ nhớ đệm (luồng đã giải, kết quả Zing) giữ tối đa 256 mục, thừa thì bỏ mục sắp hết hạn trước.
-- Test mới `tests/test_gioi_han.py` (3 ca). Toàn bộ add-on 121 ca đạt.
+- **Đóng gói Docker** (`docker-compose.yaml`, `Dockerfile`): trần tài nguyên `mem_limit`/`memswap_limit` 768 MB, `cpus` 1,5, `pids_limit` 256,
+  `init: true` (dọn tiến trình con mồ côi), `no-new-privileges` + bỏ mọi `cap`; **nhật ký xoay vòng** (10 MB × 3 tệp) để một lỗi
+  lặp không còn đầy ổ đĩa. Sửa phiên bản lệch (image/`BUILD_VERSION` đang 0.8.1 so với add-on 0.9.x).
+- Tuỳ chọn add-on mới `max_extract` (1–8, mặc định 2) và biến môi trường `YT_TRICH_XUAT_DONG_THOI` cho số lần trích xuất cùng lúc.
+- Test mới `tests/test_gioi_han.py` (3 ca) và `tests/test_dong_goi.py` (4 ca: trần tài nguyên, xoay vòng nhật ký, phiên bản khớp).
+  Toàn bộ add-on 125 ca đạt.
 
 ## 0.9.8 - 2026-10-20
 

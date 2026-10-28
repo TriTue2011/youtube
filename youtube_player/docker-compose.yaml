@@ -2,14 +2,33 @@ services:
   youtube-player:
     build:
       context: .
-    image: ghcr.io/tritue2011/youtube-player:0.8.1
+    image: ghcr.io/tritue2011/youtube-player:0.9.9
     container_name: tritue-youtube-player
     restart: unless-stopped
+    # Trần tài nguyên (docs/QUY-TAC-TAI-NGUYEN.md): máy chủ chạy một luồng mỗi kết nối và gọi yt-dlp; không đặt trần thì một
+    # đợt bấm dồn dập hay một lỗi lặp làm cả máy chủ Docker đầy RAM/ổ đĩa.
+    init: true                      # tini làm PID 1: dọn tiến trình con (deno/yt-dlp) mồ côi
+    mem_limit: 768m
+    memswap_limit: 768m             # không cho tràn sang swap
+    cpus: "1.5"
+    pids_limit: 256                 # trần số luồng + tiến trình
+    stop_grace_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:                        # nhật ký xoay vòng: một lỗi lặp không còn đầy ổ đĩa
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8099:8099"
     environment:
       APP_TITLE: "TriTue YouTube Player"
       MAX_HISTORY: "20"
+      # Số lần yt-dlp/tìm kiếm chạy cùng lúc (1-8). Nhỏ = đỡ tốn RAM/CPU.
+      YT_TRICH_XUAT_DONG_THOI: "2"
       # Optional. When empty, a stable token is generated in /data and logged.
       INTEGRATION_TOKEN: ""
       # Required for Zing playback. Use the LAN URL reachable by every speaker.

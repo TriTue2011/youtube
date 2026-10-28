@@ -5,6 +5,9 @@ configuration:
   max_history:
     name: Số mục lịch sử
     description: Số video hoặc playlist được lưu gần đây, từ 1 đến 100.
+  max_extract:
+    name: Số lần trích xuất cùng lúc
+    description: Tối đa bao nhiêu lần yt-dlp/tìm kiếm chạy đồng thời (1–8, mặc định 2). Nhỏ hơn thì đỡ tốn RAM/CPU, lớn hơn thì nhiều loa bấm cùng lúc đỡ chờ.
   integration_token:
     name: Token tích hợp
     description: Bearer token tùy chọn cho custom integration. Để trống để tự sinh và lưu trong /data.
