@@ -1,5 +1,7 @@
 # TriTue YouTube Player cho Home Assistant
 
+[![Mở kho này trong HACS của bạn.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=TriTue2011&repository=youtube&category=integration)
+
 Tìm và phát **nhạc YouTube, Zing MP3, video Facebook và link audio trực tiếp** ra bất
 kỳ loa nào trong Home Assistant — loa Google Cast, Android TV, tivi LG webOS, DLNA,
 ESPHome, hay mọi `media_player` hỗ trợ `play_media` — hoặc nghe và xem ngay trên
