@@ -22,6 +22,8 @@ from urllib.request import (
     build_opener,
 )
 
+import gioi_han
+
 
 STREAM_SOURCES = ("zing", "youtube", "youtube_video", "facebook", "facebook_video")
 YOUTUBE_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -492,6 +494,11 @@ def extract_with_yt_dlp(watch_url: str, timeout: int) -> dict:
     """
     import yt_dlp  # imported on first use, then cached by Python
 
+    with gioi_han.chiem_cho(timeout, StreamUnavailableError("extract_busy")):
+        return _extract_yt_dlp_da_chiem_cho(yt_dlp, watch_url, timeout)
+
+
+def _extract_yt_dlp_da_chiem_cho(yt_dlp, watch_url: str, timeout: int) -> dict:
     options = {
         "format": YOUTUBE_AUDIO_FORMAT,
         "noplaylist": True,

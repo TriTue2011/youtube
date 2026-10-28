@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.9 - 2026-10-28
+
+### Trần CPU/RAM: giới hạn trích xuất/tìm kiếm chạy cùng lúc và số mục bộ nhớ đệm
+
+Máy chủ chạy một luồng cho mỗi kết nối; mỗi lần `yt-dlp` hay tìm kiếm tốn vài chục tới cả trăm MB và một lõi CPU, nhiều loa
+cùng bấm «bài kế» + tải trước bài sau + tìm kiếm thì chồng chất. Mô-đun mới `app/gioi_han.py`:
+
+- `chiem_cho`: tối đa **2** lần trích xuất/tìm kiếm chạy cùng lúc (đổi bằng biến môi trường `YT_TRICH_XUAT_DONG_THOI`, 1–8);
+  lần thừa chờ tối đa theo `timeout` rồi báo bận (`extract_busy` / `search_busy`), không treo luồng.
+- `cat_bo_nho_dem`: hai bộ nhớ đệm (luồng đã giải, kết quả Zing) giữ tối đa 256 mục, thừa thì bỏ mục sắp hết hạn trước.
+- Test mới `tests/test_gioi_han.py` (3 ca). Toàn bộ add-on 121 ca đạt.
+
 ## 0.9.8 - 2026-10-20
 
 ### Fixed — proxy_stream: tự động nối lại luồng khi nguồn đứt giữa bài
