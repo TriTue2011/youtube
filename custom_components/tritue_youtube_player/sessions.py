@@ -197,6 +197,7 @@ def observe_track(
         if stream_target(attributes.get("media_content_id")) is not None:
             tracker["luong_minh"] = True
         tracker["seen_playing"] = True
+        tracker.pop("tam_dung_vi_tri", None)
         tracker.setdefault("playing_since", now)
         position = _number(attributes.get("media_position"))
         if position is not None:
@@ -211,6 +212,19 @@ def observe_track(
         duration = _number(attributes.get("media_duration"))
         if duration:
             tracker["duration"] = duration
+        return False
+    if state == "paused":
+        # Tạm dừng: đóng băng vị trí bài ở lúc dừng. Không đóng băng thì thời gian nằm tạm dừng bị cộng vào «vị trí ước tính», rồi TTS/Assist
+        # lên loa và dứt → idle → mã thấy «vị trí cũ + thời gian trôi ≥ độ dài bài» và nhảy sang bài kế (nhóm báo 28/10/2026: «bấm tạm
+        # dừng, phát TTS, xong TTS nó next bài rồi phát tiếp»).
+        if tracker.get("seen_playing") and "tam_dung_vi_tri" not in tracker:
+            position, position_at = tracker.get("position"), tracker.get("position_at")
+            if position is None and tracker.get("playing_since") is not None:
+                position, position_at = 0.0, tracker["playing_since"]
+            if position is not None and position_at is not None:
+                tracker["tam_dung_vi_tri"] = position + max(0.0, (now - position_at).total_seconds())
+            else:
+                tracker["tam_dung_vi_tri"] = None
         return False
     if state not in FINISHED_STATES or not tracker.get("seen_playing"):
         return False
@@ -230,6 +244,11 @@ def observe_track(
             # loa. Báo cho nơi gọi quyết định (sang bài kế hoặc dừng hẳn) thay vì im lặng để phiên «playing» mà loa đã im.
             tracker["het_khong_ro"] = True
         return False
+    if "tam_dung_vi_tri" in tracker:
+        # Từng Tạm dừng rồi loa về idle (thường do TTS/Assist chen vào rồi dứt): vị trí là lúc tạm dừng, không cộng thời gian nằm im. Chưa tới cuối
+        # bài thì đây KHÔNG phải hết bài và cũng không phải nút Stop: không nhảy bài, không gỡ loa khỏi phiên.
+        vi_tri_dung = tracker.pop("tam_dung_vi_tri")
+        return vi_tri_dung is not None and vi_tri_dung >= duration - END_TOLERANCE_SECONDS
     elapsed = max(0.0, (now - position_at).total_seconds())
     if position + elapsed >= duration - END_TOLERANCE_SECONDS:
         return True

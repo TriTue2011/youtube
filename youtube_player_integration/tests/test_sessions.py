@@ -223,6 +223,37 @@ class DungRoiTtsKhongPhatLaiTests(unittest.TestCase):
         self.assertIsNotNone(self.feed(tr, "idle", self.tts, 604))
 
 
+class TamDungRoiTtsKhongNhayBaiTests(unittest.TestCase):
+    """Nhóm báo 28/10/2026: bấm Tạm dừng (nút tam giác) rồi phát TTS, xong TTS nó next bài rồi phát tiếp (Dừng hẳn rồi đợi thì ổn)."""
+
+    def setUp(self):
+        self.s = load_sessions_module()
+        self.item = {"id": "dQw4w9WgXcQ", "url": "u", "duration": 240}
+        self.ours = stream_url("dQw4w9WgXcQ")
+
+    def _doc(self, tr, state, mcid, t, **thuoc):
+        attrs = {"media_content_id": mcid, **thuoc}
+        return self.s.observe_track(tr, state, attrs, NOW + timedelta(seconds=t), self.item)
+
+    def test_tam_dung_lau_roi_tts_dut_khong_bi_coi_la_het_bai(self):
+        tr = {}
+        self._doc(tr, "playing", self.ours, 0, media_position=40, media_position_updated_at=NOW.isoformat(), media_duration=240)
+        self._doc(tr, "paused", self.ours, 10)                              # người dùng tạm dừng ở giây ~50
+        self._doc(tr, "playing", "http://ha/api/tts_proxy/x.mp3", 200)      # 3 phút sau: TTS ra loa
+        da_het = self._doc(tr, "idle", None, 204)                           # TTS xong
+        self.assertFalse(da_het, "TTS dứt sau Tạm dừng không được tính là hết bài (nhảy bài kế)")
+        self.assertNotIn("dung_som", tr)
+        self.assertNotIn("het_khong_ro", tr)
+
+    def test_tam_dung_roi_phat_tiep_dung_bai_van_theo_doi_binh_thuong(self):
+        tr = {}
+        self._doc(tr, "playing", self.ours, 0, media_position=40, media_position_updated_at=NOW.isoformat(), media_duration=240)
+        self._doc(tr, "paused", self.ours, 10)
+        self._doc(tr, "playing", self.ours, 100, media_position=50, media_position_updated_at=(NOW + timedelta(seconds=100)).isoformat(),
+                  media_duration=240)                                       # phát tiếp từ giây 50
+        self.assertTrue(self._doc(tr, "idle", None, 100 + 192), "hết bài thật sau khi phát tiếp vẫn phải nhận ra")
+
+
 class Issue3Tests(unittest.TestCase):
     """Issue #3: TTS on an idle camera speaker started the next song at 22:42; Stop on the speaker skipped songs."""
 

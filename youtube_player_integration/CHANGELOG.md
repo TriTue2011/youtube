@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.28.6 - 2026-10-28
+
+### Sửa: bấm Tạm dừng (nút tam giác) rồi TTS / Assist, xong TTS nó nhảy sang bài kế
+
+Nhóm báo: Dừng hẳn (nút vuông) rồi chờ 15 giây thì ổn (0.28.5), nhưng Tạm dừng rồi TTS thì xong TTS nhảy bài kế và phát tiếp. Nguyên nhân: vị trí ước tính của bài
+cứ cộng thêm thời gian trôi kể cả lúc nằm tạm dừng; TTS dứt làm loa idle, mã thấy «vị trí cũ + thời gian trôi ≥ độ dài bài» và coi là hết bài. Nay Tạm dừng đóng băng
+vị trí lúc dừng; loa về idle sau Tạm dừng chỉ tính hết bài khi chính vị trí đóng băng đã gần cuối, còn lại không nhảy bài và không gỡ loa khỏi phiên. Hai test mới.
+
 ## 0.28.5 - 2026-10-28
 
 ### Sửa: người dùng bấm Tạm dừng rồi TTS / trả lời Assist, xong thì nhạc tự phát tiếp
