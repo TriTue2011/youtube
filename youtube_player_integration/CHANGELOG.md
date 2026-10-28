@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.28.0 - 2026-10-28
+
+### Đồng bộ vị trí phát giữa các loa đã tích (mọi loại loa, không cần nhóm)
+
+Theo ý Music Assistant (cách «máy chủ theo dõi tiến độ rồi hiệu chỉnh»): tích loa nào thì các loa đó tự khớp vị trí
+với nhau, không cần lập nhóm Cast/Snapcast. Mô-đun mới `dong_bo.py`:
+
+- Phát ra nhiều loa: loa đầu danh sách là **loa chuẩn**; các loa còn lại được kéo về đúng vị trí của nó.
+- **Loa mới vào phiên đang phát** (tích thêm loa khi nhạc đang chạy) vào đúng vị trí đang phát, không còn phát từ đầu.
+- Mỗi loa theo sau: chờ loa thực sự phát và báo vị trí, đo trôi, `media_seek` tới vị trí loa chuẩn **cộng độ trễ nạp luồng
+  của chính loa đó** (học theo lần đo thật, không đặt cố định), đợi rồi đo lại (tối đa 3 vòng). Đã khớp thì không seek.
+- **Hiệu chỉnh định kỳ** khi đang phát (mặc định 90 giây): loa khác loại có đồng hồ chạy lệch nhau nên trôi dần; chỉ seek
+  khi trôi quá 1 giây để không nghe giật. Dừng khi loa chuẩn dừng; đổi bài hay phát lại thì tác vụ cũ bị huỷ.
+- Tuỳ chọn của mục cấu hình: `dong_bo` (mặc định bật), `dong_bo_adjust_ms` {entity_id: ms} (chỉnh tay như `sync_adjust` của
+  Music Assistant, ÂM = phát sớm hơn, cho tivi/ampli có độ trễ riêng), `dong_bo_chu_ky_s` (0 = chỉ căn một lần).
+- Giới hạn nói thẳng: Cast/DLNA/… không có đồng hồ chung để lên lịch từng mẫu âm nên KHÔNG đạt mức từng mẫu; sai lệch còn
+  lại cỡ vài trăm mili giây, tuỳ loa báo vị trí chính xác tới đâu. Loa không hỗ trợ `seek` thì bỏ qua. Cần khớp chặt hơn thì
+  vẫn dùng Cast group/Snapcast. Mới kiểm bằng loa giả (22 test), chưa kiểm trên loa thật.
+
 ## 0.27.22 - 2026-10-23
 
 ### Thẻ: tên loa dài không còn đẩy danh sách loa tràn ra ngoài màn hình

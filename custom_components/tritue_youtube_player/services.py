@@ -14,7 +14,7 @@ from homeassistant.helpers import config_validation as cv, entity_registry as er
 from .actions import async_play_on_players
 from .dung_loa import async_dung_loa_luong
 from .api import InvalidTargetError, YouTubePlayerApiError
-from . import lenh_cua_minh
+from . import dong_bo, lenh_cua_minh
 from .queue_store import get_queue_store
 from .const import (
     CONF_ENTRY_ID,
@@ -143,6 +143,31 @@ def _virtual_players(hass: HomeAssistant, entry) -> set[str]:
     }
 
 
+def _dong_bo_nen(hass: HomeAssistant, entry, entity_ids: list[str], join_entity_ids: list[str] | None) -> None:
+    """Nhiều loa cùng phát (hoặc loa mới vào phiên đang phát): kéo các loa về CÙNG VỊ TRÍ của loa chuẩn (xem dong_bo.py).
+    Tắt bằng tuỳ chọn ``dong_bo: false`` của mục cấu hình; chỉnh tay từng loa bằng ``dong_bo_adjust_ms`` {entity_id: ms};
+    ``dong_bo_chu_ky_s`` (mặc định 90, 0 = chỉ căn một lần) là chu kỳ kiểm trôi khi đang phát."""
+    tuy_chon = getattr(entry, "options", None) or {}
+    if not tuy_chon.get("dong_bo", True):
+        return
+    if join_entity_ids:                      # loa mới vào: loa chuẩn là loa ĐANG phát trong phiên
+        followers = [e for e in entity_ids if e not in join_entity_ids]
+        master = next((e for e in join_entity_ids if e not in followers), None)
+    elif len(entity_ids) > 1:
+        master, followers = entity_ids[0], list(entity_ids[1:])
+    else:
+        return
+    if master is None or not followers:
+        return
+    adjust = {str(k): int(v) for k, v in (tuy_chon.get("dong_bo_adjust_ms") or {}).items()
+              if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    try:
+        chu_ky = float(tuy_chon.get("dong_bo_chu_ky_s", dong_bo.CHU_KY_DINH_KY_MAC_DINH_S))
+    except (TypeError, ValueError):
+        chu_ky = dong_bo.CHU_KY_DINH_KY_MAC_DINH_S
+    dong_bo.len_lich(entry, hass, master, followers, adjust_ms=adjust, chu_ky_s=chu_ky)
+
+
 async def async_dispatch(
     hass: HomeAssistant,
     entry,
@@ -215,6 +240,7 @@ async def async_dispatch(
         )
         await entry.runtime_data.async_refresh()
         lenh_cua_minh.danh_dau(entity_ids)          # tính lại từ lúc lệnh XONG: loa chậm chỉ idle sau khi nhận lệnh
+        _dong_bo_nen(hass, entry, entity_ids, join_entity_ids)
     except InvalidTargetError as error:
         raise _validation_error("invalid_target") from error
     except UnsupportedCastMediaError as error:

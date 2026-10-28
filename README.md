@@ -485,11 +485,16 @@ Khung YouTube bị iOS treo ngay khi khoá máy — không vá được từ ph�
 được: bấm **nghe**, hoặc bật công tắc «Nghe khi tắt màn hình» rồi mới bấm **xem**. Xem
 [mục 4](#4-mỗi-thiết-bị-nghe-thế-nào).
 
-### 6.3. Các loa không đồng bộ từng mẫu
+### 6.3. Đồng bộ nhiều loa — khớp vị trí, không khớp từng mẫu âm
 
-Loa mới vào sẽ phát bài **từ đầu**, không khớp vị trí với loa đang phát — Cast và DLNA vốn
-không đồng bộ mẫu với nhau. Cần khớp thời điểm giữa nhiều phòng thì dùng **Cast group**
-(các loa Google) hoặc **Snapcast**.
+Tích loa nào thì các loa đó tự **khớp vị trí phát** với loa chuẩn (loa đầu danh sách, hoặc loa đang phát khi bạn tích thêm
+loa mới), kể cả khi khác loại (Cast, DLNA…): loa mới vào **không còn phát từ đầu**, và trong lúc phát tích hợp kiểm trôi
+mỗi 90 giây rồi kéo lại khi lệch quá 1 giây. Cách làm và tuỳ chọn (`dong_bo`, `dong_bo_adjust_ms`, `dong_bo_chu_ky_s`):
+xem `youtube_player_integration/CHANGELOG.md` mục 0.28.0.
+
+**Giới hạn:** Cast và DLNA không có đồng hồ chung, nên sai lệch còn lại cỡ vài trăm mili giây (có thể nghe thấy tiếng vang
+nhẹ nếu hai loa đặt cùng phòng). Loa không hỗ trợ tua (`seek`) bị bỏ qua. Cần khớp chặt trong cùng một phòng thì dùng
+**Cast group** (các loa Google) hoặc **Snapcast**.
 
 ### 6.4. Loa ESP32 / ESPHome
 
