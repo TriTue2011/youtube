@@ -209,3 +209,23 @@ remove_players:
         entity:
           domain: media_player
           multiple: true
+set_sync_adjust:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    adjust_ms:
+      required: true
+      selector:
+        number:
+          min: -10000
+          max: 10000
+          step: 50
+          unit_of_measurement: ms
+          mode: box

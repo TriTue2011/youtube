@@ -113,9 +113,19 @@ class TestDongBo(unittest.IsolatedAsyncioTestCase):
         chuan = LoaGia(self.dh, 30.0)
         theo = LoaGia(self.dh, 32.0)                           # tivi trễ 2 s: chủ máy đặt -2000 ms để nó phát sớm 2 s
         hass = HassGia(self.dh, {"c": chuan, "t": theo})
-        kq = await self.chay(hass, "c", ["t"], adjust_ms={"t": 2000})
+        kq = await self.chay(hass, "c", ["t"], adjust_ms={"t": -2000})
         self.assertEqual(kq["t"]["ket_qua"], "da_khop")        # đã đúng mục tiêu «đi trước 2 s»
         self.assertEqual(hass.lenh, [])
+
+    async def test_sync_adjust_3_giay_keo_loa_ve_dung_muc_tieu(self):
+        for adjust, ky_vong in ((-3000, 3.0), (3000, -3.0), (-1000, 1.0)):
+            dong_bo.xoa_nho()
+            chuan = LoaGia(self.dh, 60.0)
+            theo = LoaGia(self.dh, 20.0, tre=1.0)
+            hass = HassGia(self.dh, {"c": chuan, "t": theo})
+            kq = await self.chay(hass, "c", ["t"], adjust_ms={"t": adjust})
+            self.assertIn(kq["t"]["ket_qua"], ("da_chinh", "da_khop"), adjust)
+            self.assertAlmostEqual(self.troi(theo, chuan), ky_vong, delta=dong_bo.NGUONG_MAC_DINH_S, msg=adjust)
 
     async def test_loa_khong_ho_tro_seek(self):
         chuan = LoaGia(self.dh, 5.0)
@@ -270,6 +280,41 @@ class TestDinhKy(unittest.IsolatedAsyncioTestCase):
         await dong_bo.vong_dong_bo(hass, "c", ["t"], chu_ky_s=30.0, cho_chuan_toi_da_s=90.0,
                                   bay_gio=self.dh.bay_gio, ngu=ngu)       # phải KẾT THÚC (không treo)
         self.assertEqual(hass.lenh, [])
+
+
+
+class TestDichVuDatDoLech(unittest.IsolatedAsyncioTestCase):
+    """Dịch vụ set_sync_adjust: ghi độ lệch từng loa vào tuỳ chọn của mục cấu hình; 0 = xoá."""
+
+    async def _goi(self, entry, entity, ms):
+        from unittest import mock
+        import custom_components.tritue_youtube_player.services as sv
+        dang_ky = {}
+        hass = mock.MagicMock()
+        hass.services.has_service.return_value = False
+        hass.services.async_register = lambda dom, ten, ham, **kw: dang_ky.__setitem__(ten, ham)
+        cap_nhat = []
+        hass.config_entries.async_update_entry = lambda e, options=None: cap_nhat.append(options)
+        sv.async_register_services(hass)
+        with mock.patch.object(sv, "_loaded_entry_or_raise", return_value=entry):
+            call = SimpleNamespace(data={"entry_id": "x", "entity_id": entity, "adjust_ms": ms})
+            await dang_ky["set_sync_adjust"](call)
+        return cap_nhat
+
+    async def test_ghi_va_xoa_do_lech(self):
+        entry = SimpleNamespace(options={"dong_bo": True, "dong_bo_adjust_ms": {"media_player.b": -300}})
+        kq = await self._goi(entry, "media_player.tv", -3000)
+        self.assertEqual(kq[-1], {"dong_bo": True, "dong_bo_adjust_ms": {"media_player.b": -300, "media_player.tv": -3000}})
+        entry.options = kq[-1]
+        kq = await self._goi(entry, "media_player.tv", 0)
+        self.assertEqual(kq[-1]["dong_bo_adjust_ms"], {"media_player.b": -300})
+
+    def test_schema_gioi_han(self):
+        import voluptuous as vol
+        import custom_components.tritue_youtube_player.services as sv
+        sv.SET_SYNC_ADJUST_SCHEMA({"entry_id": "x", "entity_id": "media_player.a", "adjust_ms": 3000})
+        with self.assertRaises(vol.Invalid):
+            sv.SET_SYNC_ADJUST_SCHEMA({"entry_id": "x", "entity_id": "media_player.a", "adjust_ms": 999999})
 
 
 if __name__ == "__main__":

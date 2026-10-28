@@ -13,8 +13,10 @@ với nhau, không cần lập nhóm Cast/Snapcast. Mô-đun mới `dong_bo.py`:
   của chính loa đó** (học theo lần đo thật, không đặt cố định), đợi rồi đo lại (tối đa 3 vòng). Đã khớp thì không seek.
 - **Hiệu chỉnh định kỳ** khi đang phát (mặc định 90 giây): loa khác loại có đồng hồ chạy lệch nhau nên trôi dần; chỉ seek
   khi trôi quá 1 giây để không nghe giật. Dừng khi loa chuẩn dừng; đổi bài hay phát lại thì tác vụ cũ bị huỷ.
-- Tuỳ chọn của mục cấu hình: `dong_bo` (mặc định bật), `dong_bo_adjust_ms` {entity_id: ms} (chỉnh tay như `sync_adjust` của
-  Music Assistant, ÂM = phát sớm hơn, cho tivi/ampli có độ trễ riêng), `dong_bo_chu_ky_s` (0 = chỉ căn một lần).
+- **Độ lệch từng loa** (như `sync_adjust` của Music Assistant), đặt bao nhiêu cũng được (ví dụ 1 giây, 3 giây): dịch vụ
+  `tritue_youtube_player.set_sync_adjust` (`entity_id`, `adjust_ms` từ -10000 đến 10000; **ÂM = loa phát sớm hơn**, dương = muộn
+  hơn, 0 = bỏ). Dùng cho tivi/ampli có độ trễ đầu ra riêng, ví dụ tivi trễ 3 giây thì đặt -3000.
+- Tuỳ chọn khác của mục cấu hình: `dong_bo` (mặc định bật), `dong_bo_chu_ky_s` (mặc định 90, 0 = chỉ căn một lần).
 - Giới hạn nói thẳng: Cast/DLNA/… không có đồng hồ chung để lên lịch từng mẫu âm nên KHÔNG đạt mức từng mẫu; sai lệch còn
   lại cỡ vài trăm mili giây, tuỳ loa báo vị trí chính xác tới đâu. Loa không hỗ trợ `seek` thì bỏ qua. Cần khớp chặt hơn thì
   vẫn dùng Cast group/Snapcast. Mới kiểm bằng loa giả (22 test), chưa kiểm trên loa thật.

@@ -270,6 +270,24 @@
           "description": "Media players to remove."
         }
       }
+    },
+    "set_sync_adjust": {
+      "name": "Set speaker sync offset",
+      "description": "Fine-tune one speaker against the lead speaker when playing in sync: negative = plays earlier, positive = later, 0 = remove. Use it for TVs and amplifiers with their own output delay (for example -1000 or -3000 ms).",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry",
+          "description": "Config entry ID of the TriTue player server."
+        },
+        "entity_id": {
+          "name": "Speaker",
+          "description": "The media player to offset."
+        },
+        "adjust_ms": {
+          "name": "Offset (ms)",
+          "description": "Milliseconds, -10000 to 10000. Negative = earlier."
+        }
+      }
     }
   }
 }

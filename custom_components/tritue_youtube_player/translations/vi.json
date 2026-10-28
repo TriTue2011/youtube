@@ -270,6 +270,24 @@
           "description": "Media player cần bỏ."
         }
       }
+    },
+    "set_sync_adjust": {
+      "name": "Đặt độ lệch đồng bộ của loa",
+      "description": "Chỉnh riêng một loa so với loa chuẩn khi phát đồng bộ: số ÂM = phát sớm hơn, số DƯƠNG = muộn hơn, 0 = bỏ chỉnh. Dùng cho tivi, ampli có độ trễ đầu ra riêng (ví dụ -1000 hoặc -3000 ms).",
+      "fields": {
+        "entry_id": {
+          "name": "Máy chủ",
+          "description": "Config entry của máy chủ TriTue."
+        },
+        "entity_id": {
+          "name": "Loa",
+          "description": "Media player cần chỉnh lệch."
+        },
+        "adjust_ms": {
+          "name": "Độ lệch (ms)",
+          "description": "Mili giây, từ -10000 đến 10000. Âm = phát sớm hơn."
+        }
+      }
     }
   }
 }

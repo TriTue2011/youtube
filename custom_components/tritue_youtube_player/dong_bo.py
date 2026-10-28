@@ -11,8 +11,8 @@ Cách làm (mỗi loa theo sau, tối đa ``toi_da_lan`` vòng):
   3. trôi vượt ngưỡng thì ``media_seek`` tới vị trí loa chuẩn + sync_adjust + độ trễ seek đã học của loa đó
      (seek xong loa luôn tụt lại một chút vì phải nạp luồng; học độ trễ này theo lần đo thật, không đặt cố định);
   4. đợi loa báo vị trí mới rồi đo lại; học lại độ trễ seek.
-``sync_adjust_ms`` từng loa (như ``sync_adjust`` của Music Assistant): số mili giây chỉnh tay, ÂM = loa phát SỚM hơn, dùng
-cho tivi hoặc ampli có độ trễ riêng.
+``adjust_ms`` từng loa (như ``sync_adjust`` của Music Assistant): số mili giây chỉnh tay, ÂM = loa phát SỚM hơn (vị trí đi
+trước loa chuẩn bấy nhiêu), DƯƠNG = phát MUỘN hơn; dùng cho tivi/ampli có độ trễ đầu ra riêng, đặt bao nhiêu cũng được (1 s, 3 s…).
 
 Mọi thời gian và hàm chờ đều truyền vào được để test không phải chờ thật.
 """
@@ -130,7 +130,7 @@ async def async_can_chinh(
         if not await _cho_phat(hass, entity_id, cho_toi_da=cho_toi_da_s, bay_gio=bay_gio, ngu=ngu):
             ket_qua[entity_id] = {"ket_qua": "khong_phat", "troi_ms": None}
             continue
-        chinh = float(adjust_ms.get(entity_id, 0)) / 1000.0
+        chinh = -float(adjust_ms.get(entity_id, 0)) / 1000.0      # sync_adjust ÂM = loa phát SỚM hơn = vị trí ĐI TRƯỚC loa chuẩn
         da_chinh = False
         troi = 0.0
         for lan in range(max(1, toi_da_lan) + 1):

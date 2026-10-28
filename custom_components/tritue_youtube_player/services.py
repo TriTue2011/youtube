@@ -27,6 +27,7 @@ from .const import (
     SERVICE_PLAY_PLAYLIST,
     SERVICE_PLAY_QUEUE,
     SERVICE_REMOVE_PLAYERS,
+    SERVICE_SET_SYNC_ADJUST,
     SERVICE_SKIP,
     SERVICE_STOP_SESSION,
     LOGGER,
@@ -114,6 +115,15 @@ REMOVE_PLAYERS_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ENTRY_ID): cv.string,
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+    }
+)
+
+
+SET_SYNC_ADJUST_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ENTRY_ID): cv.string,
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required("adjust_ms"): vol.All(vol.Coerce(int), vol.Range(min=-10000, max=10000)),
     }
 )
 
@@ -554,6 +564,20 @@ def async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_SKIP, handle_skip, schema=SKIP_SCHEMA)
     hass.services.async_register(
         DOMAIN, SERVICE_STOP_SESSION, handle_stop_session, schema=STOP_SESSION_SCHEMA
+    )
+    async def handle_set_sync_adjust(call: ServiceCall) -> None:
+        """Độ lệch (ms) của MỘT loa so với loa chuẩn khi đồng bộ: ÂM = phát sớm hơn, DƯƠNG = muộn hơn, 0 = xoá."""
+        entry = _loaded_entry_or_raise(hass, call.data[CONF_ENTRY_ID])
+        cu = dict(entry.options.get("dong_bo_adjust_ms") or {})
+        ms = int(call.data["adjust_ms"])
+        if ms:
+            cu[call.data[ATTR_ENTITY_ID]] = ms
+        else:
+            cu.pop(call.data[ATTR_ENTITY_ID], None)
+        hass.config_entries.async_update_entry(entry, options={**entry.options, "dong_bo_adjust_ms": cu})
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_SYNC_ADJUST, handle_set_sync_adjust, schema=SET_SYNC_ADJUST_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_REMOVE_PLAYERS, handle_remove_players, schema=REMOVE_PLAYERS_SCHEMA

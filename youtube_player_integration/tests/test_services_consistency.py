@@ -22,6 +22,7 @@ SCHEMA_BY_ACTION = {
     "skip": services_mod.SKIP_SCHEMA,
     "stop_session": services_mod.STOP_SESSION_SCHEMA,
     "remove_players": services_mod.REMOVE_PLAYERS_SCHEMA,
+    "set_sync_adjust": services_mod.SET_SYNC_ADJUST_SCHEMA,
 }
 
 
