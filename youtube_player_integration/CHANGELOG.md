@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.28.1 - 2026-10-28
+
+### Sửa: dừng nhạc rồi TTS ra loa thì TTS xong video đã dừng tự chạy lại
+
+Người dùng báo: «đang phát nhạc bấm dừng, xong TTS ra loa thì sau khi TTS xong nó tự chạy tiếp cái video vừa dừng»; cũng gặp
+khi đang nghe nội dung khác trên cùng loa rồi tạm dừng thì video cũ tự bật.
+
+- **Lớp lỗi:** `sessions.observe_interruption` nhận biết «TTS/thông báo chen giữa bài» bằng cờ `luong_minh` («loa từng phát luồng của
+  phiên») mà cờ này **không bao giờ hết hạn**. Sau khi người dùng dừng (hoặc tạm dừng), mọi nội dung lạ lên loa về sau (TTS, radio,
+  cast từ điện thoại) đều bị coi là «chen giữa bài»; nội dung đó dứt hay tạm dừng là tích hợp phát lại bài cũ.
+- **Sửa theo nguyên tắc:** chỉ là «chen giữa bài» khi loa **vừa đang phát** luồng của phiên ngay trước đó. Loa ngừng phát (idle,
+  tạm dừng, tắt) thì ghi lại lúc ngừng; nội dung lạ lên sóng sau hơn 15 giây (`CHO_CHEN_SAU_NGUNG_GIAY`) là người dùng đã dừng,
+  không phát lại. Giữ nguyên hai ca đúng: loa idle thoáng qua vài giây giữa luồng và TTS (R1, loa camera) và loa phát yên nhiều phút
+  không có sự kiện nào rồi TTS tới vẫn phát tiếp đúng giây.
+- Test mới `DungRoiTtsKhongPhatLaiTests` (4 ca; ca dừng rồi TTS đỏ trước khi sửa). Không thêm đỏ nào so với trước (17 đỏ có sẵn
+  của bộ test tích hợp, không liên quan).
+- Không có cookie nào được lưu; phiên phát chỉ nằm trong RAM của add-on, khởi động lại không tự phát gì.
+
 ## 0.28.0 - 2026-10-28
 
 ### Đồng bộ vị trí phát giữa các loa đã tích (mọi loại loa, không cần nhóm)

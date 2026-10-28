@@ -238,6 +238,36 @@ def observe_track(
     return False
 
 
+#: Loa về idle/tạm dừng rồi nội dung lạ lên sóng trong khoảng này (giây) sau lúc ngừng phát luồng của mình thì vẫn là CHEN
+#: giữa bài (một số loa, ví dụ R1 và loa camera, idle vài giây giữa luồng và TTS). Lâu hơn thì là người dùng đã dừng.
+CHO_CHEN_SAU_NGUNG_GIAY = 15
+
+
+def _ghi_nhan_luong_dang_phat(tracker: dict[str, Any], state: str, attributes: dict[str, Any], now: datetime,
+                              item: dict[str, Any] | None) -> None:
+    """Ghi «loa đang phát luồng của phiên» và lúc nó NGỪNG phát (idle/tạm dừng/tắt).
+
+    Báo 28/10/2026: dừng nhạc rồi TTS ra loa thì TTS xong video đã dừng tự chạy lại: cờ `luong_minh` («từng phát luồng của
+    mình») không hết hạn nên mọi nội dung lạ sau này đều bị coi là chen giữa bài. Chỉ được coi là chen khi loa VỪA ĐANG
+    phát luồng của mình (xem ``_vua_phat_luong_minh``)."""
+    if "chen_tu" in tracker:
+        return                                        # đang bị chen: trạng thái của nội dung chen không đổi gì ở đây
+    if state in PLAYING_STATES:
+        if stream_target(attributes.get("media_content_id")) is not None and plays_item(attributes, item, tracker):
+            tracker["luong_dang"] = True
+            tracker.pop("luong_ngung_luc", None)
+        return
+    if tracker.pop("luong_dang", False):
+        tracker["luong_ngung_luc"] = now
+
+
+def _vua_phat_luong_minh(tracker: dict[str, Any], now: datetime) -> bool:
+    if tracker.get("luong_dang"):
+        return True
+    ngung = tracker.get("luong_ngung_luc")
+    return ngung is not None and (now - ngung).total_seconds() <= CHO_CHEN_SAU_NGUNG_GIAY
+
+
 def observe_interruption(
     tracker: dict[str, Any],
     state: str,
@@ -257,12 +287,13 @@ def observe_interruption(
     ``observe_track`` (TTS dứt không phải là hết bài)."""
     mcid = attributes.get("media_content_id")
     target = stream_target(mcid)
+    _ghi_nhan_luong_dang_phat(tracker, state, attributes, now, item)
     if target is not None:
         if plays_item(attributes, item, tracker):
             tracker.pop("chen_tu", None)             # đang (hoặc lại) phát đúng bài của phiên
             tracker["luong_minh"] = True
         return None
-    if state in PLAYING_STATES and mcid and tracker.get("luong_minh") and "chen_tu" not in tracker:
+    if state in PLAYING_STATES and mcid and _vua_phat_luong_minh(tracker, now) and "chen_tu" not in tracker:
         position = tracker.get("position")
         if position is None:
             return None
@@ -275,6 +306,8 @@ def observe_interruption(
         return None
     if "chen_tu" in tracker and (state in FINISHED_STATES or state == "paused"):
         tracker["luong_minh"] = False
+        tracker.pop("luong_dang", None)
+        tracker.pop("luong_ngung_luc", None)
         return tracker.pop("chen_tu")
     return None
 

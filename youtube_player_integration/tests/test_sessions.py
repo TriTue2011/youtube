@@ -166,6 +166,53 @@ class ChenGiuaBaiTests(unittest.TestCase):
         self.assertIsNone(self.feed(tr2, "idle", "http://radio/stream.mp3", 5))
 
 
+class DungRoiTtsKhongPhatLaiTests(unittest.TestCase):
+    """Người dùng khác báo 28/10/2026: «đang phát nhạc bấm dừng, xong TTS ra loa thì sau khi TTS xong nó tự chạy tiếp cái
+    video vừa dừng». Lớp lỗi: cờ «từng phát luồng của mình» không hết hạn, nên MỌI nội dung lạ trên loa sau này đều bị coi
+    là chen giữa bài. Chỉ được coi là chen khi loa VỪA ĐANG phát luồng của mình ngay trước đó."""
+
+    def setUp(self):
+        self.s = load_sessions_module()
+        self.item = {"id": "dQw4w9WgXcQ", "url": "u"}
+        self.ours = stream_url("dQw4w9WgXcQ")
+        self.tts = "http://ha/api/tts_proxy/abc.mp3"
+
+    feed = ChenGiuaBaiTests.feed
+
+    def test_dung_roi_tts_sau_do_khong_phat_lai(self):
+        tr = {}
+        self.feed(tr, "playing", self.ours, 0, position=40, duration=3000)
+        self.feed(tr, "idle", self.ours, 20)                               # người dùng bấm dừng
+        self.assertIsNone(self.feed(tr, "playing", self.tts, 80))            # 60 s sau, TTS ra loa
+        self.assertNotIn("chen_tu", tr)
+        self.assertIsNone(self.feed(tr, "idle", self.tts, 84), "TTS xong không được phát lại bài đã dừng")
+
+    def test_tam_dung_roi_noi_dung_la_khong_phat_lai(self):
+        tr = {}
+        self.feed(tr, "playing", self.ours, 0, position=40, duration=3000)
+        self.feed(tr, "paused", self.ours, 20)
+        self.assertIsNone(self.feed(tr, "playing", "http://radio/stream.mp3", 300))
+        self.assertNotIn("chen_tu", tr)
+        self.assertIsNone(self.feed(tr, "paused", "http://radio/stream.mp3", 400))
+
+    def test_loa_idle_thoang_qua_giua_luong_va_tts_van_phat_tiep(self):
+        """Một số loa (R1, camera) về idle vài giây giữa luồng và TTS: vẫn là chen giữa bài."""
+        tr = {}
+        self.feed(tr, "playing", self.ours, 0, position=40, duration=240)
+        self.feed(tr, "idle", self.ours, 10)
+        self.assertIsNone(self.feed(tr, "playing", self.tts, 12))
+        self.assertIn("chen_tu", tr)
+        self.assertIsNotNone(self.feed(tr, "idle", self.tts, 16))
+
+    def test_phat_ben_vai_phut_roi_tts_van_phat_tiep(self):
+        """Loa phát yên nhiều phút không có sự kiện nào: TTS tới vẫn là chen giữa bài."""
+        tr = {}
+        self.feed(tr, "playing", self.ours, 0, position=40, duration=3000)
+        self.assertIsNone(self.feed(tr, "playing", self.tts, 600))
+        self.assertIn("chen_tu", tr)
+        self.assertIsNotNone(self.feed(tr, "idle", self.tts, 604))
+
+
 class Issue3Tests(unittest.TestCase):
     """Issue #3: TTS on an idle camera speaker started the next song at 22:42; Stop on the speaker skipped songs."""
 
